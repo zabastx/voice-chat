@@ -1,0 +1,14 @@
+node_modules
+.nuxt
+.output
+.nitro
+.cache
+.data
+.env
+.env.*
+.playwright-cli
+.git
+docs
+*.md
+shell.png
+livekit.dev.yaml

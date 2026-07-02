@@ -1,0 +1,9 @@
+# Main app — automatic HTTPS via Let's Encrypt
+{$DOMAIN} {
+	reverse_proxy app:3000
+}
+
+# LiveKit signaling (WebSocket) — RTC media itself flows directly over UDP/TCP
+livekit.{$DOMAIN} {
+	reverse_proxy host.docker.internal:7880
+}

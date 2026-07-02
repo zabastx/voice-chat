@@ -1,0 +1,35 @@
+<template>
+	<UDashboardPanel id="welcome">
+		<template #header>
+			<UDashboardNavbar title="Добро пожаловать">
+				<template #leading>
+					<UDashboardSidebarCollapse />
+				</template>
+			</UDashboardNavbar>
+		</template>
+		<template #body>
+			<div class="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+				<UIcon class="text-dimmed size-10" name="i-lucide-messages-square" />
+				<p class="text-muted">Текстовых каналов пока нет.</p>
+				<p v-if="user?.isAdmin" class="text-dimmed text-sm">
+					Создайте канал кнопкой «+» в боковой панели.
+				</p>
+			</div>
+		</template>
+	</UDashboardPanel>
+</template>
+
+<script lang="ts" setup>
+const { user } = useUserSession()
+const store = useChannelsStore()
+
+const firstText = computed(() => store.textChannels.value[0])
+
+if (firstText.value) {
+	await navigateTo(`/channels/${firstText.value.id}`, { replace: true })
+}
+
+watch(firstText, (channel) => {
+	if (channel) navigateTo(`/channels/${channel.id}`, { replace: true })
+})
+</script>

@@ -1,0 +1,45 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    # loopback only — Caddy terminates TLS, LiveKit (host network) delivers webhooks here
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - app-data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  livekit:
+    image: livekit/livekit-server:v1
+    restart: unless-stopped
+    # host networking: RTC media (UDP range) goes straight to the VPS interface,
+    # no NAT between docker bridge and the internet
+    network_mode: host
+    environment:
+      LIVEKIT_KEYS: '${NUXT_LIVEKIT_API_KEY}: ${NUXT_LIVEKIT_API_SECRET}'
+    volumes:
+      - ./deploy/livekit.yaml:/etc/livekit.yaml:ro
+    command: --config /etc/livekit.yaml
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

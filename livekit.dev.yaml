@@ -1,0 +1,23 @@
+# LiveKit config for local development.
+# Run with:
+#   docker run -d --name voicechat-livekit \
+#     --add-host=host.docker.internal:host-gateway \
+#     -p 7880:7880 -p 7881:7881 -p 50100-50120:50100-50120/udp \
+#     -v ./livekit.dev.yaml:/etc/livekit.yaml \
+#     livekit/livekit-server --config /etc/livekit.yaml --node-ip 127.0.0.1
+# (--node-ip 127.0.0.1 advertises localhost so browsers on this machine reach RTC
+#  via the published ports)
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50100
+  port_range_end: 50120
+  use_external_ip: false
+keys:
+  devkey: devsecret_at_least_32_characters_long
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:3000/api/livekit/webhook
+logging:
+  level: info

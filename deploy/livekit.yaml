@@ -1,0 +1,16 @@
+# LiveKit production config. API keys come from the LIVEKIT_KEYS env var
+# (set in compose.yaml from .env), so none are stored here.
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  # discover the VPS public IP via STUN and advertise it in ICE candidates
+  use_external_ip: true
+webhook:
+  # must match NUXT_LIVEKIT_API_KEY in .env
+  api_key: voicechat
+  urls:
+    - http://127.0.0.1:3000/api/livekit/webhook
+logging:
+  level: info
