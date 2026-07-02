@@ -1,0 +1,26 @@
+{
+	"js/ts.tsdk.path": "node_modules\\typescript\\lib",
+	"files.associations": {
+		"*.css": "tailwindcss"
+	},
+	"editor.quickSuggestions": {
+		"strings": "on"
+	},
+	"oxc.fmt.configPath": ".oxfmtrc.json",
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "oxc.oxc-vscode",
+	"tailwindCSS.classAttributes": ["class", "ui"],
+	"tailwindCSS.classFunctions": ["defineAppConfig"],
+	"[typescript]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[vue]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[html]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	},
+	"[json]": {
+		"editor.defaultFormatter": "oxc.oxc-vscode"
+	}
+}

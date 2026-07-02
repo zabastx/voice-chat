@@ -1,0 +1,33 @@
+{
+	"name": "voice-chat",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "nuxt build",
+		"dev": "nuxt dev",
+		"preview": "nuxt preview",
+		"postinstall": "nuxt prepare",
+		"typecheck": "nuxt typecheck",
+		"fmt": "oxfmt",
+		"fmt:check": "oxfmt --check",
+		"lint": "oxlint",
+		"lint:fix": "oxlint --fix"
+	},
+	"dependencies": {
+		"@iconify-json/lucide": "^1.2.114",
+		"@iconify-json/simple-icons": "^1.2.87",
+		"@nuxt/ui": "^4.9.0",
+		"nuxt": "^4.4.8",
+		"tailwindcss": "^4.3.1"
+	},
+	"devDependencies": {
+		"oxfmt": "^0.57.0",
+		"oxlint": "^1.72.0",
+		"typescript": "^6.0.3",
+		"vue-tsc": "^3.3.5"
+	},
+	"trustedDependencies": [
+		"@parcel/watcher",
+		"unrs-resolver"
+	]
+}
