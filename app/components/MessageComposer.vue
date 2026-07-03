@@ -29,13 +29,44 @@
 			</div>
 		</div>
 
-		<div class="flex items-end gap-2">
+		<div v-if="recording" class="flex items-center gap-2">
+			<UButton color="neutral" icon="i-lucide-x" variant="ghost" @click="cancel()" />
+			<div
+				class="border-default bg-elevated/50 flex flex-1 items-center gap-2 rounded-lg border px-3 py-2"
+			>
+				<span class="bg-error size-2.5 shrink-0 animate-pulse rounded-full" />
+				<UIcon class="text-error size-4 shrink-0" name="i-lucide-mic" />
+				<span class="text-default text-sm tabular-nums">{{ formatDuration(elapsed) }}</span>
+				<span class="text-muted flex-1 truncate text-xs">Идёт запись…</span>
+			</div>
+			<UButton color="primary" icon="i-lucide-square" @click="stop()" />
+		</div>
+		<div v-else-if="previewBlob" class="flex items-center gap-2">
+			<UButton color="neutral" icon="i-lucide-trash-2" variant="ghost" @click="discardPreview()" />
+			<div class="min-w-0 flex-1">
+				<VoiceMessagePlayer :blob="previewBlob" />
+			</div>
+			<UButton
+				:loading="sending"
+				color="primary"
+				icon="i-lucide-send-horizontal"
+				@click="() => sendVoice()"
+			/>
+		</div>
+		<div v-else class="flex items-end gap-2">
 			<UButton
 				:disabled="disabled"
 				color="neutral"
 				icon="i-lucide-plus"
 				variant="ghost"
 				@click="fileInput?.click()"
+			/>
+			<UButton
+				:disabled="disabled"
+				color="neutral"
+				icon="i-lucide-mic"
+				variant="ghost"
+				@click="() => start()"
 			/>
 			<input ref="fileInput" class="hidden" multiple type="file" @change="onPick" />
 			<UTextarea
@@ -70,7 +101,12 @@ interface PendingUpload {
 }
 
 const toast = useToast()
+const previewBlob = ref<Blob | null>(null)
+const { recording, elapsed, start, stop, cancel } = useVoiceRecorder((blob) => {
+	previewBlob.value = blob
+})
 const text = ref('')
+const sending = ref(false)
 const uploads = ref<PendingUpload[]>([])
 const fileInput = ref<HTMLInputElement>()
 
@@ -140,5 +176,44 @@ function submit() {
 	emit('send', text.value.trim(), attachmentIds)
 	text.value = ''
 	uploads.value = []
+}
+
+function extFromMime(mime: string) {
+	const base = mime.split(';')[0]
+	if (base === 'audio/mp4') return 'm4a'
+	if (base === 'audio/ogg') return 'ogg'
+	return 'webm'
+}
+
+function discardPreview() {
+	previewBlob.value = null
+}
+
+// upload the reviewed clip through the normal attachment pipeline, then send
+async function sendVoice() {
+	const blob = previewBlob.value
+	if (!blob || sending.value) return
+	const file = new File([blob], `voice-message-${Date.now()}.${extFromMime(blob.type)}`, {
+		type: blob.type
+	})
+	const upload: PendingUpload = {
+		key: `${file.name}-${Math.random()}`,
+		file,
+		uploading: true,
+		error: false
+	}
+	uploads.value.push(upload)
+	sending.value = true
+	try {
+		await uploadFile(upload)
+		if (upload.attachment) {
+			emit('send', '', [upload.attachment.id])
+			uploads.value = uploads.value.filter((u) => u.key !== upload.key)
+			previewBlob.value = null
+		}
+		// on error uploadFile already toasts and leaves the chip so the user sees it
+	} finally {
+		sending.value = false
+	}
 }
 </script>

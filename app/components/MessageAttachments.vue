@@ -14,6 +14,10 @@
 					loading="lazy"
 				/>
 			</a>
+			<VoiceMessagePlayer
+				v-else-if="attachment.mime.startsWith('audio/')"
+				:attachment="attachment"
+			/>
 			<a
 				v-else
 				:href="`/api/attachments/${attachment.id}`"
