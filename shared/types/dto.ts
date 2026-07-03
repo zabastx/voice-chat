@@ -25,6 +25,16 @@ export interface MessageDto {
 	attachments: AttachmentDto[]
 }
 
+export interface MemberDto {
+	id: string
+	username: string
+	displayName: string | null
+	// '/api/members/{id}/avatar?v={avatarId}' — ?v= busts the img cache on change
+	avatarUrl: string | null
+	isAdmin: boolean
+	createdAt: string
+}
+
 export interface VoiceParticipant {
 	memberId: string
 	username: string
@@ -45,6 +55,7 @@ export type ServerEvent =
 	| { type: 'message.created'; message: MessageDto }
 	| { type: 'message.updated'; message: MessageDto }
 	| { type: 'message.deleted'; channelId: string; messageId: string }
+	| { type: 'member.updated'; member: MemberDto }
 	| { type: 'auth.error' }
 	// client-side synthetic event, emitted after a reconnect so views refetch
 	| { type: 'resync' }

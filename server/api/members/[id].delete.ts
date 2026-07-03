@@ -12,5 +12,8 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 404, message: 'Участник не найден' })
 	}
 	await db.delete(schema.members).where(eq(schema.members.id, id))
+	if (member.avatarId) {
+		await deleteAttachmentObjects([avatarObjectKey(member.id, member.avatarId)])
+	}
 	return { ok: true }
 })

@@ -12,10 +12,14 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 404, message: 'Голосовой канал не найден' })
 	}
 
+	const member = await useDb().query.members.findFirst({
+		where: eq(schema.members.id, user.id)
+	})
+
 	const config = useRuntimeConfig()
 	const token = new AccessToken(config.livekitApiKey, config.livekitApiSecret, {
 		identity: user.id,
-		name: user.username,
+		name: member?.displayName ?? user.username,
 		ttl: '2h'
 	})
 	token.addGrant({

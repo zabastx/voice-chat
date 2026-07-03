@@ -13,6 +13,7 @@ const remoteScreenTracks = new Map<string, RemoteTrack>()
 export function useVoice() {
 	const toast = useToast()
 	const realtime = useRealtime()
+	const prefs = usePreferences()
 
 	const currentChannelId = useState<string | null>('voice-channel', () => null)
 	const connecting = useState('voice-connecting', () => false)
@@ -45,7 +46,17 @@ export function useVoice() {
 				{ method: 'POST' }
 			)
 
-			const nextRoom = new livekit.Room()
+			const nextRoom = new livekit.Room({
+				audioCaptureDefaults: prefs.value.micDeviceId
+					? { deviceId: prefs.value.micDeviceId }
+					: undefined,
+				videoCaptureDefaults: prefs.value.cameraDeviceId
+					? { deviceId: prefs.value.cameraDeviceId }
+					: undefined,
+				audioOutput: prefs.value.speakerDeviceId
+					? { deviceId: prefs.value.speakerDeviceId }
+					: undefined
+			})
 
 			nextRoom.on(livekit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
 				if (track.kind === livekit.Track.Kind.Audio) {
@@ -155,6 +166,16 @@ export function useVoice() {
 		return remoteScreenTracks.get(sid)
 	}
 
+	// switch an input/output device mid-call; no-op when not connected
+	async function setDevice(kind: MediaDeviceKind, deviceId: string | null) {
+		if (!room) return
+		try {
+			await room.switchActiveDevice(kind, deviceId ?? 'default')
+		} catch {
+			toast.add({ title: 'Не удалось переключить устройство', color: 'error' })
+		}
+	}
+
 	return {
 		currentChannelId,
 		connecting,
@@ -166,6 +187,7 @@ export function useVoice() {
 		leave,
 		toggleMute,
 		toggleScreenShare,
-		screenTrackFor
+		screenTrackFor,
+		setDevice
 	}
 }

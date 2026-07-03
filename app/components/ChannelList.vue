@@ -82,11 +82,12 @@
 						class="ml-4 flex items-center gap-2 py-0.5 pl-2"
 					>
 						<UAvatar
-							:alt="participant.username"
+							:alt="participantName(participant)"
 							:class="isSpeaking(channel.id, participant) ? 'ring-success ring-2' : ''"
+							:src="membersStore.profile(participant.memberId)?.avatarUrl ?? undefined"
 							size="3xs"
 						/>
-						<span class="text-muted truncate text-xs">{{ participant.username }}</span>
+						<span class="text-muted truncate text-xs">{{ participantName(participant) }}</span>
 						<UIcon
 							v-if="isMuted(participant)"
 							class="text-dimmed size-3 shrink-0"
@@ -111,6 +112,7 @@ import ChannelFormModal from './ChannelFormModal.vue'
 import ConfirmModal from './ConfirmModal.vue'
 
 const store = useChannelsStore()
+const membersStore = useMembersStore()
 const voice = useVoice()
 const { voice: rooms } = useRealtime()
 const { user } = useUserSession()
@@ -132,6 +134,11 @@ function isSpeaking(channelId: string, participant: VoiceParticipant) {
 		(voice.currentChannelId.value === channelId &&
 			voice.speakingIds.value.includes(participant.memberId))
 	)
+}
+
+function participantName(participant: VoiceParticipant) {
+	const profile = membersStore.profile(participant.memberId)
+	return profile?.displayName ?? participant.username
 }
 
 function isMuted(participant: VoiceParticipant) {

@@ -27,19 +27,20 @@ roles engine, Postgres.
 
 ## Feature status
 
-| Area                                                              | Status                             | Notes                                                 |
-| ----------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------- |
-| Auth, invites, first-user-admin                                   | ✅ done                            | `server/api/auth/*`, `server/api/invites/*`           |
-| Channels CRUD (admin)                                             | ✅ done                            | live-synced over WS                                   |
-| Text chat: send / edit / delete, unread, day separators, grouping | ✅ done                            | `app/pages/channels/[id].vue`                         |
-| Realtime hub (presence, messages, channels, voice state)          | ✅ done                            | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`      |
-| Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done                            | `server/utils/storage.ts`, `server/api/attachments/*` |
-| Voice channels (join/leave, mute, speaking, roster)               | ✅ done                            | `useVoice.ts` + LiveKit webhooks                      |
-| Screen share (publish + fullscreen viewer)                        | ✅ built, ⚠️ video path unverified | headless can't capture a screen                       |
-| Sounds, tab-title counter                                         | ✅ done                            | `app/utils/sounds.ts`, `useHead` in layout            |
-| PWA (manifest + icons)                                            | ✅ done                            | `public/manifest.webmanifest`, `public/icon-*.png`    |
-| Russian localization (UI + server errors)                         | ✅ done                            | server errors in `message` field                      |
-| Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ written, ⚠️ not run on VPS      | see [DEPLOY.md](DEPLOY.md)                            |
+| Area                                                              | Status                             | Notes                                                         |
+| ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------- |
+| Auth, invites, first-user-admin                                   | ✅ done                            | `server/api/auth/*`, `server/api/invites/*`                   |
+| Channels CRUD (admin)                                             | ✅ done                            | live-synced over WS                                           |
+| Text chat: send / edit / delete, unread, day separators, grouping | ✅ done                            | `app/pages/channels/[id].vue`                                 |
+| Realtime hub (presence, messages, channels, voice state)          | ✅ done                            | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`              |
+| Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done                            | `server/utils/storage.ts`, `server/api/attachments/*`         |
+| Voice channels (join/leave, mute, speaking, roster)               | ✅ done                            | `useVoice.ts` + LiveKit webhooks                              |
+| Screen share (publish + fullscreen viewer)                        | ✅ built, ⚠️ video path unverified | headless can't capture a screen                               |
+| Sounds, tab-title counter                                         | ✅ done                            | `app/utils/sounds.ts`, `useHead` in layout                    |
+| PWA (manifest + icons)                                            | ✅ done                            | `public/manifest.webmanifest`, `public/icon-*.png`            |
+| Russian localization (UI + server errors)                         | ✅ done                            | server errors in `message` field                              |
+| Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ written, ⚠️ not run on VPS      | see [DEPLOY.md](DEPLOY.md)                                    |
+| User settings (profile, voice/video devices, notifications)       | ✅ done                            | `SettingsModal.vue`, `server/api/me/*`, prefs in localStorage |
 
 ## Verification matrix
 
@@ -54,6 +55,9 @@ roles engine, Postgres.
 - Russian SSR renders (login page, sidebar, timestamps)
 - **Production bundle** built exactly as the Dockerfile does, smoke-tested under Bun: migrations
   run, WS works, upload+presign works, Russian SSR renders
+- Settings modal end-to-end: display name saves + propagates live to old messages/SelfPanel,
+  avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
+  meter, prefs persisted to localStorage, Esc close
 
 **Not yet verified (needs a human / real environment):**
 

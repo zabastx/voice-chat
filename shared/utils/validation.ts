@@ -7,6 +7,12 @@ export const usernameSchema = z
 
 export const passwordSchema = z.string().min(8, 'Пароль должен быть не короче 8 символов')
 
+export const displayNameSchema = z
+	.string()
+	.trim()
+	.min(1, 'Введите имя')
+	.max(32, 'Не длиннее 32 символов')
+
 export const channelNameSchema = z
 	.string()
 	.trim()

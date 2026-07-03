@@ -31,12 +31,14 @@
 
 <script lang="ts" setup>
 const store = useChannelsStore()
+const membersStore = useMembersStore()
 const realtime = useRealtime()
 const voice = useVoice()
+const prefs = usePreferences()
 const { user } = useUserSession()
 
 await useAsyncData('channels', async () => {
-	await store.refresh()
+	await Promise.all([store.refresh(), membersStore.refresh()])
 	return true
 })
 
@@ -48,14 +50,39 @@ useHead({
 
 realtime.onEvent((event) => {
 	store.apply(event)
+	membersStore.apply(event)
 	if (
 		event.type === 'message.created' &&
 		event.message.authorId !== user.value?.id &&
 		(!document.hasFocus() || store.activeChannelId.value !== event.message.channelId)
 	) {
-		playMessageSound()
+		if (prefs.value.messageSound) playMessageSound()
+		notifyDesktop(event.message)
 	}
 })
+
+function notifyDesktop(message: MessageDto) {
+	if (
+		document.hasFocus() ||
+		!prefs.value.desktopNotifications ||
+		!('Notification' in window) ||
+		Notification.permission !== 'granted'
+	) {
+		return
+	}
+	const author = membersStore.profile(message.authorId)
+	const notification = new Notification(author?.displayName ?? message.authorName, {
+		body: message.content.slice(0, 120) || 'Вложение',
+		// one notification per channel — repeats replace instead of stacking
+		tag: message.channelId,
+		icon: author?.avatarUrl ?? undefined
+	})
+	notification.onclick = () => {
+		window.focus()
+		void navigateTo(`/channels/${message.channelId}`)
+		notification.close()
+	}
+}
 
 // join/leave sounds for whoever enters/exits my current voice channel
 let roomMemberIds: string[] = []

@@ -71,11 +71,18 @@
 								inset
 								position="bottom-right"
 							>
-								<UAvatar :alt="member.username" size="sm" />
+								<UAvatar
+									:alt="member.displayName ?? member.username"
+									:src="member.avatarUrl ?? undefined"
+									size="sm"
+								/>
 							</UChip>
 							<div class="min-w-0 flex-1">
 								<p class="text-default flex items-center gap-1.5 truncate text-sm font-medium">
-									{{ member.username }}
+									{{ member.displayName ?? member.username }}
+									<span v-if="member.displayName" class="text-muted font-normal">
+										{{ member.username }}
+									</span>
 									<UBadge v-if="member.isAdmin" color="primary" size="sm" variant="subtle">
 										админ
 									</UBadge>

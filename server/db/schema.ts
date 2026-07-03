@@ -4,6 +4,8 @@ export const members = sqliteTable('members', {
 	id: text('id').primaryKey(),
 	username: text('username').notNull().unique(),
 	passwordHash: text('password_hash').notNull(),
+	displayName: text('display_name'),
+	avatarId: text('avatar_id'),
 	isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' })
 		.notNull()

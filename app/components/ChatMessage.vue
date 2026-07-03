@@ -3,7 +3,13 @@
 		:class="compact ? 'py-0.5' : 'pt-3 pb-0.5'"
 		class="group hover:bg-elevated/50 relative flex gap-3 rounded-md px-2"
 	>
-		<UAvatar v-if="!compact" :alt="message.authorName" class="mt-0.5 shrink-0" size="sm" />
+		<UAvatar
+			v-if="!compact"
+			:alt="authorName"
+			:src="author?.avatarUrl ?? undefined"
+			class="mt-0.5 shrink-0"
+			size="sm"
+		/>
 		<div v-else class="w-7 shrink-0 pt-1 text-right">
 			<span class="text-dimmed hidden text-[10px] group-hover:inline">
 				{{ formatTime(message.createdAt) }}
@@ -12,7 +18,7 @@
 
 		<div class="min-w-0 flex-1">
 			<div v-if="!compact" class="flex items-baseline gap-2">
-				<span class="text-highlighted text-sm font-semibold">{{ message.authorName }}</span>
+				<span class="text-highlighted text-sm font-semibold">{{ authorName }}</span>
 				<span class="text-dimmed text-xs">{{ formatTimestamp(message.createdAt) }}</span>
 			</div>
 
@@ -77,6 +83,12 @@ const emit = defineEmits<{
 	saveEdit: [content: string]
 	remove: []
 }>()
+
+const membersStore = useMembersStore()
+const author = computed(() => membersStore.profile(props.message.authorId))
+const authorName = computed(
+	() => author.value?.displayName ?? author.value?.username ?? props.message.authorName
+)
 
 const draft = ref('')
 

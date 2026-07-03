@@ -40,11 +40,20 @@ same Drizzle sync API. Keep both drivers installed.
 **Cause:** `overlay.open()` / `modal.open()` return a value; Vue's click handler type wants `void`.
 **Fix:** wrap in a void arrow: `@click="() => modal.open()"` or a named `function openX() { modal.open() }`.
 
-### 6. `UDashboardGroup` storage prop value
+### 6. Reka `USelect` items cannot use `''` as a value
+
+**Symptom:** console error `A <SelectItem /> must have a value prop that is not an empty string`
+and the select misbehaves.
+**Cause:** Reka UI reserves the empty string for "cleared" state.
+**Fix:** use a non-empty sentinel for the "default" option — device pickers use `'default'`
+(Chrome's own `'default'` pseudo-device is filtered out of the list first). See
+[app/components/settings/SettingsVoice.vue](../app/components/settings/SettingsVoice.vue).
+
+### 7. `UDashboardGroup` storage prop value
 
 `storage="local"`, not `"localStorage"`. The valid values are `'cookie' | 'local'`.
 
-### 7. fetch `BodyInit` rejects `Uint8Array`
+### 8. fetch `BodyInit` rejects `Uint8Array`
 
 **Symptom:** TS2322 in `putObject` — `Uint8Array<ArrayBufferLike>` not assignable to `BodyInit`,
 and `SharedArrayBuffer` leaking into the union.
@@ -54,7 +63,7 @@ and `SharedArrayBuffer` leaking into the union.
 
 ## SSR / data
 
-### 8. Session cookie not forwarded during SSR
+### 9. Session cookie not forwarded during SSR
 
 **Symptom:** channel list empty (or channel names render as `#`) on first server-rendered paint;
 works after client navigation.
@@ -62,7 +71,7 @@ works after client navigation.
 **Fix:** use `useRequestFetch()` for any authed fetch that can run during SSR. See
 [app/composables/useChannelsStore.ts](../app/composables/useChannelsStore.ts).
 
-### 9. Playwright fills the login form before hydration
+### 10. Playwright fills the login form before hydration
 
 **Symptom:** submit shows "Invalid input: expected string, received undefined" — form state empty.
 **Cause:** filling inputs before Vue hydrates doesn't populate the reactive form model.
@@ -71,7 +80,7 @@ Not an app bug.
 
 ## Localization
 
-### 10. Cyrillic in `statusMessage` breaks Node
+### 11. Cyrillic in `statusMessage` breaks Node
 
 **Symptom:** requests with Russian `createError({ statusMessage: 'Только...' })` fail oddly.
 **Cause:** HTTP reason phrases must be ASCII; Node rejects non-ASCII.
@@ -81,20 +90,20 @@ its messages stay English.
 
 ## LiveKit / voice (local dev)
 
-### 11. Webhooks can't resolve the app
+### 12. Webhooks can't resolve the app
 
 **Symptom:** LiveKit log: `dial tcp: lookup host.docker.internal on 8.8.8.8:53: no such host`;
 sidebar voice roster never populates.
 **Fix:** run the container with `--add-host=host.docker.internal:host-gateway`.
 
-### 12. Vite blocks the webhook host
+### 13. Vite blocks the webhook host
 
 **Symptom:** container reaches the app but gets HTTP 403.
 **Cause:** Vite dev server host allowlist.
 **Fix:** `vite.server.allowedHosts: ['host.docker.internal']` in `nuxt.config.ts` (already set),
 and run `nuxt dev --host` so it binds all interfaces.
 
-### 13. Browsers on the host can't reach RTC media
+### 14. Browsers on the host can't reach RTC media
 
 **Symptom:** signaling connects, then immediately disconnects; `WebSocket ... 7880 ... refused`
 and RTC never establishes. LiveKit advertises its container-internal IP (172.17.x.x).
@@ -107,12 +116,12 @@ value), so the browser still can't reach RTC and ICE fails with no obvious cause
 `127.0.0.1` (works on Docker Desktop Win/Mac and native Linux — the host kernel forwards
 loopback UDP to the published RTC ports).
 
-### 14. Screen share can't be tested headless
+### 15. Screen share can't be tested headless
 
 Headless Chromium has no screen to capture, so the video path is unverified. The publish/subscribe
 plumbing is identical to the audio path (which IS verified). Test in a headed browser or after deploy.
 
-### 15. Firefox ICE fails, Chrome works (mDNS + loopback TURN)
+### 16. Firefox ICE fails, Chrome works (mDNS + loopback TURN)
 
 **Symptom:** in Firefox, voice connects to signaling then drops with
 `WebRTC: ICE failed, your TURN server appears to be broken`. Chrome on the same
@@ -146,9 +155,9 @@ setting `media.peerconnection.ice.obfuscate_host_addresses` = `false` in
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_;
   RTC media flows directly over the UDP range (LiveKit runs on host networking in prod).
 - Firewall: 80/443 tcp, 7881 tcp (RTC fallback), 3478 udp (built-in TURN — Firefox
-  + symmetric-NAT clients), 50000–60000 udp (RTC media). Do **not** expose 3000 or
-  7880 — loopback/proxied only. The TURN relay range (57000–57100) stays internal
-  (SFU↔TURN share the host), so it needs no firewall hole.
+  - symmetric-NAT clients), 50000–60000 udp (RTC media). Do **not** expose 3000 or
+    7880 — loopback/proxied only. The TURN relay range (57000–57100) stays internal
+    (SFU↔TURN share the host), so it needs no firewall hole.
 - Prod smoke test locally: `bun --bun nuxt build` then run `.output/server/index.mjs` under Bun with
   `NUXT_DB_PATH` / `NUXT_MIGRATIONS_DIR` set — this exercises the exact `bun:sqlite` + migration path
   the container uses.
