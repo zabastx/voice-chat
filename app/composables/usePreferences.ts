@@ -6,6 +6,7 @@ export interface Preferences {
 	cameraDeviceId: string | null
 	messageSound: boolean
 	desktopNotifications: boolean
+	showOfflineMembers: boolean
 }
 
 const STORAGE_KEY = 'voice-chat:prefs'
@@ -16,7 +17,8 @@ function defaults(): Preferences {
 		speakerDeviceId: null,
 		cameraDeviceId: null,
 		messageSound: true,
-		desktopNotifications: false
+		desktopNotifications: false,
+		showOfflineMembers: true
 	}
 }
 

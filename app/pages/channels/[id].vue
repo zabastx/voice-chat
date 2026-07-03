@@ -5,6 +5,9 @@
 				<template #leading>
 					<UDashboardSidebarCollapse />
 				</template>
+				<template #right>
+					<UDashboardSidebarCollapse side="right" />
+				</template>
 			</UDashboardNavbar>
 		</template>
 
