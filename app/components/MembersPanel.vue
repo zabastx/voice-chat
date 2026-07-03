@@ -1,10 +1,32 @@
 <template>
-	<UDashboardSidebar id="members" collapsible :default-size="16" :min-size="14" side="right">
+	<UDashboardSidebar
+		id="members"
+		v-model:open="membersOpen"
+		:default-size="16"
+		:menu="{ side: 'right' }"
+		:min-size="14"
+		side="right"
+		toggle-side="right"
+		:ui="{ root: membersHidden ? 'lg:hidden' : '' }"
+	>
+		<!-- built-in toggle fires a group-wide hook that opens BOTH sidebars; replace it.
+		     toggleSide 'right' puts the close X where the navbar button opened it. -->
+		<template #toggle="{ toggle }">
+			<UButton
+				aria-label="Закрыть"
+				color="neutral"
+				icon="i-lucide-x"
+				variant="ghost"
+				@click="() => toggle()"
+			/>
+		</template>
+
 		<template #header>
 			<div class="flex w-full items-center justify-between gap-2">
 				<span class="text-highlighted truncate font-semibold">Участники</span>
 				<UTooltip :text="prefs.showOfflineMembers ? 'Скрыть не в сети' : 'Показать не в сети'">
 					<UButton
+						:aria-label="prefs.showOfflineMembers ? 'Скрыть не в сети' : 'Показать не в сети'"
 						color="neutral"
 						:icon="prefs.showOfflineMembers ? 'i-lucide-eye' : 'i-lucide-eye-off'"
 						size="xs"
@@ -56,6 +78,7 @@
 const membersStore = useMembersStore()
 const { online } = useRealtime()
 const prefs = usePreferences()
+const { membersOpen, membersHidden } = usePanels()
 
 const name = (m: MemberDto) => m.displayName ?? m.username
 const sorted = computed(() =>

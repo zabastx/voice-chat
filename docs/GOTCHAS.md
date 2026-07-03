@@ -53,7 +53,33 @@ and the select misbehaves.
 
 `storage="local"`, not `"localStorage"`. The valid values are `'cookie' | 'local'`.
 
-### 8. fetch `BodyInit` rejects `Uint8Array`
+### 8. `UDashboardSidebarToggle` / `UDashboardSidebarCollapse` act on ALL sidebars
+
+**Symptom:** with two `UDashboardSidebar`s in the group (channels + members), one toggle button
+opens/collapses **both** panels at once (on mobile, both slideovers open together).
+**Cause:** the built-in buttons fire group-wide Nuxt hooks (`dashboard:sidebar:toggle` /
+`dashboard:sidebar:collapse`) that every sidebar in the `UDashboardGroup` listens to; the `side`
+prop only affects styling.
+**Fix:** don't use the built-in buttons. Drive each sidebar's `v-model:open` (mobile slideover)
+individually and hide desktop panels via `:ui="{ root: '... lg:hidden' }"` — see
+[app/composables/usePanels.ts](../app/composables/usePanels.ts),
+[app/components/SidebarToggle.vue](../app/components/SidebarToggle.vue),
+[app/components/MembersToggle.vue](../app/components/MembersToggle.vue). Also set
+`:toggle="false"` on `UDashboardNavbar` (its default hamburger fires the same global hook) and
+override the sidebar `#toggle` slot for the slideover close button. A right-side sidebar's
+slideover also needs `:menu="{ side: 'right' }"` or it slides in from the left.
+
+### 9. `UDashboardPanel`: default slot content suppresses `#header`
+
+**Symptom:** a `UDashboardNavbar` inside `<template #header>` never renders — the channel page
+had an invisible navbar for a while.
+**Cause:** `UDashboardPanel` renders header/body/footer as _fallback_ of its default slot. Any
+direct child outside a named template becomes default-slot content and replaces all three.
+**Fix:** when using `#header`, put the page content in `<template #body>` (neutralize the body
+wrapper's own padding/scroll via `:ui="{ body: 'min-h-0 gap-0 p-0 sm:gap-0 sm:p-0' }"` if the
+page manages its own scrolling). See [app/pages/channels/[id].vue](../app/pages/channels/[id].vue).
+
+### 10. fetch `BodyInit` rejects `Uint8Array`
 
 **Symptom:** TS2322 in `putObject` — `Uint8Array<ArrayBufferLike>` not assignable to `BodyInit`,
 and `SharedArrayBuffer` leaking into the union.
@@ -63,7 +89,7 @@ and `SharedArrayBuffer` leaking into the union.
 
 ## SSR / data
 
-### 9. Session cookie not forwarded during SSR
+### 11. Session cookie not forwarded during SSR
 
 **Symptom:** channel list empty (or channel names render as `#`) on first server-rendered paint;
 works after client navigation.
@@ -71,7 +97,7 @@ works after client navigation.
 **Fix:** use `useRequestFetch()` for any authed fetch that can run during SSR. See
 [app/composables/useChannelsStore.ts](../app/composables/useChannelsStore.ts).
 
-### 10. Playwright fills the login form before hydration
+### 12. Playwright fills the login form before hydration
 
 **Symptom:** submit shows "Invalid input: expected string, received undefined" — form state empty.
 **Cause:** filling inputs before Vue hydrates doesn't populate the reactive form model.
@@ -80,7 +106,7 @@ Not an app bug.
 
 ## Localization
 
-### 11. Cyrillic in `statusMessage` breaks Node
+### 13. Cyrillic in `statusMessage` breaks Node
 
 **Symptom:** requests with Russian `createError({ statusMessage: 'Только...' })` fail oddly.
 **Cause:** HTTP reason phrases must be ASCII; Node rejects non-ASCII.
@@ -90,20 +116,20 @@ its messages stay English.
 
 ## LiveKit / voice (local dev)
 
-### 12. Webhooks can't resolve the app
+### 14. Webhooks can't resolve the app
 
 **Symptom:** LiveKit log: `dial tcp: lookup host.docker.internal on 8.8.8.8:53: no such host`;
 sidebar voice roster never populates.
 **Fix:** run the container with `--add-host=host.docker.internal:host-gateway`.
 
-### 13. Vite blocks the webhook host
+### 15. Vite blocks the webhook host
 
 **Symptom:** container reaches the app but gets HTTP 403.
 **Cause:** Vite dev server host allowlist.
 **Fix:** `vite.server.allowedHosts: ['host.docker.internal']` in `nuxt.config.ts` (already set),
 and run `nuxt dev --host` so it binds all interfaces.
 
-### 14. Browsers on the host can't reach RTC media
+### 16. Browsers on the host can't reach RTC media
 
 **Symptom:** signaling connects, then immediately disconnects; `WebSocket ... 7880 ... refused`
 and RTC never establishes. LiveKit advertises its container-internal IP (172.17.x.x).
@@ -116,12 +142,12 @@ value), so the browser still can't reach RTC and ICE fails with no obvious cause
 `127.0.0.1` (works on Docker Desktop Win/Mac and native Linux — the host kernel forwards
 loopback UDP to the published RTC ports).
 
-### 15. Screen share can't be tested headless
+### 17. Screen share can't be tested headless
 
 Headless Chromium has no screen to capture, so the video path is unverified. The publish/subscribe
 plumbing is identical to the audio path (which IS verified). Test in a headed browser or after deploy.
 
-### 16. Firefox ICE fails, Chrome works (mDNS + loopback TURN)
+### 18. Firefox ICE fails, Chrome works (mDNS + loopback TURN)
 
 **Symptom:** in Firefox, voice connects to signaling then drops with
 `WebRTC: ICE failed, your TURN server appears to be broken`. Chrome on the same

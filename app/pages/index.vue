@@ -1,9 +1,12 @@
 <template>
 	<UDashboardPanel id="welcome">
 		<template #header>
-			<UDashboardNavbar title="Добро пожаловать">
+			<UDashboardNavbar title="Добро пожаловать" :toggle="false">
 				<template #leading>
-					<UDashboardSidebarCollapse />
+					<SidebarToggle />
+				</template>
+				<template #right>
+					<MembersToggle />
 				</template>
 			</UDashboardNavbar>
 		</template>

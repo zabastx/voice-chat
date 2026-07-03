@@ -18,7 +18,7 @@ function defaults(): Preferences {
 		cameraDeviceId: null,
 		messageSound: true,
 		desktopNotifications: false,
-		showOfflineMembers: true
+		showOfflineMembers: false
 	}
 }
 

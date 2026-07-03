@@ -1,11 +1,26 @@
 <template>
 	<UDashboardGroup storage="local" storage-key="voice-chat">
 		<UDashboardSidebar
-			collapsible
+			v-model:open="channelsOpen"
 			:min-size="14"
 			:default-size="18"
-			:ui="{ footer: 'border-t border-default' }"
+			:ui="{
+				footer: 'border-t border-default',
+				root: channelsHidden ? 'lg:hidden' : ''
+			}"
 		>
+			<!-- built-in toggle fires a group-wide hook that opens BOTH sidebars; replace it.
+			     toggleSide defaults to 'left' so the close X sits where the hamburger opened it. -->
+			<template #toggle="{ toggle }">
+				<UButton
+					aria-label="Закрыть"
+					color="neutral"
+					icon="i-lucide-x"
+					variant="ghost"
+					@click="() => toggle()"
+				/>
+			</template>
+
 			<template #header>
 				<div class="text-highlighted flex items-center gap-2 font-semibold">
 					<UIcon name="i-lucide-headphones" class="text-primary size-5" />
@@ -34,6 +49,7 @@
 <script lang="ts" setup>
 const store = useChannelsStore()
 const membersStore = useMembersStore()
+const { channelsOpen, channelsHidden } = usePanels()
 const realtime = useRealtime()
 const voice = useVoice()
 const prefs = usePreferences()

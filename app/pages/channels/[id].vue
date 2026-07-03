@@ -1,62 +1,71 @@
 <template>
-	<UDashboardPanel id="chat" :ui="{ root: 'h-svh min-h-0' }">
+	<UDashboardPanel
+		id="chat"
+		:ui="{ root: 'h-svh min-h-0', body: 'min-h-0 gap-0 p-0 sm:gap-0 sm:p-0' }"
+	>
 		<template #header>
-			<UDashboardNavbar :title="channel ? `#${channel.name}` : ''" icon="i-lucide-hash">
+			<UDashboardNavbar
+				:title="channel ? `#${channel.name}` : ''"
+				icon="i-lucide-hash"
+				:toggle="false"
+			>
 				<template #leading>
-					<UDashboardSidebarCollapse />
+					<SidebarToggle />
 				</template>
 				<template #right>
-					<UDashboardSidebarCollapse side="right" />
+					<MembersToggle />
 				</template>
 			</UDashboardNavbar>
 		</template>
 
-		<div
-			ref="scroller"
-			class="min-h-0 flex-1 overflow-y-auto scroll-smooth px-2 py-3"
-			@scroll.passive="onScroll"
-		>
-			<div v-if="loadingOlder" class="flex justify-center py-2">
-				<UIcon class="text-muted size-4 animate-spin" name="i-lucide-loader-2" />
-			</div>
-			<p v-else-if="!hasMore && messages.length" class="text-dimmed px-4 py-2 text-xs">
-				Это начало канала #{{ channel?.name }}.
-			</p>
+		<template #body>
 			<div
-				v-if="!messages.length && !loading"
-				class="flex h-full flex-col items-center justify-center gap-2 text-center"
+				ref="scroller"
+				class="min-h-0 flex-1 overflow-y-auto scroll-smooth px-2 py-3"
+				@scroll.passive="onScroll"
 			>
-				<UIcon class="text-dimmed size-10" name="i-lucide-message-circle-dashed" />
-				<p class="text-muted text-sm">Пока пусто. Напишите что-нибудь!</p>
+				<div v-if="loadingOlder" class="flex justify-center py-2">
+					<UIcon class="text-muted size-4 animate-spin" name="i-lucide-loader-2" />
+				</div>
+				<p v-else-if="!hasMore && messages.length" class="text-dimmed px-4 py-2 text-xs">
+					Это начало канала #{{ channel?.name }}.
+				</p>
+				<div
+					v-if="!messages.length && !loading"
+					class="flex h-full flex-col items-center justify-center gap-2 text-center"
+				>
+					<UIcon class="text-dimmed size-10" name="i-lucide-message-circle-dashed" />
+					<p class="text-muted text-sm">Пока пусто. Напишите что-нибудь!</p>
+				</div>
+
+				<template v-for="(message, i) in messages" :key="message.id">
+					<USeparator
+						v-if="i > 0 && !sameDay(messages[i - 1]!.createdAt, message.createdAt)"
+						:label="formatDay(message.createdAt)"
+						:ui="{ label: 'text-xs text-dimmed' }"
+						class="py-2"
+					/>
+					<ChatMessage
+						:can-delete="message.authorId === user?.id || Boolean(user?.isAdmin)"
+						:can-edit="message.authorId === user?.id"
+						:compact="isCompact(i)"
+						:editing="editingId === message.id"
+						:message="message"
+						@cancel-edit="editingId = null"
+						@remove="removeMessage(message)"
+						@save-edit="saveEdit(message, $event)"
+						@start-edit="editingId = message.id"
+					/>
+				</template>
 			</div>
 
-			<template v-for="(message, i) in messages" :key="message.id">
-				<USeparator
-					v-if="i > 0 && !sameDay(messages[i - 1]!.createdAt, message.createdAt)"
-					:label="formatDay(message.createdAt)"
-					:ui="{ label: 'text-xs text-dimmed' }"
-					class="py-2"
+			<div class="border-default shrink-0 border-t p-3">
+				<MessageComposer
+					:placeholder="channel ? `Написать в #${channel.name}` : 'Написать сообщение'"
+					@send="send"
 				/>
-				<ChatMessage
-					:can-delete="message.authorId === user?.id || Boolean(user?.isAdmin)"
-					:can-edit="message.authorId === user?.id"
-					:compact="isCompact(i)"
-					:editing="editingId === message.id"
-					:message="message"
-					@cancel-edit="editingId = null"
-					@remove="removeMessage(message)"
-					@save-edit="saveEdit(message, $event)"
-					@start-edit="editingId = message.id"
-				/>
-			</template>
-		</div>
-
-		<div class="border-default shrink-0 border-t p-3">
-			<MessageComposer
-				:placeholder="channel ? `Написать в #${channel.name}` : 'Написать сообщение'"
-				@send="send"
-			/>
-		</div>
+			</div>
+		</template>
 	</UDashboardPanel>
 </template>
 
