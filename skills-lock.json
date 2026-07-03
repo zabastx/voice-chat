@@ -1,23 +1,29 @@
 {
-  "version": 1,
-  "skills": {
-    "git-commit": {
-      "source": "github/awesome-copilot",
-      "sourceType": "github",
-      "skillPath": "skills/git-commit/SKILL.md",
-      "computedHash": "2607fc60629b82b257136dd2a7a373f0a4466c0b49df7746d845d59313c99b21"
-    },
-    "nuxt": {
-      "source": "antfu/skills",
-      "sourceType": "github",
-      "skillPath": "skills/nuxt/SKILL.md",
-      "computedHash": "3f271d53fd31dbb482e6aad3f54992955f1b5cb0afa9972c592b087316005436"
-    },
-    "nuxt-ui": {
-      "source": "nuxt/ui",
-      "sourceType": "github",
-      "skillPath": "skills/nuxt-ui/SKILL.md",
-      "computedHash": "c46b774862ef29d13a3b821fc5176de45c32cb4fef6e9ba9dae9281098005a7d"
-    }
-  }
+	"version": 1,
+	"skills": {
+		"find-skills": {
+			"source": "vercel-labs/skills",
+			"sourceType": "github",
+			"skillPath": "skills/find-skills/SKILL.md",
+			"computedHash": "781bd6d3f9b19f8c9af6b53d8d0e4876d0183841b565db34ca7092ffa412d111"
+		},
+		"git-commit": {
+			"source": "github/awesome-copilot",
+			"sourceType": "github",
+			"skillPath": "skills/git-commit/SKILL.md",
+			"computedHash": "2607fc60629b82b257136dd2a7a373f0a4466c0b49df7746d845d59313c99b21"
+		},
+		"nuxt": {
+			"source": "antfu/skills",
+			"sourceType": "github",
+			"skillPath": "skills/nuxt/SKILL.md",
+			"computedHash": "3f271d53fd31dbb482e6aad3f54992955f1b5cb0afa9972c592b087316005436"
+		},
+		"nuxt-ui": {
+			"source": "nuxt/ui",
+			"sourceType": "github",
+			"skillPath": "skills/nuxt-ui/SKILL.md",
+			"computedHash": "c46b774862ef29d13a3b821fc5176de45c32cb4fef6e9ba9dae9281098005a7d"
+		}
+	}
 }
