@@ -118,12 +118,12 @@ const canSend = computed(
 
 function addFiles(files: Iterable<File>) {
 	for (const file of files) {
-		const upload: PendingUpload = {
+		const upload = reactive<PendingUpload>({
 			key: `${file.name}-${Date.now()}-${Math.random()}`,
 			file,
 			uploading: true,
 			error: false
-		}
+		})
 		uploads.value.push(upload)
 		uploadFile(upload)
 	}
@@ -196,12 +196,12 @@ async function sendVoice() {
 	const file = new File([blob], `voice-message-${Date.now()}.${extFromMime(blob.type)}`, {
 		type: blob.type
 	})
-	const upload: PendingUpload = {
+	const upload = reactive<PendingUpload>({
 		key: `${file.name}-${Math.random()}`,
 		file,
 		uploading: true,
 		error: false
-	}
+	})
 	uploads.value.push(upload)
 	sending.value = true
 	try {
