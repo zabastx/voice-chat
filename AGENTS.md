@@ -69,3 +69,17 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   (`@click="() => m.open()"`), or vue-tsc rejects the non-void return.
 - Quality gates: `bun run typecheck && bun run lint && bun run fmt`. All must stay green.
 - New UI strings: **Russian**. Dates via `ru-RU` locale (see [app/utils/format.ts](app/utils/format.ts)).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `zabastx/voice-chat` (use the `gh` CLI); external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles map 1:1 to GitHub labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
