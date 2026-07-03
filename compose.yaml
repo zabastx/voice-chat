@@ -1,6 +1,6 @@
 services:
   app:
-    build: .
+    image: zabastx.cr.cloud.ru/chat:latest
     restart: unless-stopped
     env_file: .env
     # loopback only — Caddy terminates TLS, LiveKit (host network) delivers webhooks here
