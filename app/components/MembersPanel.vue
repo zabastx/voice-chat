@@ -24,16 +24,23 @@
 		<template #header>
 			<div class="flex w-full items-center justify-between gap-2">
 				<span class="text-highlighted truncate font-semibold">Участники</span>
-				<UTooltip :text="prefs.showOfflineMembers ? 'Скрыть не в сети' : 'Показать не в сети'">
-					<UButton
-						:aria-label="prefs.showOfflineMembers ? 'Скрыть не в сети' : 'Показать не в сети'"
-						color="neutral"
-						:icon="prefs.showOfflineMembers ? 'i-lucide-eye' : 'i-lucide-eye-off'"
-						size="xs"
-						variant="ghost"
-						@click="toggleOffline"
-					/>
-				</UTooltip>
+				<!-- ClientOnly: showOfflineMembers comes from localStorage, so the
+				     icon/tooltip can't be known during SSR (would mismatch on hydration) -->
+				<ClientOnly>
+					<UTooltip :text="prefs.showOfflineMembers ? 'Скрыть не в сети' : 'Показать не в сети'">
+						<UButton
+							:aria-label="prefs.showOfflineMembers ? 'Скрыть не в сети' : 'Показать не в сети'"
+							color="neutral"
+							:icon="prefs.showOfflineMembers ? 'i-lucide-eye' : 'i-lucide-eye-off'"
+							size="xs"
+							variant="ghost"
+							@click="toggleOffline"
+						/>
+					</UTooltip>
+					<template #fallback>
+						<UButton color="neutral" disabled icon="i-lucide-eye-off" size="xs" variant="ghost" />
+					</template>
+				</ClientOnly>
 			</div>
 		</template>
 
