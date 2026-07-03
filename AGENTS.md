@@ -16,9 +16,10 @@ bun install
 bun run dev            # http://localhost:3000 — FIRST registered account becomes admin
 ```
 
-Voice needs the LiveKit container; uploads need an S3 endpoint (MinIO locally). Exact
-`docker run` commands are in [README.md](README.md). Dev accounts already seeded in the local
-DB: `danil` / `password123` (admin), `maks` / `password123`.
+Voice needs the LiveKit container; uploads need an S3 endpoint (MinIO locally). Both are
+brought up by `docker compose -f compose.dev.yaml up -d` (see [README.md](README.md) and
+[compose.dev.yaml](compose.dev.yaml)). Dev accounts already seeded in the local DB:
+`danil` / `password123` (admin), `maks` / `password123`.
 
 ## The five things that will bite you
 

@@ -7,6 +7,17 @@ rtc:
   port_range_end: 50100
   # discover the VPS public IP via STUN and advertise it in ICE candidates
   use_external_ip: true
+# Built-in TURN over UDP — no TLS cert needed, advertised at the STUN-discovered
+# public IP (non-loopback, so Firefox can allocate; Firefox blocks TURN to
+# 127.0.0.1, see GOTCHAS.md #15). Also gives a relay candidate to clients behind
+# symmetric NAT / restrictive firewalls. The relay range stays internal — the
+# SFU is the only peer of each browser, and it shares the host with TURN, so
+# SFU↔TURN relay traffic loops on localhost. Only 3478/udp needs a firewall hole.
+turn:
+  enabled: true
+  udp_port: 3478
+  relay_range_start: 57000
+  relay_range_end: 57100
 webhook:
   # must match NUXT_LIVEKIT_API_KEY in .env
   api_key: voicechat

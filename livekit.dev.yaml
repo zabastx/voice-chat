@@ -1,12 +1,7 @@
-# LiveKit config for local development.
-# Run with:
-#   docker run -d --name voicechat-livekit \
-#     --add-host=host.docker.internal:host-gateway \
-#     -p 7880:7880 -p 7881:7881 -p 50100-50120:50100-50120/udp \
-#     -v ./livekit.dev.yaml:/etc/livekit.yaml \
-#     livekit/livekit-server --config /etc/livekit.yaml --node-ip 127.0.0.1
-# (--node-ip 127.0.0.1 advertises localhost so browsers on this machine reach RTC
-#  via the published ports)
+# LiveKit config for local development. Brought up by compose.dev.yaml together
+# with the rest of the dev stack; --node-ip is set in the compose command there
+# (must be an IP, not a hostname — LiveKit silently falls back to the container
+# IP if given host.docker.internal).
 port: 7880
 rtc:
   tcp_port: 7881
@@ -19,5 +14,19 @@ webhook:
   api_key: devkey
   urls:
     - http://host.docker.internal:3000/api/livekit/webhook
+# Built-in TURN relay (no separate coturn — LiveKit v1.x has no turn_servers
+# key for external relays). Gives Firefox a non-mDNS candidate: Firefox
+# obfuscates its host candidates as *.local, which the containerized LiveKit
+# can't resolve, so direct ICE fails in Firefox while Chrome works
+# (GOTCHAS.md #15). UDP TURN needs no certs; udp_port is published in
+# compose.dev.yaml. domain is the hostname browsers resolve to reach TURN.
+# Single-participant relay is internal to LiveKit, so the relay port range
+# does NOT need to be published to the host.
+turn:
+  enabled: true
+  domain: host.docker.internal
+  udp_port: 3478
+  relay_range_start: 57000
+  relay_range_end: 57100
 logging:
   level: info

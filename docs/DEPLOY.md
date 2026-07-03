@@ -15,6 +15,7 @@ ufw allow 80/tcp    # HTTP (Let's Encrypt + redirect)
 ufw allow 443/tcp   # HTTPS + WSS
 ufw allow 443/udp   # HTTP/3 (optional)
 ufw allow 7881/tcp  # LiveKit RTC over TCP (fallback when UDP is blocked)
+ufw allow 3478/udp  # LiveKit built-in TURN (Firefox + clients behind symmetric NAT)
 ufw allow 50000:50100/udp  # LiveKit RTC media
 ```
 
@@ -57,7 +58,7 @@ docker cp "$(docker compose ps -q app)":/data/backup.sqlite ./backup-$(date +%F)
 | Symptom                                            | Check                                                                                         |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Certificates not issued                            | Both DNS records resolve to the VPS; ports 80/443 open                                        |
-| Chat works, voice does not connect                 | UDP 50000–50100 and TCP 7881 open in the VPS firewall _and_ the provider's panel firewall     |
+| Chat works, voice does not connect                 | UDP 50000–50100, UDP 3478 (TURN) and TCP 7881 open in the VPS firewall _and_ the provider's panel firewall|
 | Voice roster (sidebar) stays empty while in a call | `docker compose logs livekit` — webhooks must show `sent webhook`, targeting `127.0.0.1:3000` |
 | Files fail to upload                               | S3 env vars in `.env`; bucket must exist; `docker compose logs app`                           |
 

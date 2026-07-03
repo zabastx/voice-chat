@@ -12,18 +12,11 @@ Nuxt 4 + @nuxt/ui, LiveKit (SFU), SQLite (Drizzle), файлы в S3-совме�
 bun install
 cp .env.example .env   # for dev only NUXT_SESSION_PASSWORD is required; S3 vars enable uploads
 
-# LiveKit (voice) — required for voice channels:
-docker run -d --name voicechat-livekit \
-  --add-host=host.docker.internal:host-gateway \
-  -p 7880:7880 -p 7881:7881 -p 50100-50120:50100-50120/udp \
-  -v ./livekit.dev.yaml:/etc/livekit.yaml \
-  livekit/livekit-server --config /etc/livekit.yaml --node-ip 127.0.0.1
-
-# MinIO (attachments) — optional, any S3-compatible endpoint works:
-docker run -d --name voicechat-minio -p 9000:9000 \
-  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-  minio/minio server /data
-# then create the bucket named in NUXT_S3_BUCKET
+# LiveKit (voice) + MinIO (attachments) — the dev server runs on the host (Node),
+# these containers only provide the supporting services (see compose.dev.yaml):
+docker compose -f compose.dev.yaml up -d
+# MinIO bucket (named in NUXT_S3_BUCKET) is auto-created on first run.
+# Firefox: voice needs LIVEKIT_NODE_IP=<your LAN IP> in .env (Chrome works without it).
 
 bun run dev            # http://localhost:3000 — first registered account becomes admin
 ```

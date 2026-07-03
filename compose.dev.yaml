@@ -1,0 +1,75 @@
+# Local development infrastructure for voice-chat.
+#
+# The Nuxt dev server itself runs on the host (`bun run dev`) — it must NOT be
+# containerized: `bun run dev` is `nuxt dev --host` on Node, and Bun's dev proxy
+# silently drops WebSocket upgrades (see AGENTS.md gotcha #2). `--host` is what
+# lets these containers deliver webhooks back to it. This file only brings up
+# the two supporting services the app talks to:
+#
+#   - livekit : voice SFU (webhooks -> http://host.docker.internal:3000/...)
+#   - minio   : S3-compatible attachment storage (bucket auto-created)
+#
+# Usage:  docker compose -f compose.dev.yaml up -d
+# Stop:   docker compose -f compose.dev.yaml down        # keep data
+# Wipe:   docker compose -f compose.dev.yaml down -v     # delete volumes
+#
+# Variable substitution reads .env (NUXT_S3_*); defaults keep it working
+# standalone with the seeded minioadmin/minioadmin creds.
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.2
+    container_name: voicechat-livekit
+    restart: unless-stopped
+    # host.docker.internal lets LiveKit deliver webhooks to the host dev server.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '7880:7880' # signaling (WebSocket from browsers -> NUXT_PUBLIC_LIVEKIT_URL)
+      - '7881:7881' # RTC over TCP
+      - '50100-50120:50100-50120/udp' # RTC over UDP (range matches livekit.dev.yaml)
+      - '3478:3478/udp' # built-in TURN over UDP (Firefox relay candidate)
+    volumes:
+      - ./livekit.dev.yaml:/etc/livekit.yaml:ro
+    # --node-ip = the address LiveKit puts in its RTC ICE candidate AND in the
+    # built-in TURN server URL handed to browsers. It MUST be an IP, not a
+    # hostname (LiveKit silently falls back to its container IP otherwise).
+    # Default 127.0.0.1 works for Chrome. Firefox blocks TURN allocations to
+    # 127.0.0.1, so for voice in Firefox set LIVEKIT_NODE_IP to your machine's
+    # LAN IP in .env (the browser must reach it on the published ports).
+    # --node-ip is a CLI flag, NOT a config-file key (config node_ip crashes it).
+    command: --config /etc/livekit.yaml --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
+
+  minio:
+    image: minio/minio
+    container_name: voicechat-minio
+    restart: unless-stopped
+    ports:
+      - '9000:9000' # S3 API -> NUXT_S3_ENDPOINT=http://127.0.0.1:9000
+    environment:
+      # root creds mirror the S3 access keys the app uses (see .env)
+      MINIO_ROOT_USER: ${NUXT_S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${NUXT_S3_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    command: server /data
+
+  # one-shot: creates the bucket named NUXT_S3_BUCKET so uploads work on first run.
+  # downloads use short-lived presigned GETs, so the bucket stays private.
+  minio-init:
+    image: minio/mc
+    container_name: voicechat-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${NUXT_S3_ACCESS_KEY_ID:-minioadmin} ${NUXT_S3_SECRET_ACCESS_KEY:-minioadmin} 2>/dev/null; do
+        echo 'waiting for minio...'; sleep 1;
+      done;
+      mc mb --ignore-existing local/${NUXT_S3_BUCKET:-voice-chat};
+      echo 'bucket ready';
+      "
+    restart: 'no'
+
+volumes:
+  minio-data:

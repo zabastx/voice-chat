@@ -28,7 +28,7 @@ services:
       - app
 
   livekit:
-    image: livekit/livekit-server:v1
+    image: livekit/livekit-server:v1.13.2
     restart: unless-stopped
     # host networking: RTC media (UDP range) goes straight to the VPS interface,
     # no NAT between docker bridge and the internet
