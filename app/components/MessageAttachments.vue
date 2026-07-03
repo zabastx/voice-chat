@@ -1,11 +1,11 @@
 <template>
 	<div class="mt-1 flex flex-wrap gap-2">
 		<template v-for="attachment in attachments" :key="attachment.id">
-			<a
+			<button
 				v-if="attachment.mime.startsWith('image/')"
-				:href="`/api/attachments/${attachment.id}`"
-				rel="noopener"
-				target="_blank"
+				class="cursor-pointer"
+				type="button"
+				@click="openId = attachment.id"
 			>
 				<img
 					:alt="attachment.filename"
@@ -13,10 +13,24 @@
 					class="border-default max-h-72 max-w-full rounded-lg border object-contain"
 					loading="lazy"
 				/>
-			</a>
+			</button>
+			<video
+				v-else-if="attachment.mime.startsWith('video/')"
+				:src="`/api/attachments/${attachment.id}`"
+				class="border-default max-h-72 max-w-full rounded-lg border"
+				controls
+				preload="metadata"
+			/>
 			<VoiceMessagePlayer
-				v-else-if="attachment.mime.startsWith('audio/')"
+				v-else-if="attachment.mime.startsWith('audio/') && isVoiceMessage(attachment)"
 				:attachment="attachment"
+			/>
+			<audio
+				v-else-if="attachment.mime.startsWith('audio/')"
+				:src="`/api/attachments/${attachment.id}`"
+				class="w-72 max-w-full"
+				controls
+				preload="metadata"
 			/>
 			<a
 				v-else
@@ -32,11 +46,28 @@
 				</div>
 			</a>
 		</template>
+
+		<ImageLightbox
+			v-if="openImage"
+			:filename="openImage.filename"
+			:open="true"
+			:src="`/api/attachments/${openImage.id}`"
+			@update:open="openId = null"
+		/>
 	</div>
 </template>
 
 <script lang="ts" setup>
-defineProps<{ attachments: AttachmentDto[] }>()
+const props = defineProps<{ attachments: AttachmentDto[] }>()
+
+const openId = ref<string | null>(null)
+const openImage = computed(() => props.attachments.find((a) => a.id === openId.value) ?? null)
+
+// Recorded voice notes are named `voice-message-<ts>.<ext>` in MessageComposer;
+// they get the waveform player, other audio uploads get a native <audio> element.
+function isVoiceMessage(attachment: AttachmentDto) {
+	return attachment.filename.startsWith('voice-message-')
+}
 
 function formatSize(bytes: number) {
 	if (bytes < 1024) return `${bytes} Б`
