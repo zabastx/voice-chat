@@ -55,12 +55,12 @@ docker cp "$(docker compose ps -q app)":/data/backup.sqlite ./backup-$(date +%F)
 
 ## Troubleshooting
 
-| Symptom                                            | Check                                                                                         |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Certificates not issued                            | Both DNS records resolve to the VPS; ports 80/443 open                                        |
-| Chat works, voice does not connect                 | UDP 50000–50100, UDP 3478 (TURN) and TCP 7881 open in the VPS firewall _and_ the provider's panel firewall|
-| Voice roster (sidebar) stays empty while in a call | `docker compose logs livekit` — webhooks must show `sent webhook`, targeting `127.0.0.1:3000` |
-| Files fail to upload                               | S3 env vars in `.env`; bucket must exist; `docker compose logs app`                           |
+| Symptom                                            | Check                                                                                                      |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Certificates not issued                            | Both DNS records resolve to the VPS; ports 80/443 open                                                     |
+| Chat works, voice does not connect                 | UDP 50000–50100, UDP 3478 (TURN) and TCP 7881 open in the VPS firewall _and_ the provider's panel firewall |
+| Voice roster (sidebar) stays empty while in a call | `docker compose logs livekit` — webhooks must show `sent webhook`, targeting `127.0.0.1:3000`              |
+| Files fail to upload                               | S3 env vars in `.env`; bucket must exist; `docker compose logs app`                                        |
 
 ## Architecture notes
 
