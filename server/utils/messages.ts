@@ -1,5 +1,15 @@
 import { eq, inArray } from 'drizzle-orm'
 
+// Convert `@username` mentions in freshly written content to canonical `<@id>`
+// tokens. Called on send and edit so stored content is always canonical.
+export async function encodeMessageMentions(content: string): Promise<string> {
+	if (!content.includes('@')) return content
+	const members = await useDb()
+		.select({ id: schema.members.id, username: schema.members.username })
+		.from(schema.members)
+	return encodeMentions(content, members)
+}
+
 export async function attachmentDtosFor(messageIds: string[]) {
 	const map = new Map<string, AttachmentDto[]>()
 	if (messageIds.length === 0) return map

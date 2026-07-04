@@ -1,5 +1,25 @@
 <template>
-	<div class="flex flex-col gap-2" @dragover.prevent @drop.prevent="onDrop">
+	<div class="relative flex flex-col gap-2" @dragover.prevent @drop.prevent="onDrop">
+		<div
+			v-if="mentionOpen"
+			class="border-default bg-default absolute bottom-full left-0 z-20 mb-2 max-h-56 w-72 overflow-y-auto rounded-lg border shadow-lg"
+		>
+			<ul class="p-1">
+				<li
+					v-for="(m, i) in mentionMatches"
+					:key="m.id"
+					:class="i === mentionIndex ? 'bg-elevated' : ''"
+					class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5"
+					@mousedown.prevent="selectMention(m)"
+					@mouseenter="mentionIndex = i"
+				>
+					<UAvatar :alt="m.username" :src="m.avatarUrl ?? undefined" size="2xs" />
+					<span class="text-default truncate text-sm">{{ m.displayName || m.username }}</span>
+					<span class="text-dimmed truncate text-xs">@{{ m.username }}</span>
+				</li>
+			</ul>
+		</div>
+
 		<div v-if="uploads.length" class="flex flex-wrap gap-2">
 			<div
 				v-for="upload in uploads"
@@ -76,7 +96,10 @@
 				:rows="1"
 				autoresize
 				class="flex-1"
-				@keydown.enter.exact.prevent="submit"
+				@blur="closeMentions"
+				@click="syncMentions"
+				@keydown="onKeydown"
+				@keyup="syncMentions"
 				@paste="onPaste"
 			/>
 			<UButton :disabled="!canSend || disabled" icon="i-lucide-send-horizontal" @click="submit" />
@@ -109,6 +132,97 @@ const text = ref('')
 const sending = ref(false)
 const uploads = ref<PendingUpload[]>([])
 const fileInput = ref<HTMLInputElement>()
+
+// --- @mention autocomplete ---
+const membersStore = useMembersStore()
+const taEl = ref<HTMLTextAreaElement | null>(null)
+const mentionQuery = ref<string | null>(null)
+const mentionStart = ref(0)
+const mentionIndex = ref(0)
+
+const mentionMatches = computed<MemberDto[]>(() => {
+	if (mentionQuery.value === null) return []
+	const q = mentionQuery.value.toLowerCase()
+	return Object.values(membersStore.members.value)
+		.filter(
+			(m) =>
+				m.username.toLowerCase().startsWith(q) || (m.displayName ?? '').toLowerCase().startsWith(q)
+		)
+		.sort((a, b) => a.username.localeCompare(b.username))
+		.slice(0, 6)
+})
+const mentionOpen = computed(() => mentionQuery.value !== null && mentionMatches.value.length > 0)
+
+// recompute the active `@query` from the caret position on every caret move
+function syncMentions(event: Event) {
+	const el = event.target as HTMLTextAreaElement
+	taEl.value = el
+	const caret = el.selectionStart ?? el.value.length
+	const match = el.value.slice(0, caret).match(/(?:^|\s)@([\p{L}\p{N}_-]*)$/u)
+	if (match) {
+		const query = match[1]!
+		mentionStart.value = caret - query.length - 1
+		if (query !== mentionQuery.value) mentionIndex.value = 0
+		mentionQuery.value = query
+	} else {
+		mentionQuery.value = null
+	}
+}
+
+function closeMentions() {
+	mentionQuery.value = null
+}
+
+function selectMention(member: MemberDto) {
+	const el = taEl.value
+	if (!el) return
+	const caret = el.selectionStart ?? text.value.length
+	const insert = `@${member.username} `
+	text.value = text.value.slice(0, mentionStart.value) + insert + text.value.slice(caret)
+	const pos = mentionStart.value + insert.length
+	mentionQuery.value = null
+	nextTick(() => {
+		el.focus()
+		el.setSelectionRange(pos, pos)
+	})
+}
+
+function onKeydown(event: KeyboardEvent) {
+	if (mentionOpen.value) {
+		const count = mentionMatches.value.length
+		if (event.key === 'ArrowDown') {
+			event.preventDefault()
+			mentionIndex.value = (mentionIndex.value + 1) % count
+			return
+		}
+		if (event.key === 'ArrowUp') {
+			event.preventDefault()
+			mentionIndex.value = (mentionIndex.value - 1 + count) % count
+			return
+		}
+		if (event.key === 'Enter' || event.key === 'Tab') {
+			event.preventDefault()
+			selectMention(mentionMatches.value[mentionIndex.value] ?? mentionMatches.value[0]!)
+			return
+		}
+		if (event.key === 'Escape') {
+			event.preventDefault()
+			closeMentions()
+			return
+		}
+	}
+	// plain Enter (no modifiers) sends; Shift+Enter keeps the default newline
+	if (
+		event.key === 'Enter' &&
+		!event.shiftKey &&
+		!event.ctrlKey &&
+		!event.altKey &&
+		!event.metaKey
+	) {
+		event.preventDefault()
+		submit()
+	}
+}
 
 const canSend = computed(
 	() =>
@@ -176,6 +290,7 @@ function submit() {
 	emit('send', text.value.trim(), attachmentIds)
 	text.value = ''
 	uploads.value = []
+	mentionQuery.value = null
 }
 
 function extFromMime(mime: string) {

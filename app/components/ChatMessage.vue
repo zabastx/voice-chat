@@ -94,11 +94,12 @@ const emit = defineEmits<{
 const membersStore = useMembersStore()
 const author = computed(() => membersStore.profile(props.message.authorId))
 
-// Sanitized markdown HTML. The "(изменено)" marker is appended after
-// sanitization (trusted constant) — inline inside the trailing paragraph for
-// the common single-paragraph case, otherwise on its own line.
+// Sanitized markdown HTML with mention chips resolved from the live member
+// directory. The "(изменено)" marker is appended after sanitization (trusted
+// constant) — inline inside the trailing paragraph for the common
+// single-paragraph case, otherwise on its own line.
 const rendered = computed(() => {
-	const html = renderMarkdown(props.message.content)
+	const html = renderMessage(props.message.content, membersStore.members.value)
 	if (!props.message.editedAt) return html
 	const marker = '<span class="chat-edited">(изменено)</span>'
 	return html.endsWith('</p>') ? `${html.slice(0, -4)}${marker}</p>` : html + marker
@@ -112,7 +113,9 @@ const draft = ref('')
 watch(
 	() => props.editing,
 	(editing) => {
-		if (editing) draft.value = props.message.content
+		if (editing) {
+			draft.value = decodeMentions(props.message.content, Object.values(membersStore.members.value))
+		}
 	}
 )
 </script>

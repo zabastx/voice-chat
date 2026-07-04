@@ -59,3 +59,31 @@ export function renderMarkdown(content: string): string {
 	cache.set(content, html)
 	return html
 }
+
+const ESCAPE: Record<string, string> = {
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&#39;'
+}
+function escapeHtml(value: string): string {
+	return value.replace(/[&<>"']/g, (c) => ESCAPE[c]!)
+}
+
+type MentionMember = { username: string; displayName?: string | null }
+
+// Sanitized markdown with `<@id>` tokens resolved to highlighted mention chips.
+// The markdown pass (memoized) escapes the tokens to `&lt;@id&gt;`; we then swap
+// them for a chip built from the live member directory. The chip is injected
+// after sanitization, so the display name is HTML-escaped here and the id is
+// constrained to a safe charset — nothing user-controlled reaches the markup.
+export function renderMessage(content: string, members: Record<string, MentionMember>): string {
+	const html = renderMarkdown(content)
+	if (!html.includes('&lt;@')) return html
+	return html.replace(/&lt;@([A-Za-z0-9_-]+)&gt;/g, (_match, id: string) => {
+		const member = members[id]
+		const name = member ? (member.displayName ?? '') || member.username : 'неизвестный'
+		return `<span class="chat-mention">@${escapeHtml(name)}</span>`
+	})
+}

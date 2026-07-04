@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.4.0',
+		date: '2026-07-04',
+		title: 'Упоминания',
+		changes: [
+			'Наберите @ и выберите участника — упоминание подсветится в сообщении',
+			'Упомянутый участник получает отдельный звук-уведомление'
+		]
+	},
+	{
 		version: '0.3.0',
 		date: '2026-07-04',
 		title: 'Форматирование сообщений',

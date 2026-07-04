@@ -34,6 +34,13 @@ export function playMessageSound() {
 	tone(1100, 0.07, 0.12)
 }
 
+export function playMentionSound() {
+	if (!ensureContext()) return
+	tone(880, 0, 0.12)
+	tone(1320, 0.09, 0.14)
+	tone(1760, 0.18, 0.16)
+}
+
 export function playJoinSound() {
 	if (!ensureContext()) return
 	tone(440, 0, 0.12)

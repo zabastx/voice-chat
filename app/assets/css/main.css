@@ -97,6 +97,14 @@
 	font-size: 10px;
 	color: var(--ui-text-dimmed);
 }
+.chat-mention {
+	padding: 0 0.2em;
+	border-radius: 0.25rem;
+	font-weight: 500;
+	color: var(--ui-primary);
+	background: color-mix(in oklab, var(--ui-primary) 12%, transparent);
+	white-space: nowrap;
+}
 
 /* Brief highlight when jumping to a message (replies / search). */
 @keyframes chat-flash {

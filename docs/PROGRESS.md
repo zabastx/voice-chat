@@ -34,7 +34,7 @@ URLs are clickable via M1 autolink.
 | ------------------------------------------ | -------------- | ------------------------------------------------------------------- |
 | M1 — Markdown (Discord subset) + autolinks | ✅ done        | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose`    |
 | M1 — jump-to-message foundation            | 🟡 partial     | server `around=` window shipped; client `jumpToMessage` lands w/ M3 |
-| M2 — @mentions                             | ⬜ not started |                                                                     |
+| M2 — @mentions                             | ✅ done        | `shared/utils/mentions.ts`, composer autocomplete, chip + ping      |
 | M3 — Replies                               | ⬜ not started |                                                                     |
 | M4 — Reactions                             | ⬜ not started |                                                                     |
 | M5 — Message search (global FTS5)          | ⬜ not started |                                                                     |
@@ -73,6 +73,9 @@ URLs are clickable via M1 autolink.
 - **M1 markdown** rendered in a real browser: bold/italic/strike/code/autolink produce the right
   tags; `<script>`, `javascript:` links, and `<img onerror>` all render inert (no dialogs); no
   hydration mismatch
+- **M2 @mentions** in a real browser: composer `@` autocomplete filters + inserts, the server
+  encodes `@name`→`<@id>`, the message renders a live-name chip; encode/decode round-trips
+  (incl. Cyrillic usernames), longest-match wins, and `a@danil` is not treated as a mention
 - Settings modal end-to-end: display name saves + propagates live to old messages/SelfPanel,
   avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
   meter, prefs persisted to localStorage, Esc close

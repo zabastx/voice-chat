@@ -10,8 +10,8 @@ export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
 	const channelId = getRouterParam(event, 'id')!
 	const body = await readValidatedBody(event, bodySchema.parse)
-	const content = body.content.trim()
-	if (!content && body.attachmentIds.length === 0) {
+	const trimmed = body.content.trim()
+	if (!trimmed && body.attachmentIds.length === 0) {
 		throw createError({ statusCode: 400, message: 'Пустое сообщение' })
 	}
 
@@ -20,6 +20,8 @@ export default defineEventHandler(async (event) => {
 	if (!channel || channel.kind !== 'text') {
 		throw createError({ statusCode: 404, message: 'Канал не найден' })
 	}
+
+	const content = await encodeMessageMentions(trimmed)
 
 	const message = {
 		id: newId(),

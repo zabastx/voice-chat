@@ -17,9 +17,10 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 403, message: 'Можно редактировать только свои сообщения' })
 	}
 
+	const content = await encodeMessageMentions(body.content)
 	await db
 		.update(schema.messages)
-		.set({ content: body.content, editedAt: new Date() })
+		.set({ content, editedAt: new Date() })
 		.where(eq(schema.messages.id, id))
 
 	const dto = (await messageDto(id))!

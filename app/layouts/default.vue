@@ -69,13 +69,17 @@ useHead({
 realtime.onEvent((event) => {
 	store.apply(event)
 	membersStore.apply(event)
-	if (
-		event.type === 'message.created' &&
-		event.message.authorId !== user.value?.id &&
-		(!document.hasFocus() || store.activeChannelId.value !== event.message.channelId)
-	) {
-		if (prefs.value.messageSound) playMessageSound()
-		notifyDesktop(event.message)
+	if (event.type === 'message.created' && event.message.authorId !== user.value?.id) {
+		const mentionsMe =
+			Boolean(user.value) && mentionedIds(event.message.content).includes(user.value!.id)
+		const away = !document.hasFocus() || store.activeChannelId.value !== event.message.channelId
+		// a mention pings even when the channel is focused; it wins over the
+		// plain message sound so we never play both
+		if (prefs.value.messageSound) {
+			if (mentionsMe) playMentionSound()
+			else if (away) playMessageSound()
+		}
+		if (away) notifyDesktop(event.message)
 	}
 })
 
@@ -89,8 +93,9 @@ function notifyDesktop(message: MessageDto) {
 		return
 	}
 	const author = membersStore.profile(message.authorId)
+	const body = decodeMentions(message.content, Object.values(membersStore.members.value))
 	const notification = new Notification(author?.displayName ?? message.authorName, {
-		body: message.content.slice(0, 120) || 'Вложение',
+		body: body.slice(0, 120) || 'Вложение',
 		// one notification per channel — repeats replace instead of stacking
 		tag: message.channelId,
 		icon: author?.avatarUrl ?? undefined
