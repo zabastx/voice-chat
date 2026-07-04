@@ -3,8 +3,8 @@ import * as z from 'zod'
 
 const querySchema = z.object({
 	before: z.iso.datetime().optional(),
-	// center a window on the message at this timestamp (reply / search jump)
-	around: z.iso.datetime().optional(),
+	// center a window on this message (reply / search jump)
+	aroundId: z.string().optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(50)
 })
 
@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
 				authorId: schema.messages.authorId,
 				authorName: schema.members.username,
 				content: schema.messages.content,
+				replyToId: schema.messages.replyToId,
 				createdAt: schema.messages.createdAt,
 				editedAt: schema.messages.editedAt
 			})
@@ -46,15 +47,20 @@ export default defineEventHandler(async (event) => {
 	let rows: Awaited<ReturnType<typeof selectMessages>>
 	let hasMore: boolean
 
-	if (query.around) {
-		const target = new Date(query.around)
+	const target = query.aroundId
+		? await db.query.messages.findFirst({
+				where: and(eq(schema.messages.id, query.aroundId), channelFilter)
+			})
+		: undefined
+
+	if (target) {
 		const older = await selectMessages(
-			and(channelFilter, lte(schema.messages.createdAt, target)),
+			and(channelFilter, lte(schema.messages.createdAt, target.createdAt)),
 			'desc',
 			WINDOW + 1
 		)
 		const newer = await selectMessages(
-			and(channelFilter, gt(schema.messages.createdAt, target)),
+			and(channelFilter, gt(schema.messages.createdAt, target.createdAt)),
 			'asc',
 			WINDOW
 		)
@@ -73,13 +79,17 @@ export default defineEventHandler(async (event) => {
 		rows = page.reverse()
 	}
 
-	const attachments = await attachmentDtosFor(rows.map((row) => row.id))
+	const [attachments, replyRefs] = await Promise.all([
+		attachmentDtosFor(rows.map((row) => row.id)),
+		replyRefsFor(rows.flatMap((row) => (row.replyToId ? [row.replyToId] : [])))
+	])
 	const messages = rows.map(
-		(row): MessageDto => ({
-			...row,
-			createdAt: row.createdAt.toISOString(),
-			editedAt: row.editedAt?.toISOString() ?? null,
-			attachments: attachments.get(row.id) ?? []
+		({ replyToId, ...rest }): MessageDto => ({
+			...rest,
+			createdAt: rest.createdAt.toISOString(),
+			editedAt: rest.editedAt?.toISOString() ?? null,
+			attachments: attachments.get(rest.id) ?? [],
+			replyTo: resolveReplyRef(replyToId, replyRefs)
 		})
 	)
 

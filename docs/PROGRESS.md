@@ -30,14 +30,14 @@ previews, search) is now in progress — see "v2 — Chat/messaging" below.
 Phased plan, each milestone its own release. Rich link previews (M6) stay deferred (SSRF/privacy);
 URLs are clickable via M1 autolink.
 
-| Milestone                                  | Status         | Notes                                                               |
-| ------------------------------------------ | -------------- | ------------------------------------------------------------------- |
-| M1 — Markdown (Discord subset) + autolinks | ✅ done        | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose`    |
-| M1 — jump-to-message foundation            | 🟡 partial     | server `around=` window shipped; client `jumpToMessage` lands w/ M3 |
-| M2 — @mentions                             | ✅ done        | `shared/utils/mentions.ts`, composer autocomplete, chip + ping      |
-| M3 — Replies                               | ⬜ not started |                                                                     |
-| M4 — Reactions                             | ⬜ not started |                                                                     |
-| M5 — Message search (global FTS5)          | ⬜ not started |                                                                     |
+| Milestone                                  | Status         | Notes                                                            |
+| ------------------------------------------ | -------------- | ---------------------------------------------------------------- |
+| M1 — Markdown (Discord subset) + autolinks | ✅ done        | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose` |
+| M1 — jump-to-message foundation            | ✅ done        | `aroundId=` window + client `jumpToMessage` + flash              |
+| M2 — @mentions                             | ✅ done        | `shared/utils/mentions.ts`, composer autocomplete, chip + ping   |
+| M3 — Replies                               | ✅ done        | `replyToId` (no FK), reply banner, quote render, deleted-live    |
+| M4 — Reactions                             | ⬜ not started |                                                                  |
+| M5 — Message search (global FTS5)          | ⬜ not started |                                                                  |
 
 ## Feature status
 
@@ -76,6 +76,9 @@ URLs are clickable via M1 autolink.
 - **M2 @mentions** in a real browser: composer `@` autocomplete filters + inserts, the server
   encodes `@name`→`<@id>`, the message renders a live-name chip; encode/decode round-trips
   (incl. Cyrillic usernames), longest-match wins, and `a@danil` is not treated as a mention
+- **M3 replies** in a real browser: reply banner → sent reply shows the quoted parent (author +
+  mention-decoded preview); clicking the quote scrolls to and flashes the original; deleting the
+  parent flips the quote to "исходное сообщение удалено" both live and after reload
 - Settings modal end-to-end: display name saves + propagates live to old messages/SelfPanel,
   avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
   meter, prefs persisted to localStorage, Esc close

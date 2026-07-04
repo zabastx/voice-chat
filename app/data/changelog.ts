@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.5.0',
+		date: '2026-07-04',
+		title: 'Ответы на сообщения',
+		changes: [
+			'Отвечайте на конкретное сообщение — над ответом видна цитата',
+			'Нажмите на цитату, чтобы перейти к исходному сообщению'
+		]
+	},
+	{
 		version: '0.4.0',
 		date: '2026-07-04',
 		title: 'Упоминания',

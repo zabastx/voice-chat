@@ -51,9 +51,12 @@
 							:can-edit="message.authorId === user?.id"
 							:compact="isCompact(i)"
 							:editing="editingId === message.id"
+							:flash="flashId === message.id"
 							:message="message"
 							@cancel-edit="editingId = null"
+							@jump="jumpToMessage"
 							@remove="removeMessage(message)"
+							@reply="replyingTo = message"
 							@save-edit="saveEdit(message, $event)"
 							@start-edit="editingId = message.id"
 						/>
@@ -62,6 +65,24 @@
 			</div>
 
 			<div class="border-default shrink-0 border-t p-3">
+				<div v-if="replyingTo" class="text-muted mb-2 flex items-center gap-2 text-xs">
+					<UIcon class="size-3.5 shrink-0 -scale-x-100" name="i-lucide-reply" />
+					<span class="shrink-0">Ответ на</span>
+					<span class="text-primary shrink-0">@{{ replyingTo.authorName }}</span>
+					<span class="truncate">{{ replyPreview }}</span>
+					<UButton
+						class="ml-auto shrink-0"
+						color="neutral"
+						icon="i-lucide-x"
+						size="xs"
+						variant="ghost"
+						@click="
+							() => {
+								replyingTo = null
+							}
+						"
+					/>
+				</div>
 				<MessageComposer
 					:placeholder="channel ? `Написать в #${channel.name}` : 'Написать сообщение'"
 					@send="send"
@@ -93,6 +114,21 @@ const loadingOlder = ref(false)
 const editingId = ref<string | null>(null)
 const scroller = ref<HTMLElement>()
 const content = ref<HTMLElement>()
+const membersStore = useMembersStore()
+
+// message being replied to (drives the composer banner + send payload)
+const replyingTo = ref<MessageDto | null>(null)
+// message briefly highlighted after a reply/search jump
+const flashId = ref<string | null>(null)
+
+const replyPreview = computed(() => {
+	if (!replyingTo.value) return ''
+	const text = decodeMentions(replyingTo.value.content, Object.values(membersStore.members.value))
+		.replace(/\s+/g, ' ')
+		.trim()
+	if (!text) return 'вложение'
+	return text.length > 100 ? `${text.slice(0, 100)}…` : text
+})
 
 // True while the view is pinned to the newest messages. Kept in sync on scroll
 // so late-loading images/videos (see MessageAttachments) and incoming messages
@@ -106,6 +142,8 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000
 function isCompact(index: number) {
 	const prev = messages.value[index - 1]
 	const current = messages.value[index]!
+	// a reply needs its header + quote visible, so never collapse it
+	if (current.replyTo) return false
 	if (!prev || prev.authorId !== current.authorId) return false
 	if (!sameDay(prev.createdAt, current.createdAt)) return false
 	return (
@@ -163,12 +201,42 @@ function onScroll() {
 	if (el.scrollTop < 100) loadOlder()
 }
 
+// Scroll to a message (reply quote / search result), loading a window around it
+// if it isn't currently in view, then flash it. The `around` foundation from M1.
+async function jumpToMessage(messageId: string) {
+	stick.value = false
+	if (!messages.value.some((m) => m.id === messageId)) {
+		loading.value = true
+		try {
+			const res = await $fetch(`/api/channels/${channelId.value}/messages`, {
+				query: { aroundId: messageId }
+			})
+			messages.value = res.messages
+			hasMore.value = res.hasMore
+		} finally {
+			loading.value = false
+		}
+	}
+	await nextTick()
+	const el = scroller.value?.querySelector(`[data-message-id="${messageId}"]`)
+	if (!el) return
+	el.scrollIntoView({ block: 'center' })
+	flashId.value = null
+	await nextTick()
+	flashId.value = messageId
+	setTimeout(() => {
+		if (flashId.value === messageId) flashId.value = null
+	}, 1600)
+}
+
 async function send(content: string, attachmentIds: string[]) {
+	const replyToId = replyingTo.value?.id
 	try {
 		const message = await $fetch(`/api/channels/${channelId.value}/messages`, {
 			method: 'POST',
-			body: { content, attachmentIds }
+			body: { content, attachmentIds, replyToId }
 		})
+		replyingTo.value = null
 		pushMessage(message)
 	} catch (e) {
 		toast.add({

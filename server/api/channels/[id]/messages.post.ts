@@ -3,7 +3,8 @@ import * as z from 'zod'
 
 const bodySchema = z.object({
 	content: z.string().max(4000),
-	attachmentIds: z.array(z.string()).max(10).default([])
+	attachmentIds: z.array(z.string()).max(10).default([]),
+	replyToId: z.string().optional()
 })
 
 export default defineEventHandler(async (event) => {
@@ -23,11 +24,22 @@ export default defineEventHandler(async (event) => {
 
 	const content = await encodeMessageMentions(trimmed)
 
+	// only accept a reply pointer to an existing message in this channel;
+	// anything stale is silently dropped rather than failing the send
+	let replyToId: string | null = null
+	if (body.replyToId) {
+		const parent = await db.query.messages.findFirst({
+			where: eq(schema.messages.id, body.replyToId)
+		})
+		if (parent && parent.channelId === channelId) replyToId = parent.id
+	}
+
 	const message = {
 		id: newId(),
 		channelId,
 		authorId: user.id,
 		content,
+		replyToId,
 		createdAt: new Date()
 	}
 	await db.insert(schema.messages).values(message)

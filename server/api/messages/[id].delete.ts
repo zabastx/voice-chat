@@ -22,5 +22,17 @@ export default defineEventHandler(async (event) => {
 	}
 
 	wsBroadcast({ type: 'message.deleted', channelId: message.channelId, messageId: id })
+
+	// replies to this message now dangle — rebroadcast them so their quote
+	// flips to "исходное сообщение удалено" live
+	const replies = await db
+		.select({ id: schema.messages.id })
+		.from(schema.messages)
+		.where(eq(schema.messages.replyToId, id))
+	for (const reply of replies) {
+		const dto = await messageDto(reply.id)
+		if (dto) wsBroadcast({ type: 'message.updated', message: dto })
+	}
+
 	return { ok: true }
 })

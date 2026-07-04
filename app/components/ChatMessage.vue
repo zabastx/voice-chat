@@ -20,6 +20,24 @@
 		</div>
 
 		<div class="min-w-0 flex-1">
+			<button
+				v-if="message.replyTo"
+				:disabled="message.replyTo.deleted"
+				class="text-muted mb-0.5 flex max-w-full items-center gap-1 text-xs"
+				:class="message.replyTo.deleted ? 'cursor-default' : 'hover:text-default cursor-pointer'"
+				type="button"
+				@click="onQuoteClick"
+			>
+				<UIcon class="size-3 shrink-0 -scale-x-100" name="i-lucide-reply" />
+				<span v-if="message.replyTo.deleted" class="text-dimmed italic">
+					исходное сообщение удалено
+				</span>
+				<template v-else>
+					<span class="text-primary shrink-0">@{{ message.replyTo.authorName }}</span>
+					<span class="truncate">{{ message.replyTo.preview || 'вложение' }}</span>
+				</template>
+			</button>
+
 			<div v-if="!compact" class="flex items-baseline gap-2">
 				<span class="text-highlighted text-sm font-semibold">{{ authorName }}</span>
 				<span class="text-dimmed text-xs">{{ formatTimestamp(message.createdAt) }}</span>
@@ -50,9 +68,16 @@
 		</div>
 
 		<div
-			v-if="!editing && (canEdit || canDelete)"
+			v-if="!editing"
 			class="border-default bg-default absolute -top-3 right-2 hidden gap-0.5 rounded-md border p-0.5 shadow-sm group-hover:flex"
 		>
+			<UButton
+				color="neutral"
+				icon="i-lucide-reply"
+				size="xs"
+				variant="ghost"
+				@click="emit('reply')"
+			/>
 			<UButton
 				v-if="canEdit"
 				color="neutral"
@@ -89,7 +114,15 @@ const emit = defineEmits<{
 	cancelEdit: []
 	saveEdit: [content: string]
 	remove: []
+	reply: []
+	jump: [messageId: string]
 }>()
+
+function onQuoteClick() {
+	if (props.message.replyTo && !props.message.replyTo.deleted) {
+		emit('jump', props.message.replyTo.id)
+	}
+}
 
 const membersStore = useMembersStore()
 const author = computed(() => membersStore.profile(props.message.authorId))

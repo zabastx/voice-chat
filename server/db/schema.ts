@@ -33,6 +33,10 @@ export const messages = sqliteTable(
 			.notNull()
 			.references(() => members.id, { onDelete: 'cascade' }),
 		content: text('content').notNull(),
+		// id of the message this one replies to. Deliberately NOT a foreign key:
+		// when the parent is deleted the reference dangles so we can still show
+		// "исходное сообщение удалено" instead of silently losing the reply.
+		replyToId: text('reply_to_id'),
 		createdAt: integer('created_at', { mode: 'timestamp_ms' })
 			.notNull()
 			.$defaultFn(() => new Date()),

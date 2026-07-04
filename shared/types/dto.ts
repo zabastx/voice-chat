@@ -14,6 +14,15 @@ export interface AttachmentDto {
 	size: number
 }
 
+export interface ReplyRefDto {
+	id: string
+	authorName: string | null
+	// plain-text, mention-decoded, markdown-stripped snippet of the parent
+	preview: string
+	// true when the parent message has since been deleted
+	deleted: boolean
+}
+
 export interface MessageDto {
 	id: string
 	channelId: string
@@ -23,6 +32,7 @@ export interface MessageDto {
 	createdAt: string
 	editedAt: string | null
 	attachments: AttachmentDto[]
+	replyTo: ReplyRefDto | null
 }
 
 export interface MemberDto {
