@@ -76,6 +76,9 @@ export function useVoice() {
 					const el = track.attach()
 					document.body.appendChild(el)
 					audioElements.add(el)
+					// re-apply this listener's stored local volume/mute for the speaker;
+					// livekit's per-participant volume lives on the room and is lost on leave
+					applyLocalVolume(participant.identity)
 				} else if (publication.source === livekit.Track.Source.ScreenShare) {
 					remoteScreenTracks.set(publication.trackSid, track)
 					screenShares.value = [
@@ -243,6 +246,43 @@ export function useVoice() {
 		return remoteCameraTracks.get(identity)
 	}
 
+	// --- local (client-side only) per-speaker volume/mute; see ADR 0003 ---
+
+	function localVolume(identity: string) {
+		return prefs.value.localVolumes[identity]?.volume ?? 100
+	}
+
+	function isLocallyMuted(identity: string) {
+		return prefs.value.localVolumes[identity]?.muted ?? false
+	}
+
+	// push the stored preference onto the live LiveKit track (0 while muted)
+	function applyLocalVolume(identity: string) {
+		const entry = prefs.value.localVolumes[identity]
+		const value = entry ? (entry.muted ? 0 : entry.volume / 100) : 1
+		room?.remoteParticipants.get(identity)?.setVolume(value)
+	}
+
+	function setLocalVolume(identity: string, volume: number) {
+		const clamped = Math.round(Math.min(200, Math.max(0, volume)))
+		const current = prefs.value.localVolumes[identity]
+		// dragging the slider off zero clears a local mute (Discord behaviour)
+		prefs.value.localVolumes = {
+			...prefs.value.localVolumes,
+			[identity]: { volume: clamped, muted: clamped > 0 ? false : (current?.muted ?? false) }
+		}
+		applyLocalVolume(identity)
+	}
+
+	function toggleLocalMute(identity: string) {
+		const current = prefs.value.localVolumes[identity] ?? { volume: 100, muted: false }
+		prefs.value.localVolumes = {
+			...prefs.value.localVolumes,
+			[identity]: { ...current, muted: !current.muted }
+		}
+		applyLocalVolume(identity)
+	}
+
 	// switch an input/output device mid-call; no-op when not connected
 	async function setDevice(kind: MediaDeviceKind, deviceId: string | null) {
 		if (!room) return
@@ -269,6 +309,10 @@ export function useVoice() {
 		toggleCamera,
 		screenTrackFor,
 		cameraTrackFor,
+		localVolume,
+		isLocallyMuted,
+		setLocalVolume,
+		toggleLocalMute,
 		setDevice
 	}
 }

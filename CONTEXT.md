@@ -15,3 +15,6 @@ Glossary for the voice-chat project — a private Discord-style app for one frie
 - **Invite** — a single-use registration token created by the Admin or a Moderator. Redeeming it is the only way to register (except the very first Member, who becomes the Admin).
 - **Presence** — whether a Member is currently connected (online/offline).
 - **Voice State** — which Voice Channel a Member is currently in, plus mute/speaking status; visible to all Members without joining.
+- **Self-Mute** — a Member muting their own microphone. Broadcast to everyone via Voice State; the whole room stops hearing that Member.
+- **Local Volume** — a listener's per-speaker playback level (0–200%, default 100%), applied only in the listener's own browser. Purely client-side: it never touches the speaker's mic or any other listener. Persisted per-device (localStorage), keyed by the speaker's Member id.
+- **Local Mute** — a listener silencing one specific speaker for themselves only (Local Volume forced to 0 via a separate flag that preserves the prior level). Distinct from Self-Mute (which is the speaker's own choice, seen by all) and from any server/admin force-mute (which this app does not have).

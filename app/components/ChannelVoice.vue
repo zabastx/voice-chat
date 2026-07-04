@@ -46,14 +46,16 @@
 					v-else-if="tiles.length"
 					class="flex min-h-0 flex-1 flex-wrap content-center-safe justify-center-safe gap-3 overflow-y-auto p-3"
 				>
-					<div
+					<VoiceUserMenu
 						v-for="tile in tiles"
 						:key="tile.key"
-						class="h-45 w-80 max-w-full shrink-0 cursor-pointer"
-						@click="focused = tile.key"
+						:disabled="!canAdjust(tile)"
+						:identity="tile.memberId ?? ''"
 					>
-						<VoiceTile v-bind="tile.props" />
-					</div>
+						<div class="h-45 w-80 max-w-full shrink-0 cursor-pointer" @click="focused = tile.key">
+							<VoiceTile v-bind="tile.props" />
+						</div>
+					</VoiceUserMenu>
 				</div>
 
 				<!-- empty channel -->
@@ -154,6 +156,7 @@ const tiles = computed(() => {
 	const camIds = new Set(voice.cameraTiles.value.map((t) => t.identity))
 	const list = roster.value.map((p) => ({
 		key: `p:${p.memberId}`,
+		memberId: p.memberId as string | undefined,
 		props: {
 			track:
 				connectedHere.value && camIds.has(p.memberId)
@@ -162,19 +165,23 @@ const tiles = computed(() => {
 			label: participantName(p),
 			avatarUrl: membersStore.profile(p.memberId)?.avatarUrl,
 			muted: isMuted(p),
-			speaking: isSpeaking(p)
+			speaking: isSpeaking(p),
+			locallyMuted:
+				connectedHere.value && p.memberId !== user.value?.id && voice.isLocallyMuted(p.memberId)
 		}
 	}))
 	if (connectedHere.value) {
 		for (const s of voice.screenShares.value) {
 			list.push({
 				key: `s:${s.sid}`,
+				memberId: undefined,
 				props: {
 					track: voice.screenTrackFor(s.sid),
 					label: `${s.name} — экран`,
 					avatarUrl: undefined,
 					muted: false,
 					speaking: false,
+					locallyMuted: false,
 					icon: 'i-lucide-monitor-up'
 				} as (typeof list)[number]['props']
 			})
@@ -184,6 +191,11 @@ const tiles = computed(() => {
 })
 
 const focusedTile = computed(() => tiles.value.find((t) => t.key === focused.value)?.props)
+
+// local volume/mute only applies to other participants while we are in the call
+function canAdjust(tile: (typeof tiles.value)[number]) {
+	return connectedHere.value && !!tile.memberId && tile.memberId !== user.value?.id
+}
 
 // drop focus if the focused tile disappears (owner left / stopped video);
 // removing the element from the DOM also exits fullscreen automatically

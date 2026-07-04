@@ -1,5 +1,11 @@
 // per-device user preferences, persisted in localStorage (device ids are
 // per-machine, so they don't belong on the server)
+// per-speaker playback preference, applied only in this browser (see ADR 0003)
+export interface LocalVolume {
+	volume: number // percent, 0–200; 100 = unchanged
+	muted: boolean // local mute, independent of `volume` so it preserves the level
+}
+
 export interface Preferences {
 	micDeviceId: string | null
 	speakerDeviceId: string | null
@@ -7,6 +13,8 @@ export interface Preferences {
 	messageSound: boolean
 	desktopNotifications: boolean
 	showOfflineMembers: boolean
+	// per-speaker local volume/mute, keyed by the speaker's member id; sparse
+	localVolumes: Record<string, LocalVolume>
 	// last app version whose changelog the user has seen; null until first load seeds it
 	lastSeenVersion: string | null
 }
@@ -21,6 +29,7 @@ function defaults(): Preferences {
 		messageSound: true,
 		desktopNotifications: false,
 		showOfflineMembers: false,
+		localVolumes: {},
 		lastSeenVersion: null
 	}
 }

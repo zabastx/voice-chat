@@ -81,34 +81,49 @@
 							variant="ghost"
 						/>
 					</UDropdownMenu>
-					<div
+					<VoiceUserMenu
 						v-for="participant in rooms[channel.id] ?? []"
 						:key="participant.memberId"
-						class="ml-4 flex items-center gap-2 py-0.5 pl-2"
+						:disabled="!canAdjust(channel.id, participant)"
+						:identity="participant.memberId"
 					>
-						<UAvatar
-							:alt="participantName(participant)"
-							:class="isSpeaking(channel.id, participant) ? 'ring-success ring-2' : ''"
-							:src="membersStore.profile(participant.memberId)?.avatarUrl ?? undefined"
-							size="3xs"
-						/>
-						<span class="text-muted truncate text-xs">{{ participantName(participant) }}</span>
-						<UIcon
-							v-if="isMuted(participant)"
-							class="text-dimmed size-3 shrink-0"
-							name="i-lucide-mic-off"
-						/>
-						<UIcon
-							v-if="isCameraOn(participant)"
-							class="text-primary size-3 shrink-0"
-							name="i-lucide-video"
-						/>
-						<UIcon
-							v-if="participant.screenSharing"
-							class="text-primary size-3 shrink-0"
-							name="i-lucide-monitor-up"
-						/>
-					</div>
+						<div
+							class="ml-4 flex items-center gap-2 rounded-md py-1 pl-2 transition-colors"
+							:class="
+								canAdjust(channel.id, participant) ? 'hover:bg-elevated cursor-context-menu' : ''
+							"
+						>
+							<UAvatar
+								:alt="participantName(participant)"
+								:class="isSpeaking(channel.id, participant) ? 'ring-success ring-2' : ''"
+								:src="membersStore.profile(participant.memberId)?.avatarUrl ?? undefined"
+								size="2xs"
+							/>
+							<span class="text-muted truncate text-sm">{{ participantName(participant) }}</span>
+							<UIcon
+								v-if="isMuted(participant)"
+								class="text-dimmed size-3.5 shrink-0"
+								name="i-lucide-mic-off"
+							/>
+							<UIcon
+								v-if="isCameraOn(participant)"
+								class="text-primary size-3.5 shrink-0"
+								name="i-lucide-video"
+							/>
+							<UIcon
+								v-if="participant.screenSharing"
+								class="text-primary size-3.5 shrink-0"
+								name="i-lucide-monitor-up"
+							/>
+							<UIcon
+								v-if="
+									canAdjust(channel.id, participant) && voice.isLocallyMuted(participant.memberId)
+								"
+								class="text-dimmed size-3.5 shrink-0"
+								name="i-lucide-volume-x"
+							/>
+						</div>
+					</VoiceUserMenu>
 				</div>
 			</div>
 		</div>
@@ -164,6 +179,11 @@ function isMuted(participant: VoiceParticipant) {
 
 function isCameraOn(participant: VoiceParticipant) {
 	return participant.memberId === user.value?.id ? voice.camera.value : participant.cameraOn
+}
+
+// local volume/mute only works for other people in the channel we are connected to
+function canAdjust(channelId: string, participant: VoiceParticipant) {
+	return voice.currentChannelId.value === channelId && participant.memberId !== user.value?.id
 }
 
 function channelMenu(channel: ChannelDto): DropdownMenuItem[][] {

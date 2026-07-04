@@ -18,6 +18,7 @@
 			<UIcon v-if="icon" :name="icon" class="text-primary size-3.5 shrink-0" />
 			<span class="truncate text-xs font-medium text-white">{{ label }}</span>
 			<UIcon v-if="muted" class="text-error size-3.5 shrink-0" name="i-lucide-mic-off" />
+			<UIcon v-if="locallyMuted" class="size-3.5 shrink-0 text-white/70" name="i-lucide-volume-x" />
 		</div>
 	</div>
 </template>
@@ -32,6 +33,7 @@ const props = defineProps<{
 	muted?: boolean
 	speaking?: boolean
 	icon?: string
+	locallyMuted?: boolean
 }>()
 
 const videoEl = ref<HTMLVideoElement>()
