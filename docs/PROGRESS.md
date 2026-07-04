@@ -22,8 +22,9 @@ on the VPS.
 | Notifications | In-app only: unread badges, tab-title counter, join/leave/message sounds                                      |
 
 **Deferred to v2+:** browser/Web Push, desktop wrapper / global PTT, DMs, multiple spaces, a real
-roles engine, Postgres. The **Chat/messaging** batch (replies, reactions, markdown, @mentions, link
-previews, search) is now in progress — see "v2 — Chat/messaging" below.
+roles engine, Postgres. The **Chat/messaging** batch (markdown, @mentions, replies, reactions,
+search) shipped as v0.3.0–v0.7.0 — see "v2 — Chat/messaging" below. Only rich link previews (M6)
+remain deferred (SSRF/privacy).
 
 ## v2 — Chat/messaging
 
