@@ -6,6 +6,10 @@ const querySchema = z.object({
 	// id tiebreaker for `before`: rows can share a createdAt millisecond, and a
 	// strict timestamp cursor would skip the twins across a page boundary
 	beforeId: z.string().optional(),
+	// symmetric forward cursor, used when the client scrolls back down through a
+	// window whose live tail was trimmed away (message virtualization)
+	after: z.iso.datetime().optional(),
+	afterId: z.string().optional(),
 	// center a window on this message (reply / search jump)
 	aroundId: z.string().optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(50)
@@ -48,7 +52,10 @@ export default defineEventHandler(async (event) => {
 
 	// rows in ascending (oldest → newest) order regardless of query mode
 	let rows: Awaited<ReturnType<typeof selectMessages>>
+	// hasMore = older messages exist before rows[0]; hasMoreNewer = newer exist
+	// after the last row (only the live-tail page can be sure there are none)
 	let hasMore: boolean
+	let hasMoreNewer = false
 
 	const target = query.aroundId
 		? await db.query.messages.findFirst({
@@ -65,10 +72,24 @@ export default defineEventHandler(async (event) => {
 		const newer = await selectMessages(
 			and(channelFilter, gt(schema.messages.createdAt, target.createdAt)),
 			'asc',
-			WINDOW
+			WINDOW + 1
 		)
 		hasMore = older.length > WINDOW
-		rows = [...older.slice(0, WINDOW).reverse(), ...newer]
+		hasMoreNewer = newer.length > WINDOW
+		rows = [...older.slice(0, WINDOW).reverse(), ...newer.slice(0, WINDOW)]
+	} else if (query.after) {
+		// page forward: the oldest `limit` messages newer than the cursor
+		const after = new Date(query.after)
+		const cursor = query.afterId
+			? or(
+					gt(schema.messages.createdAt, after),
+					and(eq(schema.messages.createdAt, after), gt(schema.messages.id, query.afterId))
+				)
+			: gt(schema.messages.createdAt, after)
+		const page = await selectMessages(and(channelFilter, cursor), 'asc', query.limit)
+		hasMoreNewer = page.length === query.limit
+		hasMore = true // there is always older history behind a forward page
+		rows = page
 	} else {
 		const before = query.before ? new Date(query.before) : undefined
 		// matches the (createdAt, id) sort order of selectMessages
@@ -101,5 +122,5 @@ export default defineEventHandler(async (event) => {
 		})
 	)
 
-	return { messages, hasMore }
+	return { messages, hasMore, hasMoreNewer }
 })

@@ -46,7 +46,7 @@ URLs are clickable via M1 autolink.
 | ----------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Auth, invites, first-user-admin                                   | ✅ done     | `server/api/auth/*`, `server/api/invites/*`                                                                                                                                                                                    |
 | Channels CRUD (admin)                                             | ✅ done     | live-synced over WS                                                                                                                                                                                                            |
-| Text chat: send / edit / delete, unread, day separators, grouping | ✅ done     | `app/pages/channels/[id].vue`                                                                                                                                                                                                  |
+| Text chat: send / edit / delete, unread, day separators, grouping | ✅ done     | `app/pages/channels/[id].vue`; message list is windowed — a bounded ~150-message DOM around the viewport (scroll-up loads older + trims newest, scroll-down reloads newer + trims oldest)                                      |
 | Realtime hub (presence, messages, channels, voice state)          | ✅ done     | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`                                                                                                                                                                               |
 | Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done     | `server/utils/storage.ts`, `server/api/attachments/*`; `?proxy` streams bytes for JS readers (voice waveform — bucket has no CORS); `?preview` serves a sharp-generated WebP thumbnail for in-chat images (`image-preview.ts`) |
 | Voice channels (join/leave, mute, speaking, roster)               | ✅ done     | `useVoice.ts` + LiveKit webhooks                                                                                                                                                                                               |
@@ -111,6 +111,17 @@ URLs are clickable via M1 autolink.
 - `PRAGMA synchronous = NORMAL` under WAL; hourly stale-upload sweep (was boot-only);
   avatar/attachment redirects carry `Cache-Control: private, max-age=240`; WS ticket-map purge + 10 s auth timeout
 - Message pagination cursor extended with an id tiebreaker (`before` + `beforeId`) so same-millisecond rows aren't skipped
+
+**Message virtualization (v0.9.2)** — data-window cap on the chat message list, verified in a real
+browser (Playwright, headless Chromium) against a 400-message-seeded channel:
+
+- DOM held at ~150 message nodes while scrolling through 400+ messages in both directions
+  (was unbounded); scroll position stayed anchored across every load/trim; no console errors
+- Reached the true top (oldest message) and returned cleanly to the live tail, re-pinned to bottom
+- Jump-to-message (search result → old message) loads an around-window, flashes the target, and
+  scrolling back down reloads newer + returns to the live tail
+- Server endpoint gained a symmetric `after`/`afterId` forward cursor and reports `hasMoreNewer`
+  (used by the client to know when the window is detached from the live tail)
 
 **Not yet verified (needs a human / real environment):**
 

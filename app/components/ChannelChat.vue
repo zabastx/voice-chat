@@ -126,6 +126,11 @@ const messages = ref<MessageDto[]>([])
 const hasMore = ref(false)
 const loading = ref(false)
 const loadingOlder = ref(false)
+const loadingNewer = ref(false)
+// True while the loaded window ends at the live newest message. Reading history
+// (scroll-up trim / jump) can detach the window from the tail; while detached we
+// don't append live messages — they're pulled back in by loadNewer on scroll-down.
+const atLiveEdge = ref(true)
 const editingId = ref<string | null>(null)
 const scroller = ref<HTMLElement>()
 const content = ref<HTMLElement>()
@@ -154,6 +159,12 @@ let resizeObserver: ResizeObserver | undefined
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000
 
+// Cap on messages kept in the DOM. The list is bounded around the viewport:
+// scrolling up loads older + trims the newest end, scrolling down reloads newer
+// + trims the oldest. Well above a viewport's worth, so trimming only ever
+// removes off-screen rows.
+const RENDER_CAP = 150
+
 function isCompact(index: number) {
 	const prev = messages.value[index - 1]
 	const current = messages.value[index]!
@@ -180,6 +191,8 @@ async function loadInitial() {
 		const res = await $fetch(`/api/channels/${channelId.value}/messages`)
 		messages.value = res.messages
 		hasMore.value = res.hasMore
+		// a param-less fetch returns the live tail
+		atLiveEdge.value = true
 		await nextTick()
 		scrollToBottom()
 		store.markRead(channelId.value)
@@ -203,17 +216,64 @@ async function loadOlder() {
 		messages.value = [...res.messages, ...messages.value]
 		hasMore.value = res.hasMore
 		await nextTick()
+		// keep the viewport anchored across the prepend
 		if (el) el.scrollTop += el.scrollHeight - prevHeight
+		// drop the newest end past the cap — it's below the viewport, so removing
+		// it is seamless (no scroll compensation) but detaches us from the tail
+		if (messages.value.length > RENDER_CAP) {
+			messages.value = messages.value.slice(0, RENDER_CAP)
+			atLiveEdge.value = false
+		}
 	} finally {
 		loadingOlder.value = false
+	}
+}
+
+async function loadNewer() {
+	const last = messages.value[messages.value.length - 1]
+	if (atLiveEdge.value || loadingNewer.value || !last) return
+	loadingNewer.value = true
+	try {
+		const el = scroller.value
+		const res = await $fetch(`/api/channels/${channelId.value}/messages`, {
+			query: { after: last.createdAt, afterId: last.id }
+		})
+		// appended below the viewport → seamless, no compensation needed
+		messages.value = [...messages.value, ...res.messages]
+		if (!res.hasMoreNewer) atLiveEdge.value = true
+		// trim the oldest end past the cap; it's above the viewport, so compensate
+		// scrollTop for the removed height to keep the view anchored
+		if (el && messages.value.length > RENDER_CAP) {
+			const prevHeight = el.scrollHeight
+			messages.value = messages.value.slice(messages.value.length - RENDER_CAP)
+			hasMore.value = true
+			await nextTick()
+			el.scrollTop -= prevHeight - el.scrollHeight
+		}
+	} finally {
+		loadingNewer.value = false
+	}
+}
+
+// Drop history above the cap while pinned to the tail. Safe only when the view
+// is at the bottom: the removed rows are off-screen above and the caller
+// re-pins with scrollToBottom.
+function trimToLiveWindow() {
+	if (messages.value.length > RENDER_CAP) {
+		messages.value = messages.value.slice(-RENDER_CAP)
+		hasMore.value = true
 	}
 }
 
 function onScroll() {
 	const el = scroller.value
 	if (!el) return
-	stick.value = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+	const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+	// only "stuck" when the tail is actually loaded — near the bottom of a
+	// detached window there are still newer messages to pull in
+	stick.value = atLiveEdge.value && distanceToBottom < 150
 	if (el.scrollTop < 100) loadOlder()
+	if (!atLiveEdge.value && distanceToBottom < 200) loadNewer()
 }
 
 // Scroll to a message (reply quote / search result), loading a window around it
@@ -228,6 +288,8 @@ async function jumpToMessage(messageId: string) {
 			})
 			messages.value = res.messages
 			hasMore.value = res.hasMore
+			// the window is centred on an older message, so the tail may be trimmed
+			atLiveEdge.value = !res.hasMoreNewer
 		} finally {
 			loading.value = false
 		}
@@ -252,7 +314,13 @@ async function send(content: string, attachmentIds: string[]) {
 			body: { content, attachmentIds, replyToId }
 		})
 		replyingTo.value = null
-		pushMessage(message)
+		// if we're reading detached history, snap back to the tail so the sent
+		// message is visible instead of being dropped by the live-edge guard
+		if (!atLiveEdge.value) {
+			await loadInitial()
+		} else {
+			pushMessage(message)
+		}
 	} catch (e) {
 		toast.add({
 			title:
@@ -263,10 +331,15 @@ async function send(content: string, attachmentIds: string[]) {
 }
 
 async function pushMessage(message: MessageDto) {
+	// while detached from the tail, a live message belongs beyond the loaded
+	// window — ignore it here; loadNewer will fetch it on scroll-down
+	if (!atLiveEdge.value) return
 	if (messages.value.some((m) => m.id === message.id)) return
 	const pin = message.authorId === user.value?.id || stick.value
 	messages.value.push(message)
 	if (pin) {
+		await nextTick()
+		trimToLiveWindow()
 		await nextTick()
 		scrollToBottom()
 	}

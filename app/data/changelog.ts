@@ -11,6 +11,14 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.9.2',
+		date: '2026-07-04',
+		title: 'Плавная прокрутка длинной истории',
+		changes: [
+			'Чат держит в памяти только видимую часть переписки — прокрутка длинной истории стала плавной и не тормозит'
+		]
+	},
+	{
 		version: '0.9.1',
 		date: '2026-07-04',
 		title: 'Безопасность и скорость',
