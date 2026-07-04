@@ -102,6 +102,42 @@ cheap redirect. See [server/api/attachments/[id].get.ts](../server/api/attachmen
 `getObject` in [server/utils/storage.ts](../server/utils/storage.ts). Alternative would have been
 bucket-side CORS config, but the proxy needs no infra dependency.
 
+### 10c. `sharp` (image previews) is native — dev on Node, prod on Bun
+
+**Context:** in-chat image previews are generated with `sharp` in
+[server/utils/image-preview.ts](../server/utils/image-preview.ts). sharp is a native module, so it
+faces the same dual-runtime concern as better-sqlite3 (gotcha #2): **Node in dev, Bun in prod**.
+**How it's handled:**
+
+- **Dynamic import** (`await import('sharp')`) inside the server util, so it never enters the
+  client/SSR bundle and only loads server-side. Same spirit as the db-driver import in
+  [server/utils/db.ts](../server/utils/db.ts).
+- **`trustedDependencies`** in [package.json](../package.json) includes `sharp` (next to
+  `better-sqlite3`) so Bun installs its platform packages. sharp 0.33+ ships prebuilt binaries as
+  `optionalDependencies` (`@img/sharp-*`), so the Dockerfile's `bun install --ignore-scripts` is
+  fine — no build step needed.
+- **Cross-platform lockfile trap:** we dev on **Windows** but the prod image is **linux/glibc**
+  (`oven/bun:1`, Debian). `bun.lock` must contain `@img/sharp-linux-x64` **and**
+  `@img/sharp-libvips-linux-x64` or the Docker `bun install --frozen-lockfile` won't fetch the
+  binary and sharp throws at runtime. `bun add sharp` on Windows _did_ record every platform (bun
+  locks the full graph, install filters by OS), so this works — but re-verify after any lockfile
+  regeneration.
+- **The Docker trap — libvips .so is invisible to Nitro's trace.** sharp's prebuilt addon
+  (`@img/sharp-linux-x64/…​.node`) **dlopens** `libvips-cpp.so` from the sibling
+  `@img/sharp-libvips-linux-x64` package at runtime. Nitro's static dependency trace can't follow a
+  dlopen, so the `.so` never lands in `.output`. A runtime image that ships **only `.output`**
+  (which ours originally did) will throw `Could not load the "sharp" module … cannot open shared
+  object file` on the first upload. **Fix (in the [Dockerfile](../Dockerfile)):** a `deps` stage
+  does `bun install --production`, the runtime stage copies that `node_modules`, and
+  `ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib` points the dynamic linker
+  at the `.so`. (Pattern proven on another Bun+sharp+Nitro project.)
+- **Verify under Bun before deploy:** the fastest local check is running the helper under the Bun
+  runtime directly (`bun run` a script that calls `generateImagePreview`) — done, it resizes to WebP
+  correctly. The full Docker path (libvips `.so` + `LD_LIBRARY_PATH`) is only proven by building the
+  image and uploading an image in the container / after deploy.
+- **Failure is non-fatal:** `generateImagePreview` never throws — on any error it returns null, the
+  upload still succeeds, and `?preview` falls back to the original.
+
 ## SSR / data
 
 ### 11. Session cookie not forwarded during SSR

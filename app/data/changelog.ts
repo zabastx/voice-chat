@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.9.0',
+		date: '2026-07-04',
+		title: 'Картинки грузятся быстрее',
+		changes: [
+			'В чате показывается лёгкое превью — картинки открываются мгновенно',
+			'Клик по картинке по-прежнему открывает оригинал в полном размере'
+		]
+	},
+	{
 		version: '0.8.1',
 		date: '2026-07-04',
 		title: 'Исправление',

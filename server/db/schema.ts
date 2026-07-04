@@ -56,6 +56,9 @@ export const attachments = sqliteTable('attachments', {
 	mime: text('mime').notNull(),
 	size: integer('size').notNull(),
 	objectKey: text('object_key').notNull().unique(),
+	// downscaled WebP preview for in-chat display; null = no preview
+	// (non-image, gif/svg, or generation failed) → the original is served
+	previewKey: text('preview_key'),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' })
 		.notNull()
 		.$defaultFn(() => new Date())

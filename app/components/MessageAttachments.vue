@@ -9,7 +9,7 @@
 			>
 				<img
 					:alt="attachment.filename"
-					:src="`/api/attachments/${attachment.id}`"
+					:src="`/api/attachments/${attachment.id}?preview`"
 					class="border-default max-h-72 max-w-full rounded-lg border object-contain"
 					loading="lazy"
 				/>

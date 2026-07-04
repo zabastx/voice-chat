@@ -29,6 +29,13 @@
 			"when": 1783144505955,
 			"tag": "0003_nifty_wraith",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "6",
+			"when": 1783175856808,
+			"tag": "0004_spotty_giant_man",
+			"breakpoints": true
 		}
 	]
 }

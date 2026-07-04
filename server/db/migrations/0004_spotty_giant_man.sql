@@ -1,0 +1,1 @@
+ALTER TABLE `attachments` ADD `preview_key` text;

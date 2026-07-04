@@ -13,7 +13,9 @@ export default defineNitroPlugin(async () => {
 		)
 	})
 	if (stale.length > 0) {
-		await deleteAttachmentObjects(stale.map((a) => a.objectKey))
+		await deleteAttachmentObjects(
+			stale.flatMap((a) => (a.previewKey ? [a.objectKey, a.previewKey] : [a.objectKey]))
+		)
 		await db.delete(schema.attachments).where(
 			inArray(
 				schema.attachments.id,

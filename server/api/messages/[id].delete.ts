@@ -18,7 +18,9 @@ export default defineEventHandler(async (event) => {
 	})
 	await db.delete(schema.messages).where(eq(schema.messages.id, id))
 	if (attachments.length > 0) {
-		await deleteAttachmentObjects(attachments.map((a) => a.objectKey))
+		await deleteAttachmentObjects(
+			attachments.flatMap((a) => (a.previewKey ? [a.objectKey, a.previewKey] : [a.objectKey]))
+		)
 	}
 
 	wsBroadcast({ type: 'message.deleted', channelId: message.channelId, messageId: id })

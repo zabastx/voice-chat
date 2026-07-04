@@ -27,11 +27,21 @@ export default defineEventHandler(async (event) => {
 		filename,
 		mime: file.type || 'application/octet-stream',
 		size: file.data.length,
-		objectKey: ''
+		objectKey: '',
+		previewKey: null as string | null
 	}
 	attachment.objectKey = `attachments/${attachment.id}/${filename}`
 
 	await putObject(attachment.objectKey, file.data, attachment.mime)
+
+	// generate a small WebP preview for in-chat display; served via ?preview.
+	// Non-images (and failures) leave previewKey null → the original is served.
+	const preview = await generateImagePreview(file.data, attachment.mime)
+	if (preview) {
+		attachment.previewKey = `attachments/${attachment.id}/preview.webp`
+		await putObject(attachment.previewKey, preview, 'image/webp')
+	}
+
 	await useDb().insert(schema.attachments).values(attachment)
 
 	const dto: AttachmentDto = {

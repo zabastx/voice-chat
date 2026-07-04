@@ -42,22 +42,22 @@ URLs are clickable via M1 autolink.
 
 ## Feature status
 
-| Area                                                              | Status      | Notes                                                              |
-| ----------------------------------------------------------------- | ----------- | ------------------------------------------------------------------ |
-| Auth, invites, first-user-admin                                   | ✅ done     | `server/api/auth/*`, `server/api/invites/*`                        |
-| Channels CRUD (admin)                                             | ✅ done     | live-synced over WS                                                |
-| Text chat: send / edit / delete, unread, day separators, grouping | ✅ done     | `app/pages/channels/[id].vue`                                      |
-| Realtime hub (presence, messages, channels, voice state)          | ✅ done     | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`                   |
-| Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done     | `server/utils/storage.ts`, `server/api/attachments/*`; `?proxy` streams bytes for JS readers (voice waveform — bucket has no CORS) |
-| Voice channels (join/leave, mute, speaking, roster)               | ✅ done     | `useVoice.ts` + LiveKit webhooks                                   |
-| Screen share (publish, now a tile in the call view)               | ✅ done     | video verified on desktop; viewer merged into `ChannelVoice.vue`   |
-| Camera video calls (in-channel call view, grid + focus)           | ✅ built    | voice channel opens a call view; camera/screen tiles; needs verify |
-| Sounds, tab-title counter                                         | ✅ done     | `app/utils/sounds.ts`, `useHead` in layout                         |
-| PWA (manifest + icons)                                            | ✅ done     | `public/manifest.webmanifest`, `public/icon-*.png`                 |
-| Russian localization (UI + server errors)                         | ✅ done     | server errors in `message` field                                   |
-| Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ deployed | live on the VPS; see [DEPLOY.md](DEPLOY.md)                        |
-| User settings (profile, voice/video devices, notifications)       | ✅ done     | `SettingsModal.vue`, `server/api/me/*`, prefs in localStorage      |
-| Versioning + changelog ("Что нового", badge on new version)       | ✅ done     | `app/data/changelog.ts`, `useChangelog.ts`, `ChangelogModal.vue`   |
+| Area                                                              | Status      | Notes                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Auth, invites, first-user-admin                                   | ✅ done     | `server/api/auth/*`, `server/api/invites/*`                                                                                                                                                                                    |
+| Channels CRUD (admin)                                             | ✅ done     | live-synced over WS                                                                                                                                                                                                            |
+| Text chat: send / edit / delete, unread, day separators, grouping | ✅ done     | `app/pages/channels/[id].vue`                                                                                                                                                                                                  |
+| Realtime hub (presence, messages, channels, voice state)          | ✅ done     | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`                                                                                                                                                                               |
+| Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done     | `server/utils/storage.ts`, `server/api/attachments/*`; `?proxy` streams bytes for JS readers (voice waveform — bucket has no CORS); `?preview` serves a sharp-generated WebP thumbnail for in-chat images (`image-preview.ts`) |
+| Voice channels (join/leave, mute, speaking, roster)               | ✅ done     | `useVoice.ts` + LiveKit webhooks                                                                                                                                                                                               |
+| Screen share (publish, now a tile in the call view)               | ✅ done     | video verified on desktop; viewer merged into `ChannelVoice.vue`                                                                                                                                                               |
+| Camera video calls (in-channel call view, grid + focus)           | ✅ built    | voice channel opens a call view; camera/screen tiles; needs verify                                                                                                                                                             |
+| Sounds, tab-title counter                                         | ✅ done     | `app/utils/sounds.ts`, `useHead` in layout                                                                                                                                                                                     |
+| PWA (manifest + icons)                                            | ✅ done     | `public/manifest.webmanifest`, `public/icon-*.png`                                                                                                                                                                             |
+| Russian localization (UI + server errors)                         | ✅ done     | server errors in `message` field                                                                                                                                                                                               |
+| Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ deployed | live on the VPS; see [DEPLOY.md](DEPLOY.md)                                                                                                                                                                                    |
+| User settings (profile, voice/video devices, notifications)       | ✅ done     | `SettingsModal.vue`, `server/api/me/*`, prefs in localStorage                                                                                                                                                                  |
+| Versioning + changelog ("Что нового", badge on new version)       | ✅ done     | `app/data/changelog.ts`, `useChangelog.ts`, `ChangelogModal.vue`                                                                                                                                                               |
 
 ## Verification matrix
 
