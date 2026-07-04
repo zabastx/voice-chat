@@ -13,6 +13,17 @@
 					<SidebarToggle />
 				</template>
 				<template #right>
+					<UButton
+						aria-label="Поиск"
+						color="neutral"
+						icon="i-lucide-search"
+						variant="ghost"
+						@click="
+							() => {
+								searchModal.open()
+							}
+						"
+					/>
 					<MembersToggle />
 				</template>
 			</UDashboardNavbar>
@@ -95,6 +106,7 @@
 
 <script lang="ts" setup>
 import ConfirmModal from '~/components/ConfirmModal.vue'
+import SearchModal from '~/components/SearchModal.vue'
 
 const route = useRoute()
 const store = useChannelsStore()
@@ -104,6 +116,8 @@ const toast = useToast()
 
 const overlay = useOverlay()
 const confirmModal = overlay.create(ConfirmModal)
+const searchModal = overlay.create(SearchModal)
+const pendingJump = useMessageJump()
 
 const channelId = computed(() => route.params.id as string)
 const channel = computed(() => store.channels.value.find((c) => c.id === channelId.value))
@@ -316,10 +330,24 @@ realtime.onEvent((event) => {
 	}
 })
 
-watch(channelId, () => loadInitial())
+// consume a pending "jump to message" handed over from search once the target
+// channel is active (its history may need an around-window load)
+function applyPendingJump() {
+	const jump = pendingJump.value
+	if (jump && jump.channelId === channelId.value) {
+		pendingJump.value = null
+		jumpToMessage(jump.messageId)
+	}
+}
+
+watch(channelId, () => loadInitial().then(applyPendingJump))
+// same-channel search result: channelId didn't change, so react to the jump itself
+watch(pendingJump, (jump) => {
+	if (jump && jump.channelId === channelId.value) applyPendingJump()
+})
 
 onMounted(() => {
-	loadInitial()
+	loadInitial().then(applyPendingJump)
 	if (content.value) {
 		// Re-pin to the bottom whenever content grows (images loading, new
 		// messages) as long as the user hasn't scrolled up.

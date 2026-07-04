@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.7.0',
+		date: '2026-07-04',
+		title: 'Поиск по сообщениям',
+		changes: [
+			'Ищите по всем каналам через кнопку поиска в шапке чата',
+			'Нажмите на результат, чтобы перейти к сообщению'
+		]
+	},
+	{
 		version: '0.6.0',
 		date: '2026-07-04',
 		title: 'Реакции',

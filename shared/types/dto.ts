@@ -44,6 +44,16 @@ export interface MessageDto {
 	reactions: ReactionDto[]
 }
 
+export interface SearchResultDto {
+	messageId: string
+	channelId: string
+	channelName: string
+	authorName: string
+	createdAt: string
+	// plain-text, mention-decoded excerpt; the client highlights the query
+	preview: string
+}
+
 export interface MemberDto {
 	id: string
 	username: string

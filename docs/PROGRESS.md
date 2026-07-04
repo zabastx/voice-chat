@@ -25,19 +25,19 @@ on the VPS.
 roles engine, Postgres. The **Chat/messaging** batch (replies, reactions, markdown, @mentions, link
 previews, search) is now in progress — see "v2 — Chat/messaging" below.
 
-## v2 — Chat/messaging (in progress)
+## v2 — Chat/messaging
 
-Phased plan, each milestone its own release. Rich link previews (M6) stay deferred (SSRF/privacy);
+M1–M5 shipped; each was its own release. Rich link previews (M6) stay deferred (SSRF/privacy);
 URLs are clickable via M1 autolink.
 
-| Milestone                                  | Status         | Notes                                                            |
-| ------------------------------------------ | -------------- | ---------------------------------------------------------------- |
-| M1 — Markdown (Discord subset) + autolinks | ✅ done        | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose` |
-| M1 — jump-to-message foundation            | ✅ done        | `aroundId=` window + client `jumpToMessage` + flash              |
-| M2 — @mentions                             | ✅ done        | `shared/utils/mentions.ts`, composer autocomplete, chip + ping   |
-| M3 — Replies                               | ✅ done        | `replyToId` (no FK), reply banner, quote render, deleted-live    |
-| M4 — Reactions                             | ✅ done        | `reactions` table, toggle endpoint, emoji-picker-element, chips  |
-| M5 — Message search (global FTS5)          | ⬜ not started |                                                                  |
+| Milestone                                  | Status  | Notes                                                            |
+| ------------------------------------------ | ------- | ---------------------------------------------------------------- |
+| M1 — Markdown (Discord subset) + autolinks | ✅ done | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose` |
+| M1 — jump-to-message foundation            | ✅ done | `aroundId=` window + client `jumpToMessage` + flash              |
+| M2 — @mentions                             | ✅ done | `shared/utils/mentions.ts`, composer autocomplete, chip + ping   |
+| M3 — Replies                               | ✅ done | `replyToId` (no FK), reply banner, quote render, deleted-live    |
+| M4 — Reactions                             | ✅ done | `reactions` table, toggle endpoint, emoji-picker-element, chips  |
+| M5 — Message search (global FTS5)          | ✅ done | FTS5 + triggers in `db.ts`, `/api/search`, SearchModal + jump    |
 
 ## Feature status
 
@@ -81,6 +81,9 @@ URLs are clickable via M1 autolink.
   parent flips the quote to "исходное сообщение удалено" both live and after reload
 - **M4 reactions** in a real browser: quick-react adds a chip with count + "me" styling, the full
   `<emoji-picker>` web component registers/upgrades, and clicking a chip toggles the reaction off
+- **M5 search** in a real browser: global FTS5 search returns ranked results with `<mark>` highlight
+  (incl. a Cyrillic query), clicking a result jumps to + flashes the message, and the insert/delete
+  triggers keep the index live (new message searchable immediately, deleted message drops out)
 - Settings modal end-to-end: display name saves + propagates live to old messages/SelfPanel,
   avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
   meter, prefs persisted to localStorage, Esc close
