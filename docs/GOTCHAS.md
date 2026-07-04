@@ -176,6 +176,21 @@ back to the container IP.
 setting `media.peerconnection.ice.obfuscate_host_addresses` = `false` in
 `about:config` (reveals real local IPs so direct ICE pairs without TURN).
 
+## Client / PWA
+
+### 19. A leftover service worker from a previous app hijacks the origin
+
+**Symptom:** the main page shows a _different, old app_ (this origin previously hosted Stoat, a
+self-hosted Discord alternative); a hard reload flashes the correct app (redirects to `/login`),
+but normal navigations keep serving the stale shell. Every user who opened the old app is affected.
+**Cause:** a PWA service worker outlives the app that registered it. It keeps controlling its scope
+and serving its cached app shell. Hard reload bypasses the SW for the top-level navigation only.
+**Fix:** this app ships **no** service worker, so any registration can only be stale. A client
+plugin [app/plugins/unregister-sw.client.ts](../app/plugins/unregister-sw.client.ts) unregisters
+every worker, clears Cache Storage, and reloads once (guarded via `sessionStorage`) if one is
+currently controlling the page — cleaning up all users automatically. Manual one-off: DevTools →
+Application → Service Workers → Unregister, then Clear site data.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_;

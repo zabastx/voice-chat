@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.2.1',
+		date: '2026-07-04',
+		title: 'Стабильность',
+		changes: [
+			'Приложение больше не показывает старую версию из кеша браузера',
+			'Автоматическая очистка данных от предыдущего приложения на этом домене'
+		]
+	},
+	{
 		version: '0.2.0',
 		date: '2026-07-04',
 		title: 'Голосовые сообщения и вложения',
