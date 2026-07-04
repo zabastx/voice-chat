@@ -24,7 +24,7 @@
 			<template #header>
 				<div class="text-highlighted flex items-center gap-2 font-semibold">
 					<UIcon name="i-lucide-headphones" class="text-primary size-5" />
-					<span class="truncate">Голосовой чат</span>
+					<span class="truncate">Voice Chat</span>
 				</div>
 			</template>
 
@@ -60,7 +60,7 @@ await useAsyncData('channels', async () => {
 
 useHead({
 	title: computed(() =>
-		store.unreadCount.value > 0 ? `(${store.unreadCount.value}) Голосовой чат` : 'Голосовой чат'
+		store.unreadCount.value > 0 ? `(${store.unreadCount.value}) Voice Chat` : 'Voice Chat'
 	)
 })
 

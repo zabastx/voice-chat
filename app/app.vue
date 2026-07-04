@@ -10,7 +10,7 @@
 import { ru } from '@nuxt/ui/locale'
 
 useHead({
-	title: 'Голосовой чат',
+	title: 'Voice Chat',
 	htmlAttrs: { lang: 'ru' },
 	link: [
 		{ rel: 'manifest', href: '/manifest.webmanifest' },
