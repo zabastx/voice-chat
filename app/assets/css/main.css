@@ -1,2 +1,36 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
+
+/*
+ * Custom scrollbar in the app's theme. Uses Nuxt UI semantic CSS vars so it
+ * tracks light/dark automatically. Applied to native overflow scrollers
+ * (chat window, settings panels) — see app/pages/channels/[id].vue.
+ */
+@utility scrollbar-app {
+	scrollbar-width: thin;
+	scrollbar-color: var(--ui-bg-accented) transparent;
+
+	&::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+
+	&::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	&::-webkit-scrollbar-thumb {
+		background-color: var(--ui-bg-accented);
+		background-clip: padding-box;
+		border: 2px solid transparent;
+		border-radius: 9999px;
+	}
+
+	&::-webkit-scrollbar-thumb:hover {
+		background-color: var(--ui-border-accented);
+	}
+
+	&::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+}

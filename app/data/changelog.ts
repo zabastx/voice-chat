@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.2.2',
+		date: '2026-07-04',
+		title: 'Внешний вид',
+		changes: [
+			'Чат открывается на последних сообщениях, даже пока подгружаются картинки',
+			'Аккуратная полоса прокрутки в стиле приложения в чате и настройках'
+		]
+	},
+	{
 		version: '0.2.1',
 		date: '2026-07-04',
 		title: 'Стабильность',

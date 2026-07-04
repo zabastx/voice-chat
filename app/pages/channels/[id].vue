@@ -21,42 +21,44 @@
 		<template #body>
 			<div
 				ref="scroller"
-				class="min-h-0 flex-1 overflow-y-auto scroll-smooth px-2 py-3"
+				class="scrollbar-app min-h-0 flex-1 overflow-y-auto"
 				@scroll.passive="onScroll"
 			>
-				<div v-if="loadingOlder" class="flex justify-center py-2">
-					<UIcon class="text-muted size-4 animate-spin" name="i-lucide-loader-2" />
-				</div>
-				<p v-else-if="!hasMore && messages.length" class="text-dimmed px-4 py-2 text-xs">
-					Это начало канала #{{ channel?.name }}.
-				</p>
-				<div
-					v-if="!messages.length && !loading"
-					class="flex h-full flex-col items-center justify-center gap-2 text-center"
-				>
-					<UIcon class="text-dimmed size-10" name="i-lucide-message-circle-dashed" />
-					<p class="text-muted text-sm">Пока пусто. Напишите что-нибудь!</p>
-				</div>
+				<div ref="content" class="flex min-h-full flex-col px-2 py-3">
+					<div v-if="loadingOlder" class="flex justify-center py-2">
+						<UIcon class="text-muted size-4 animate-spin" name="i-lucide-loader-2" />
+					</div>
+					<p v-else-if="!hasMore && messages.length" class="text-dimmed px-4 py-2 text-xs">
+						Это начало канала #{{ channel?.name }}.
+					</p>
+					<div
+						v-if="!messages.length && !loading"
+						class="flex flex-1 flex-col items-center justify-center gap-2 text-center"
+					>
+						<UIcon class="text-dimmed size-10" name="i-lucide-message-circle-dashed" />
+						<p class="text-muted text-sm">Пока пусто. Напишите что-нибудь!</p>
+					</div>
 
-				<template v-for="(message, i) in messages" :key="message.id">
-					<USeparator
-						v-if="i > 0 && !sameDay(messages[i - 1]!.createdAt, message.createdAt)"
-						:label="formatDay(message.createdAt)"
-						:ui="{ label: 'text-xs text-dimmed' }"
-						class="py-2"
-					/>
-					<ChatMessage
-						:can-delete="message.authorId === user?.id || Boolean(user?.isAdmin)"
-						:can-edit="message.authorId === user?.id"
-						:compact="isCompact(i)"
-						:editing="editingId === message.id"
-						:message="message"
-						@cancel-edit="editingId = null"
-						@remove="removeMessage(message)"
-						@save-edit="saveEdit(message, $event)"
-						@start-edit="editingId = message.id"
-					/>
-				</template>
+					<template v-for="(message, i) in messages" :key="message.id">
+						<USeparator
+							v-if="i > 0 && !sameDay(messages[i - 1]!.createdAt, message.createdAt)"
+							:label="formatDay(message.createdAt)"
+							:ui="{ label: 'text-xs text-dimmed' }"
+							class="py-2"
+						/>
+						<ChatMessage
+							:can-delete="message.authorId === user?.id || Boolean(user?.isAdmin)"
+							:can-edit="message.authorId === user?.id"
+							:compact="isCompact(i)"
+							:editing="editingId === message.id"
+							:message="message"
+							@cancel-edit="editingId = null"
+							@remove="removeMessage(message)"
+							@save-edit="saveEdit(message, $event)"
+							@start-edit="editingId = message.id"
+						/>
+					</template>
+				</div>
 			</div>
 
 			<div class="border-default shrink-0 border-t p-3">
@@ -90,6 +92,14 @@ const loading = ref(false)
 const loadingOlder = ref(false)
 const editingId = ref<string | null>(null)
 const scroller = ref<HTMLElement>()
+const content = ref<HTMLElement>()
+
+// True while the view is pinned to the newest messages. Kept in sync on scroll
+// so late-loading images/videos (see MessageAttachments) and incoming messages
+// re-pin to the bottom via the ResizeObserver below instead of stranding the
+// user near the top.
+const stick = ref(true)
+let resizeObserver: ResizeObserver | undefined
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000
 
@@ -104,18 +114,15 @@ function isCompact(index: number) {
 }
 
 function scrollToBottom() {
-	scroller.value?.scrollTo({ top: scroller.value.scrollHeight, behavior: 'instant' })
-}
-
-function nearBottom() {
 	const el = scroller.value
-	if (!el) return true
-	return el.scrollHeight - el.scrollTop - el.clientHeight < 150
+	if (!el) return
+	el.scrollTop = el.scrollHeight
 }
 
 async function loadInitial() {
 	loading.value = true
 	editingId.value = null
+	stick.value = true
 	try {
 		const res = await $fetch(`/api/channels/${channelId.value}/messages`)
 		messages.value = res.messages
@@ -150,7 +157,10 @@ async function loadOlder() {
 }
 
 function onScroll() {
-	if (scroller.value && scroller.value.scrollTop < 100) loadOlder()
+	const el = scroller.value
+	if (!el) return
+	stick.value = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+	if (el.scrollTop < 100) loadOlder()
 }
 
 async function send(content: string, attachmentIds: string[]) {
@@ -171,9 +181,9 @@ async function send(content: string, attachmentIds: string[]) {
 
 async function pushMessage(message: MessageDto) {
 	if (messages.value.some((m) => m.id === message.id)) return
-	const stick = message.authorId === user.value?.id || nearBottom()
+	const pin = message.authorId === user.value?.id || stick.value
 	messages.value.push(message)
-	if (stick) {
+	if (pin) {
 		await nextTick()
 		scrollToBottom()
 	}
@@ -226,5 +236,18 @@ realtime.onEvent((event) => {
 })
 
 watch(channelId, () => loadInitial())
-onMounted(() => loadInitial())
+
+onMounted(() => {
+	loadInitial()
+	if (content.value) {
+		// Re-pin to the bottom whenever content grows (images loading, new
+		// messages) as long as the user hasn't scrolled up.
+		resizeObserver = new ResizeObserver(() => {
+			if (stick.value) scrollToBottom()
+		})
+		resizeObserver.observe(content.value)
+	}
+})
+
+onUnmounted(() => resizeObserver?.disconnect())
 </script>

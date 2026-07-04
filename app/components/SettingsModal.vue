@@ -72,7 +72,7 @@
 						<span class="text-dimmed text-[10px] font-semibold">ESC</span>
 					</div>
 
-					<div class="flex-1 overflow-y-auto">
+					<div class="scrollbar-app flex-1 overflow-y-auto">
 						<div class="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
 							<SettingsProfile v-if="active === 'profile'" />
 							<SettingsVoice v-else-if="active === 'voice'" />

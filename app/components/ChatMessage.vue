@@ -10,8 +10,10 @@
 			class="mt-0.5 shrink-0"
 			size="sm"
 		/>
-		<div v-else class="w-7 shrink-0 pt-1 text-right">
-			<span class="text-dimmed hidden text-[10px] group-hover:inline">
+		<div v-else class="w-7 shrink-0 text-right">
+			<span
+				class="text-dimmed invisible text-[10px] leading-5 whitespace-nowrap group-hover:visible"
+			>
 				{{ formatTime(message.createdAt) }}
 			</span>
 		</div>
