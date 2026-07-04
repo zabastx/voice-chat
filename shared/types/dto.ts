@@ -23,6 +23,14 @@ export interface ReplyRefDto {
 	deleted: boolean
 }
 
+export interface ReactionDto {
+	emoji: string
+	count: number
+	// members who reacted; the client derives "did I react" from this so a
+	// single broadcast DTO is correct for every viewer
+	memberIds: string[]
+}
+
 export interface MessageDto {
 	id: string
 	channelId: string
@@ -33,6 +41,7 @@ export interface MessageDto {
 	editedAt: string | null
 	attachments: AttachmentDto[]
 	replyTo: ReplyRefDto | null
+	reactions: ReactionDto[]
 }
 
 export interface MemberDto {

@@ -9,6 +9,13 @@ export default defineNuxtConfig({
 
 	css: ['~/assets/css/main.css'],
 
+	// <emoji-picker> is a web component (emoji-picker-element) used by ReactionPicker
+	vue: {
+		compilerOptions: {
+			isCustomElement: (tag) => tag === 'emoji-picker'
+		}
+	},
+
 	compatibilityDate: '2026-06-30',
 
 	nitro: {

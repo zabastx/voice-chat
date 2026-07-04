@@ -36,7 +36,7 @@ URLs are clickable via M1 autolink.
 | M1 — jump-to-message foundation            | ✅ done        | `aroundId=` window + client `jumpToMessage` + flash              |
 | M2 — @mentions                             | ✅ done        | `shared/utils/mentions.ts`, composer autocomplete, chip + ping   |
 | M3 — Replies                               | ✅ done        | `replyToId` (no FK), reply banner, quote render, deleted-live    |
-| M4 — Reactions                             | ⬜ not started |                                                                  |
+| M4 — Reactions                             | ✅ done        | `reactions` table, toggle endpoint, emoji-picker-element, chips  |
 | M5 — Message search (global FTS5)          | ⬜ not started |                                                                  |
 
 ## Feature status
@@ -79,6 +79,8 @@ URLs are clickable via M1 autolink.
 - **M3 replies** in a real browser: reply banner → sent reply shows the quoted parent (author +
   mention-decoded preview); clicking the quote scrolls to and flashes the original; deleting the
   parent flips the quote to "исходное сообщение удалено" both live and after reload
+- **M4 reactions** in a real browser: quick-react adds a chip with count + "me" styling, the full
+  `<emoji-picker>` web component registers/upgrades, and clicking a chip toggles the reaction off
 - Settings modal end-to-end: display name saves + propagates live to old messages/SelfPanel,
   avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
   meter, prefs persisted to localStorage, Esc close

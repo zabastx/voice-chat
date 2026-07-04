@@ -79,9 +79,10 @@ export default defineEventHandler(async (event) => {
 		rows = page.reverse()
 	}
 
-	const [attachments, replyRefs] = await Promise.all([
+	const [attachments, replyRefs, reactionMap] = await Promise.all([
 		attachmentDtosFor(rows.map((row) => row.id)),
-		replyRefsFor(rows.flatMap((row) => (row.replyToId ? [row.replyToId] : [])))
+		replyRefsFor(rows.flatMap((row) => (row.replyToId ? [row.replyToId] : []))),
+		reactionsFor(rows.map((row) => row.id))
 	])
 	const messages = rows.map(
 		({ replyToId, ...rest }): MessageDto => ({
@@ -89,7 +90,8 @@ export default defineEventHandler(async (event) => {
 			createdAt: rest.createdAt.toISOString(),
 			editedAt: rest.editedAt?.toISOString() ?? null,
 			attachments: attachments.get(rest.id) ?? [],
-			replyTo: resolveReplyRef(replyToId, replyRefs)
+			replyTo: resolveReplyRef(replyToId, replyRefs),
+			reactions: reactionMap.get(rest.id) ?? []
 		})
 	)
 

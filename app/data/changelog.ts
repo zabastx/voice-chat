@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.6.0',
+		date: '2026-07-04',
+		title: 'Реакции',
+		changes: [
+			'Ставьте эмодзи-реакции на сообщения — быстрый выбор и полная палитра',
+			'Наведите на реакцию, чтобы увидеть, кто её поставил'
+		]
+	},
+	{
 		version: '0.5.0',
 		date: '2026-07-04',
 		title: 'Ответы на сообщения',

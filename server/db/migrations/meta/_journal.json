@@ -22,6 +22,13 @@
 			"when": 1783143733109,
 			"tag": "0002_old_cable",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "6",
+			"when": 1783144505955,
+			"tag": "0003_nifty_wraith",
+			"breakpoints": true
 		}
 	]
 }

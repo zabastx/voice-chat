@@ -1,4 +1,36 @@
-import { eq, inArray } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
+
+// Batch-load reactions grouped by message, then by emoji in first-reacted
+// order. `me` is intentionally omitted — the client derives it from memberIds
+// so one broadcast DTO is correct for every viewer.
+export async function reactionsFor(messageIds: string[]): Promise<Map<string, ReactionDto[]>> {
+	const map = new Map<string, ReactionDto[]>()
+	if (messageIds.length === 0) return map
+	const rows = await useDb()
+		.select({
+			messageId: schema.reactions.messageId,
+			memberId: schema.reactions.memberId,
+			emoji: schema.reactions.emoji
+		})
+		.from(schema.reactions)
+		.where(inArray(schema.reactions.messageId, messageIds))
+		.orderBy(asc(schema.reactions.createdAt))
+	for (const row of rows) {
+		let list = map.get(row.messageId)
+		if (!list) {
+			list = []
+			map.set(row.messageId, list)
+		}
+		let entry = list.find((r) => r.emoji === row.emoji)
+		if (!entry) {
+			entry = { emoji: row.emoji, count: 0, memberIds: [] }
+			list.push(entry)
+		}
+		entry.count++
+		entry.memberIds.push(row.memberId)
+	}
+	return map
+}
 
 // Convert `@username` mentions in freshly written content to canonical `<@id>`
 // tokens. Called on send and edit so stored content is always canonical.
@@ -105,15 +137,17 @@ export async function messageDto(messageId: string): Promise<MessageDto | null> 
 		.limit(1)
 	if (!row) return null
 	const { replyToId, ...rest } = row
-	const [attachments, refs] = await Promise.all([
+	const [attachments, refs, reactionMap] = await Promise.all([
 		attachmentDtosFor([row.id]),
-		replyToId ? replyRefsFor([replyToId]) : Promise.resolve(new Map<string, ReplyRefDto>())
+		replyToId ? replyRefsFor([replyToId]) : Promise.resolve(new Map<string, ReplyRefDto>()),
+		reactionsFor([row.id])
 	])
 	return {
 		...rest,
 		createdAt: row.createdAt.toISOString(),
 		editedAt: row.editedAt?.toISOString() ?? null,
 		attachments: attachments.get(row.id) ?? [],
-		replyTo: resolveReplyRef(replyToId, refs)
+		replyTo: resolveReplyRef(replyToId, refs),
+		reactions: reactionMap.get(row.id) ?? []
 	}
 }

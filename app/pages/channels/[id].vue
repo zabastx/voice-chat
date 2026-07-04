@@ -55,6 +55,7 @@
 							:message="message"
 							@cancel-edit="editingId = null"
 							@jump="jumpToMessage"
+							@react="toggleReaction(message, $event)"
 							@remove="removeMessage(message)"
 							@reply="replyingTo = message"
 							@save-edit="saveEdit(message, $event)"
@@ -254,6 +255,18 @@ async function pushMessage(message: MessageDto) {
 	if (pin) {
 		await nextTick()
 		scrollToBottom()
+	}
+}
+
+async function toggleReaction(message: MessageDto, emoji: string) {
+	try {
+		const updated = await $fetch(`/api/messages/${message.id}/reactions`, {
+			method: 'POST',
+			body: { emoji }
+		})
+		replaceMessage(updated)
+	} catch {
+		toast.add({ title: 'Не удалось поставить реакцию', color: 'error' })
 	}
 }
 

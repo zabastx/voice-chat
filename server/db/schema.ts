@@ -61,6 +61,26 @@ export const attachments = sqliteTable('attachments', {
 		.$defaultFn(() => new Date())
 })
 
+export const reactions = sqliteTable(
+	'reactions',
+	{
+		messageId: text('message_id')
+			.notNull()
+			.references(() => messages.id, { onDelete: 'cascade' }),
+		memberId: text('member_id')
+			.notNull()
+			.references(() => members.id, { onDelete: 'cascade' }),
+		emoji: text('emoji').notNull(),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.$defaultFn(() => new Date())
+	},
+	(table) => [
+		primaryKey({ columns: [table.messageId, table.memberId, table.emoji] }),
+		index('reactions_message_idx').on(table.messageId)
+	]
+)
+
 export const invites = sqliteTable('invites', {
 	token: text('token').primaryKey(),
 	createdBy: text('created_by')

@@ -51,6 +51,28 @@
 					v-html="rendered"
 				/>
 				<MessageAttachments v-if="message.attachments.length" :attachments="message.attachments" />
+
+				<div v-if="message.reactions.length" class="mt-1 flex flex-wrap gap-1">
+					<UTooltip
+						v-for="reaction in message.reactions"
+						:key="reaction.emoji"
+						:text="reactorNames(reaction)"
+					>
+						<button
+							class="flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs"
+							:class="
+								reaction.memberIds.includes(user?.id ?? '')
+									? 'border-primary bg-primary/10 text-primary'
+									: 'border-default bg-elevated/50 text-default hover:bg-elevated'
+							"
+							type="button"
+							@click="emit('react', reaction.emoji)"
+						>
+							<span>{{ reaction.emoji }}</span>
+							<span class="tabular-nums">{{ reaction.count }}</span>
+						</button>
+					</UTooltip>
+				</div>
 			</template>
 
 			<div v-else class="py-1">
@@ -71,6 +93,7 @@
 			v-if="!editing"
 			class="border-default bg-default absolute -top-3 right-2 hidden gap-0.5 rounded-md border p-0.5 shadow-sm group-hover:flex"
 		>
+			<ReactionPicker @select="emit('react', $event)" />
 			<UButton
 				color="neutral"
 				icon="i-lucide-reply"
@@ -115,13 +138,25 @@ const emit = defineEmits<{
 	saveEdit: [content: string]
 	remove: []
 	reply: []
+	react: [emoji: string]
 	jump: [messageId: string]
 }>()
+
+const { user } = useUserSession()
 
 function onQuoteClick() {
 	if (props.message.replyTo && !props.message.replyTo.deleted) {
 		emit('jump', props.message.replyTo.id)
 	}
+}
+
+function reactorNames(reaction: ReactionDto): string {
+	return reaction.memberIds
+		.map((id) => {
+			const member = membersStore.profile(id)
+			return member?.displayName || member?.username || 'кто-то'
+		})
+		.join(', ')
 }
 
 const membersStore = useMembersStore()

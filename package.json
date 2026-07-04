@@ -1,6 +1,6 @@
 {
 	"name": "voice-chat",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -22,6 +22,7 @@
 		"aws4fetch": "^1.0.20",
 		"better-sqlite3": "^12.11.1",
 		"drizzle-orm": "^0.45.2",
+		"emoji-picker-element": "^1.29.1",
 		"isomorphic-dompurify": "^3.18.0",
 		"livekit-client": "^2.20.0",
 		"livekit-server-sdk": "^2.16.0",
