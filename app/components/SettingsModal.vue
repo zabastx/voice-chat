@@ -1,7 +1,7 @@
 <template>
 	<UModal fullscreen>
 		<template #content>
-			<div class="flex h-full w-full flex-col sm:flex-row">
+			<div class="flex h-full min-h-0 w-full flex-col sm:flex-row">
 				<!-- Category list: full screen on mobile, fixed sidebar on desktop.
 				     Hidden on mobile once a category is opened (detail view takes over). -->
 				<aside
@@ -36,7 +36,10 @@
 				</aside>
 
 				<!-- Detail: hidden on mobile until a category is picked; always shown on desktop. -->
-				<div class="relative flex-1 flex-col" :class="mobileDetail ? 'flex' : 'hidden sm:flex'">
+				<div
+					class="relative min-h-0 flex-1 flex-col"
+					:class="mobileDetail ? 'flex' : 'hidden sm:flex'"
+				>
 					<!-- Mobile header with back navigation -->
 					<div class="border-default flex shrink-0 items-center gap-2 border-b p-3 sm:hidden">
 						<UButton
