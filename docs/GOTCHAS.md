@@ -87,6 +87,21 @@ and `SharedArrayBuffer` leaking into the union.
 `const bytes = new Uint8Array(body.byteLength); bytes.set(body);` — see
 [server/utils/storage.ts](../server/utils/storage.ts).
 
+### 10b. Presigned-redirect attachments break when read in JS (CORS)
+
+**Symptom:** in production, voice messages fail to play — console shows
+`CORS Missing Allow Origin` for a `s3.cloud.ru/.../voice-message-*.webm?X-Amz-...` request.
+Images, video, and plain `<audio>` all work fine.
+**Cause:** `GET /api/attachments/:id` 302-redirects to a presigned S3 URL. Media elements render
+cross-origin responses **opaquely** (no CORS needed), but `VoiceMessagePlayer` reads the raw bytes
+in JS (`fetch(...).arrayBuffer()` → `decodeAudioData` for the waveform). Following the redirect and
+reading the body cross-origin requires `Access-Control-Allow-Origin`, which the bucket doesn't send.
+**Fix:** the endpoint takes a `?proxy` query param that streams the object bytes **through the app**
+(same-origin) instead of redirecting; the voice player fetches `?proxy`. Media elements keep the
+cheap redirect. See [server/api/attachments/[id].get.ts](../server/api/attachments/[id].get.ts),
+`getObject` in [server/utils/storage.ts](../server/utils/storage.ts). Alternative would have been
+bucket-side CORS config, but the proxy needs no infra dependency.
+
 ## SSR / data
 
 ### 11. Session cookie not forwarded during SSR

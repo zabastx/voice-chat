@@ -59,6 +59,13 @@ export async function putObject(objectKey: string, body: Uint8Array, contentType
 	}
 }
 
+export async function getObject(objectKey: string) {
+	// Server-to-S3 signed GET (auth in headers, not query). Used to proxy bytes
+	// through the app for clients that read the body in JS and would otherwise
+	// hit a cross-origin CORS wall on the presigned URL.
+	return s3Client().fetch(objectUrl(objectKey), { method: 'GET' })
+}
+
 export async function presignGetUrl(objectKey: string, expiresSeconds = 300) {
 	const url = new URL(objectUrl(objectKey))
 	url.searchParams.set('X-Amz-Expires', String(expiresSeconds))

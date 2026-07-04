@@ -11,6 +11,12 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.8.1',
+		date: '2026-07-04',
+		title: 'Исправление',
+		changes: ['Голосовые сообщения снова воспроизводятся']
+	},
+	{
 		version: '0.8.0',
 		date: '2026-07-04',
 		title: 'Видеозвонки',

@@ -116,7 +116,9 @@ async function load() {
 		if (props.blob) {
 			bytes = await props.blob.arrayBuffer()
 		} else if (props.attachment) {
-			const res = await fetch(`/api/attachments/${props.attachment.id}`)
+			// `?proxy` streams bytes through the app; the default 302-to-S3 would be a
+			// cross-origin read here and the bucket sends no CORS headers.
+			const res = await fetch(`/api/attachments/${props.attachment.id}?proxy`)
 			if (!res.ok) throw new Error('fetch failed')
 			bytes = await res.arrayBuffer()
 		} else {

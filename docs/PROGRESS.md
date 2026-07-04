@@ -48,7 +48,7 @@ URLs are clickable via M1 autolink.
 | Channels CRUD (admin)                                             | ✅ done     | live-synced over WS                                                |
 | Text chat: send / edit / delete, unread, day separators, grouping | ✅ done     | `app/pages/channels/[id].vue`                                      |
 | Realtime hub (presence, messages, channels, voice state)          | ✅ done     | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`                   |
-| Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done     | `server/utils/storage.ts`, `server/api/attachments/*`              |
+| Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done     | `server/utils/storage.ts`, `server/api/attachments/*`; `?proxy` streams bytes for JS readers (voice waveform — bucket has no CORS) |
 | Voice channels (join/leave, mute, speaking, roster)               | ✅ done     | `useVoice.ts` + LiveKit webhooks                                   |
 | Screen share (publish, now a tile in the call view)               | ✅ done     | video verified on desktop; viewer merged into `ChannelVoice.vue`   |
 | Camera video calls (in-channel call view, grid + focus)           | ✅ built    | voice channel opens a call view; camera/screen tiles; needs verify |
