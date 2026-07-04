@@ -8,6 +8,11 @@ New here? Read this file, then [docs/PROGRESS.md](docs/PROGRESS.md) (status) and
 [docs/GOTCHAS.md](docs/GOTCHAS.md) (traps that already cost time). Domain terms live in
 [CONTEXT.md](CONTEXT.md); the LiveKit decision in [docs/adr/0001](docs/adr/0001-self-hosted-livekit-sfu.md).
 
+**Always check [docs/PROGRESS.md](docs/PROGRESS.md) before starting and update it when you finish.**
+It is the single source of truth for what's built, verified, deployed, and still pending. When you
+ship a feature, verify something, or change deploy state, edit the relevant row/section in the same
+change — a stale PROGRESS.md is a bug.
+
 ## Run it
 
 ```bash
@@ -69,6 +74,9 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   (`@click="() => m.open()"`), or vue-tsc rejects the non-void return.
 - Quality gates: `bun run typecheck && bun run lint && bun run fmt`. All must stay green.
 - New UI strings: **Russian**. Dates via `ru-RU` locale (see [app/utils/format.ts](app/utils/format.ts)).
+- Keep [docs/PROGRESS.md](docs/PROGRESS.md) in sync with reality as part of the same change:
+  update the Feature status, Verification matrix, and Remaining work sections whenever you build,
+  verify, or deploy something.
 
 ## Agent skills
 

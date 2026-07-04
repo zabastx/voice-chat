@@ -1,8 +1,8 @@
 # Progress & Plan
 
 Status of the personal Discord clone. Started from a bare Nuxt 4 + @nuxt/ui scaffold; the plan
-below was approved via a grilling session and is now built end-to-end and verified locally
-(not yet deployed to the VPS).
+below was approved via a grilling session, built end-to-end, and is now deployed and running
+on the VPS.
 
 ## Product decisions (locked)
 
@@ -35,11 +35,11 @@ roles engine, Postgres.
 | Realtime hub (presence, messages, channels, voice state)          | ✅ done                            | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`              |
 | Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done                            | `server/utils/storage.ts`, `server/api/attachments/*`         |
 | Voice channels (join/leave, mute, speaking, roster)               | ✅ done                            | `useVoice.ts` + LiveKit webhooks                              |
-| Screen share (publish + fullscreen viewer)                        | ✅ built, ⚠️ video path unverified | headless can't capture a screen                               |
+| Screen share (publish + fullscreen viewer)                        | ✅ done                            | video verified on desktop (two real browsers)                |
 | Sounds, tab-title counter                                         | ✅ done                            | `app/utils/sounds.ts`, `useHead` in layout                    |
 | PWA (manifest + icons)                                            | ✅ done                            | `public/manifest.webmanifest`, `public/icon-*.png`            |
 | Russian localization (UI + server errors)                         | ✅ done                            | server errors in `message` field                              |
-| Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ written, ⚠️ not run on VPS      | see [DEPLOY.md](DEPLOY.md)                                    |
+| Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ deployed                        | live on the VPS; see [DEPLOY.md](DEPLOY.md)                   |
 | User settings (profile, voice/video devices, notifications)       | ✅ done                            | `SettingsModal.vue`, `server/api/me/*`, prefs in localStorage |
 
 ## Verification matrix
@@ -59,18 +59,17 @@ roles engine, Postgres.
   avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
   meter, prefs persisted to localStorage, Esc close
 
+**Verified on the deployed VPS:**
+
+- Screen-share _video_ rendering between two real desktop browsers
+- The actual VPS `docker compose up` — stack is live on the server
+
 **Not yet verified (needs a human / real environment):**
 
-- Screen-share _video_ rendering (headless browsers can't capture a screen; the publish/subscribe
-  path is identical to the verified audio path, but give it a real two-browser test)
 - Real NAT traversal — test voice from two different networks (phone hotspot vs home Wi-Fi)
-- The actual VPS `docker compose up` — nothing has run on the server yet
 - Mobile browsers (esp. iOS Safari voice)
 
 ## Remaining work / next steps
 
-1. **Deploy to the VPS.** Follow [DEPLOY.md](DEPLOY.md). Needs two DNS records (`DOMAIN` and
-   `livekit.DOMAIN`) and the firewall ports opened (80/443 tcp, 7881 tcp, 50000–60000 udp).
-2. **Manually verify screen share** with two real browsers once deployed (or locally in headed mode).
-3. **git**: nothing is committed yet — the tree is still the initial scaffold commit plus all this
-   work uncommitted. Make the first real commit when ready.
+1. **Test real NAT traversal** — voice from two different networks (phone hotspot vs home Wi-Fi).
+2. **Test on mobile browsers**, especially iOS Safari voice.
