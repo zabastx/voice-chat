@@ -21,9 +21,23 @@ on the VPS.
 | Deploy        | docker compose to a rented VPS with a domain; ships its own Caddy for auto-HTTPS                              |
 | Notifications | In-app only: unread badges, tab-title counter, join/leave/message sounds                                      |
 
-**Deferred to v2+:** replies, reactions, markdown rendering, link previews, @mentions,
-browser/Web Push, desktop wrapper / global PTT, DMs, message search, multiple spaces, a real
-roles engine, Postgres.
+**Deferred to v2+:** browser/Web Push, desktop wrapper / global PTT, DMs, multiple spaces, a real
+roles engine, Postgres. The **Chat/messaging** batch (replies, reactions, markdown, @mentions, link
+previews, search) is now in progress — see "v2 — Chat/messaging" below.
+
+## v2 — Chat/messaging (in progress)
+
+Phased plan, each milestone its own release. Rich link previews (M6) stay deferred (SSRF/privacy);
+URLs are clickable via M1 autolink.
+
+| Milestone                                  | Status         | Notes                                                               |
+| ------------------------------------------ | -------------- | ------------------------------------------------------------------- |
+| M1 — Markdown (Discord subset) + autolinks | ✅ done        | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose`    |
+| M1 — jump-to-message foundation            | 🟡 partial     | server `around=` window shipped; client `jumpToMessage` lands w/ M3 |
+| M2 — @mentions                             | ⬜ not started |                                                                     |
+| M3 — Replies                               | ⬜ not started |                                                                     |
+| M4 — Reactions                             | ⬜ not started |                                                                     |
+| M5 — Message search (global FTS5)          | ⬜ not started |                                                                     |
 
 ## Feature status
 
@@ -56,6 +70,9 @@ roles engine, Postgres.
 - Russian SSR renders (login page, sidebar, timestamps)
 - **Production bundle** built exactly as the Dockerfile does, smoke-tested under Bun: migrations
   run, WS works, upload+presign works, Russian SSR renders
+- **M1 markdown** rendered in a real browser: bold/italic/strike/code/autolink produce the right
+  tags; `<script>`, `javascript:` links, and `<img onerror>` all render inert (no dialogs); no
+  hydration mismatch
 - Settings modal end-to-end: display name saves + propagates live to old messages/SelfPanel,
   avatar upload→MinIO→presigned serve (5 render sites), wrong-current-password 400, mic-test level
   meter, prefs persisted to localStorage, Esc close

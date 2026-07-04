@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.3.0',
+		date: '2026-07-04',
+		title: 'Форматирование сообщений',
+		changes: [
+			'Markdown в сообщениях: **жирный**, _курсив_, ~~зачёркнутый~~, `код`, цитаты и списки',
+			'Ссылки в сообщениях стали кликабельными'
+		]
+	},
+	{
 		version: '0.2.2',
 		date: '2026-07-04',
 		title: 'Внешний вид',

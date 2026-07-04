@@ -1,6 +1,7 @@
 <template>
 	<div
-		:class="compact ? 'py-0.5' : 'pt-3 pb-0.5'"
+		:class="[compact ? 'py-0.5' : 'pt-3 pb-0.5', { 'chat-flash': flash }]"
+		:data-message-id="message.id"
 		class="group hover:bg-elevated/50 relative flex gap-3 rounded-md px-2"
 	>
 		<UAvatar
@@ -25,10 +26,12 @@
 			</div>
 
 			<template v-if="!editing">
-				<p v-if="message.content" class="text-default text-sm break-words whitespace-pre-wrap">
-					{{ message.content
-					}}<span v-if="message.editedAt" class="text-dimmed ml-1 text-[10px]">(изменено)</span>
-				</p>
+				<!-- eslint-disable-next-line vue/no-v-html -- sanitized in renderMarkdown -->
+				<div
+					v-if="message.content"
+					class="chat-prose text-default text-sm break-words"
+					v-html="rendered"
+				/>
 				<MessageAttachments v-if="message.attachments.length" :attachments="message.attachments" />
 			</template>
 
@@ -77,6 +80,8 @@ const props = defineProps<{
 	editing: boolean
 	canEdit: boolean
 	canDelete: boolean
+	// briefly highlighted after a reply/search jump
+	flash?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -88,6 +93,16 @@ const emit = defineEmits<{
 
 const membersStore = useMembersStore()
 const author = computed(() => membersStore.profile(props.message.authorId))
+
+// Sanitized markdown HTML. The "(изменено)" marker is appended after
+// sanitization (trusted constant) — inline inside the trailing paragraph for
+// the common single-paragraph case, otherwise on its own line.
+const rendered = computed(() => {
+	const html = renderMarkdown(props.message.content)
+	if (!props.message.editedAt) return html
+	const marker = '<span class="chat-edited">(изменено)</span>'
+	return html.endsWith('</p>') ? `${html.slice(0, -4)}${marker}</p>` : html + marker
+})
 const authorName = computed(
 	() => author.value?.displayName ?? author.value?.username ?? props.message.authorName
 )

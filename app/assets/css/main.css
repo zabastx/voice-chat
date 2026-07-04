@@ -34,3 +34,79 @@
 		background: transparent;
 	}
 }
+
+/*
+ * Rendered message markdown (see app/utils/markdown.ts). These target the
+ * v-html output in ChatMessage, which is NOT scoped, so the rules live here
+ * globally. Colors use Nuxt UI semantic vars to track light/dark.
+ */
+.chat-prose {
+	line-height: 1.5;
+}
+.chat-prose p {
+	margin: 0;
+}
+.chat-prose p + p {
+	margin-top: 0.35rem;
+}
+.chat-prose a {
+	color: var(--ui-primary);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.chat-prose code {
+	font-family: var(--font-mono, monospace);
+	font-size: 0.85em;
+	background: var(--ui-bg-elevated);
+	padding: 0.1em 0.3em;
+	border-radius: 0.25rem;
+}
+.chat-prose pre {
+	margin: 0.35rem 0;
+	padding: 0.6rem 0.75rem;
+	background: var(--ui-bg-elevated);
+	border-radius: 0.5rem;
+	overflow-x: auto;
+}
+.chat-prose pre code {
+	padding: 0;
+	background: transparent;
+}
+.chat-prose blockquote {
+	margin: 0.2rem 0;
+	padding-left: 0.6rem;
+	border-left: 2px solid var(--ui-border-accented);
+	color: var(--ui-text-muted);
+}
+.chat-prose ul,
+.chat-prose ol {
+	margin: 0.2rem 0;
+	padding-left: 1.25rem;
+}
+.chat-prose ul {
+	list-style: disc;
+}
+.chat-prose ol {
+	list-style: decimal;
+}
+.chat-prose li {
+	margin: 0.1rem 0;
+}
+.chat-edited {
+	margin-left: 0.25rem;
+	font-size: 10px;
+	color: var(--ui-text-dimmed);
+}
+
+/* Brief highlight when jumping to a message (replies / search). */
+@keyframes chat-flash {
+	from {
+		background-color: var(--ui-bg-accented);
+	}
+	to {
+		background-color: transparent;
+	}
+}
+.chat-flash {
+	animation: chat-flash 1.6s ease-out;
+}
