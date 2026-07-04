@@ -7,6 +7,8 @@ export interface Preferences {
 	messageSound: boolean
 	desktopNotifications: boolean
 	showOfflineMembers: boolean
+	// last app version whose changelog the user has seen; null until first load seeds it
+	lastSeenVersion: string | null
 }
 
 const STORAGE_KEY = 'voice-chat:prefs'
@@ -18,7 +20,8 @@ function defaults(): Preferences {
 		cameraDeviceId: null,
 		messageSound: true,
 		desktopNotifications: false,
-		showOfflineMembers: false
+		showOfflineMembers: false,
+		lastSeenVersion: null
 	}
 }
 

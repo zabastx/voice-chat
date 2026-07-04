@@ -76,7 +76,8 @@
 						<div class="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
 							<SettingsProfile v-if="active === 'profile'" />
 							<SettingsVoice v-else-if="active === 'voice'" />
-							<SettingsNotifications v-else />
+							<SettingsNotifications v-else-if="active === 'notifications'" />
+							<SettingsAbout v-else />
 						</div>
 					</div>
 				</div>
@@ -86,6 +87,7 @@
 </template>
 
 <script lang="ts" setup>
+import SettingsAbout from './settings/SettingsAbout.vue'
 import SettingsNotifications from './settings/SettingsNotifications.vue'
 import SettingsProfile from './settings/SettingsProfile.vue'
 import SettingsVoice from './settings/SettingsVoice.vue'
@@ -95,7 +97,8 @@ const emit = defineEmits<{ close: [] }>()
 const tabs = [
 	{ id: 'profile', label: 'Профиль', icon: 'i-lucide-user' },
 	{ id: 'voice', label: 'Голос и видео', icon: 'i-lucide-mic' },
-	{ id: 'notifications', label: 'Уведомления', icon: 'i-lucide-bell' }
+	{ id: 'notifications', label: 'Уведомления', icon: 'i-lucide-bell' },
+	{ id: 'about', label: 'О приложении', icon: 'i-lucide-info' }
 ] as const
 
 type TabId = (typeof tabs)[number]['id']

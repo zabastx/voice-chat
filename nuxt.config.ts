@@ -1,4 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import pkg from './package.json'
+
 export default defineNuxtConfig({
 	modules: ['@nuxt/ui', 'nuxt-auth-utils'],
 	devtools: {
@@ -34,7 +36,8 @@ export default defineNuxtConfig({
 		s3AccessKeyId: '',
 		s3SecretAccessKey: '',
 		public: {
-			livekitUrl: 'ws://127.0.0.1:7880'
+			livekitUrl: 'ws://127.0.0.1:7880',
+			appVersion: pkg.version
 		}
 	}
 })

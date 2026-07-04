@@ -77,6 +77,9 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
 - Keep [docs/PROGRESS.md](docs/PROGRESS.md) in sync with reality as part of the same change:
   update the Feature status, Verification matrix, and Remaining work sections whenever you build,
   verify, or deploy something.
+- User-facing changes: bump `version` in [package.json](package.json) and prepend a Russian entry
+  to [app/data/changelog.ts](app/data/changelog.ts) (newest first) in the same commit — it powers
+  the "Что нового" badge/modal.
 
 ## Agent skills
 
