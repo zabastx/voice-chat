@@ -91,7 +91,7 @@
 
 		<div
 			v-if="!editing"
-			class="border-default bg-default absolute -top-3 right-2 hidden gap-0.5 rounded-md border p-0.5 shadow-sm group-hover:flex has-[[data-state=open]]:flex"
+			class="border-default bg-default pointer-events-none absolute -top-3 right-2 flex gap-0.5 rounded-md border p-0.5 opacity-0 shadow-sm group-hover:pointer-events-auto group-hover:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100"
 		>
 			<ReactionPicker @select="emit('react', $event)" />
 			<UButton
