@@ -126,11 +126,12 @@ faces the same dual-runtime concern as better-sqlite3 (gotcha #2): **Node in dev
   (`@img/sharp-linux-x64/…​.node`) **dlopens** `libvips-cpp.so` from the sibling
   `@img/sharp-libvips-linux-x64` package at runtime. Nitro's static dependency trace can't follow a
   dlopen, so the `.so` never lands in `.output`. A runtime image that ships **only `.output`**
-  (which ours originally did) will throw `Could not load the "sharp" module … cannot open shared
-  object file` on the first upload. **Fix (in the [Dockerfile](../Dockerfile)):** a `deps` stage
-  does `bun install --production`, the runtime stage copies that `node_modules`, and
-  `ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib` points the dynamic linker
+  (which ours originally did) will throw `Could not load the "sharp" module … cannot open shared object file on the first upload.`
+  **Fix (in the [Dockerfile](../Dockerfile)):** a `deps`stage
+  does`bun install --production`, the runtime stage copies that `node_modules`, and
+  `ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib`points the dynamic linker
   at the `.so`. (Pattern proven on another Bun+sharp+Nitro project.)
+
 - **Verify under Bun before deploy:** the fastest local check is running the helper under the Bun
   runtime directly (`bun run` a script that calls `generateImagePreview`) — done, it resizes to WebP
   correctly. The full Docker path (libvips `.so` + `LD_LIBRARY_PATH`) is only proven by building the
