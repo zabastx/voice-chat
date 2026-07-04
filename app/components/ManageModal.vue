@@ -83,8 +83,16 @@
 									<span v-if="member.displayName" class="text-muted font-normal">
 										{{ member.username }}
 									</span>
-									<UBadge v-if="member.isAdmin" color="primary" size="sm" variant="subtle">
+									<UBadge v-if="member.role === 'admin'" color="primary" size="sm" variant="subtle">
 										админ
+									</UBadge>
+									<UBadge
+										v-else-if="member.role === 'moderator'"
+										color="info"
+										size="sm"
+										variant="subtle"
+									>
+										модератор
 									</UBadge>
 								</p>
 								<p class="text-muted text-xs">
@@ -114,7 +122,18 @@
 									@click="cancelReset"
 								/>
 							</template>
-							<template v-else-if="member.id !== user?.id">
+							<template v-else-if="isAdmin && member.id !== user?.id">
+								<UTooltip
+									:text="member.role === 'moderator' ? 'Снять модератора' : 'Назначить модератором'"
+								>
+									<UButton
+										color="neutral"
+										:icon="member.role === 'moderator' ? 'i-lucide-shield-off' : 'i-lucide-shield'"
+										size="xs"
+										variant="ghost"
+										@click="toggleModerator(member)"
+									/>
+								</UTooltip>
 								<UTooltip text="Сбросить пароль">
 									<UButton
 										color="neutral"
@@ -149,6 +168,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const toast = useToast()
 const { user } = useUserSession()
+const { isAdmin } = useRole()
 const { online } = useRealtime()
 
 const overlay = useOverlay()
@@ -206,6 +226,21 @@ async function savePassword(memberId: string) {
 	} catch (e) {
 		toast.add({
 			title: (e as { data?: { message?: string } }).data?.message ?? 'Не удалось изменить пароль',
+			color: 'error'
+		})
+	}
+}
+
+async function toggleModerator(member: MemberDto) {
+	try {
+		await $fetch(`/api/members/${member.id}/role`, {
+			method: 'PATCH',
+			body: { role: member.role === 'moderator' ? 'member' : 'moderator' }
+		})
+		await refreshMembers()
+	} catch (e) {
+		toast.add({
+			title: (e as { data?: { message?: string } }).data?.message ?? 'Не удалось изменить роль',
 			color: 'error'
 		})
 	}

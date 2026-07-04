@@ -4,7 +4,7 @@
 			<div class="mb-1 flex items-center justify-between px-1.5">
 				<span class="text-muted text-xs font-semibold uppercase">Текстовые каналы</span>
 				<UButton
-					v-if="user?.isAdmin"
+					v-if="canModerate"
 					color="neutral"
 					icon="i-lucide-plus"
 					size="xs"
@@ -32,7 +32,7 @@
 							class="bg-primary size-2 shrink-0 rounded-full group-hover:hidden"
 						/>
 					</ULink>
-					<UDropdownMenu v-if="user?.isAdmin" :items="channelMenu(channel)">
+					<UDropdownMenu v-if="canModerate" :items="channelMenu(channel)">
 						<UButton
 							class="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover:opacity-100"
 							color="neutral"
@@ -49,7 +49,7 @@
 			<div class="mb-1 flex items-center justify-between px-1.5">
 				<span class="text-muted text-xs font-semibold uppercase">Голосовые каналы</span>
 				<UButton
-					v-if="user?.isAdmin"
+					v-if="canModerate"
 					color="neutral"
 					icon="i-lucide-plus"
 					size="xs"
@@ -72,7 +72,7 @@
 						<UIcon class="size-4 shrink-0" name="i-lucide-volume-2" />
 						<span class="flex-1 truncate text-left">{{ channel.name }}</span>
 					</button>
-					<UDropdownMenu v-if="user?.isAdmin" :items="channelMenu(channel)">
+					<UDropdownMenu v-if="canModerate" :items="channelMenu(channel)">
 						<UButton
 							class="absolute top-1.5 right-1 opacity-0 group-hover:opacity-100"
 							color="neutral"
@@ -126,6 +126,7 @@ const membersStore = useMembersStore()
 const voice = useVoice()
 const { voice: rooms } = useRealtime()
 const { user } = useUserSession()
+const { isAdmin, canModerate } = useRole()
 const toast = useToast()
 
 const overlay = useOverlay()
@@ -166,7 +167,7 @@ function isCameraOn(participant: VoiceParticipant) {
 }
 
 function channelMenu(channel: ChannelDto): DropdownMenuItem[][] {
-	return [
+	const groups: DropdownMenuItem[][] = [
 		[
 			{
 				label: 'Переименовать',
@@ -175,16 +176,20 @@ function channelMenu(channel: ChannelDto): DropdownMenuItem[][] {
 					channelModal.open({ channel })
 				}
 			}
-		],
-		[
+		]
+	]
+	// deleting a channel wipes its history — admin only
+	if (isAdmin.value) {
+		groups.push([
 			{
 				label: 'Удалить',
 				icon: 'i-lucide-trash-2',
 				color: 'error',
 				onSelect: () => deleteChannel(channel)
 			}
-		]
-	]
+		])
+	}
+	return groups
 }
 
 async function deleteChannel(channel: ChannelDto) {

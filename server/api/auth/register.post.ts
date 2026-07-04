@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
 			id: newId(),
 			username: body.username,
 			passwordHash,
-			isAdmin: isFirst
+			role: isFirst ? ('admin' as const) : ('member' as const)
 		}
 		tx.insert(schema.members).values(created).run()
 
@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
 	})
 
 	await setUserSession(event, {
-		user: { id: member.id, username: member.username, isAdmin: member.isAdmin }
+		user: { id: member.id, username: member.username, role: member.role }
 	})
-	return { id: member.id, username: member.username, isAdmin: member.isAdmin }
+	return { id: member.id, username: member.username, role: member.role }
 })

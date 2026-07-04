@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
 			username: schema.members.username,
 			displayName: schema.members.displayName,
 			avatarId: schema.members.avatarId,
-			isAdmin: schema.members.isAdmin,
+			role: schema.members.role,
 			createdAt: schema.members.createdAt
 		})
 		.from(schema.members)

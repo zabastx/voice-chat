@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
-	const admin = await requireAdmin(event)
+	const admin = await requireRole(event, 'admin')
 	const id = getRouterParam(event, 'id')!
 	if (id === admin.id) {
 		throw createError({ statusCode: 400, message: 'Нельзя удалить самого себя' })

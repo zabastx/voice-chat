@@ -1,7 +1,7 @@
 import { desc, eq } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
-	await requireAdmin(event)
+	await requireRole(event, 'moderator')
 	const db = useDb()
 	const rows = await db
 		.select({

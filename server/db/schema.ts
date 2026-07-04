@@ -6,7 +6,9 @@ export const members = sqliteTable('members', {
 	passwordHash: text('password_hash').notNull(),
 	displayName: text('display_name'),
 	avatarId: text('avatar_id'),
-	isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
+	role: text('role', { enum: ['admin', 'moderator', 'member'] })
+		.notNull()
+		.default('member'),
 	createdAt: integer('created_at', { mode: 'timestamp_ms' })
 		.notNull()
 		.$defaultFn(() => new Date())

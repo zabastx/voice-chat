@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
-	await requireAdmin(event)
+	await requireRole(event, 'admin')
 	const id = getRouterParam(event, 'id')!
 	const db = useDb()
 	const channel = await db.query.channels.findFirst({ where: eq(schema.channels.id, id) })

@@ -6,20 +6,20 @@ on the VPS.
 
 ## Product decisions (locked)
 
-| Decision      | Choice                                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------------------------- |
-| UI language   | **Russian** (locked after initial build; `lang="ru"`, `ru` UApp locale)                                       |
-| Voice scale   | 2–5 concurrent participants                                                                                   |
-| Media         | Self-hosted **LiveKit** SFU (screen share needs an SFU — see [ADR 0001](adr/0001-self-hosted-livekit-sfu.md)) |
-| Structure     | One space, flat channel list; each channel is `text` or `voice`; no guilds                                    |
-| Roles         | Two: **Admin** (first account) + **Member** — one boolean, no permissions engine                              |
-| Auth          | Single-use invite links → username + password; cookie sessions; no email/reset (admin resets)                 |
-| Chat v1       | Persistent history, image/file attachments, edit & delete own (admin deletes any)                             |
-| Attachments   | External **S3-compatible bucket** via aws4fetch; presigned GETs; nothing on VPS disk                          |
-| Database      | SQLite (Drizzle); one file on a volume                                                                        |
-| Platform      | Responsive web + installable PWA; voice-activity detection (no push-to-talk)                                  |
-| Deploy        | docker compose to a rented VPS with a domain; ships its own Caddy for auto-HTTPS                              |
-| Notifications | In-app only: unread badges, tab-title counter, join/leave/message sounds                                      |
+| Decision      | Choice                                                                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI language   | **Russian** (locked after initial build; `lang="ru"`, `ru` UApp locale)                                                                                                                 |
+| Voice scale   | 2–5 concurrent participants                                                                                                                                                             |
+| Media         | Self-hosted **LiveKit** SFU (screen share needs an SFU — see [ADR 0001](adr/0001-self-hosted-livekit-sfu.md))                                                                           |
+| Structure     | One space, flat channel list; each channel is `text` or `voice`; no guilds                                                                                                              |
+| Roles         | Three, strictly hierarchical: **Admin** (first account) > **Moderator** > **Member** — a single `role` enum, no permissions engine (see [ADR 0002](adr/0002-db-checked-role-guards.md)) |
+| Auth          | Single-use invite links → username + password; cookie sessions; no email/reset (admin resets)                                                                                           |
+| Chat v1       | Persistent history, image/file attachments, edit & delete own (admin deletes any)                                                                                                       |
+| Attachments   | External **S3-compatible bucket** via aws4fetch; presigned GETs; nothing on VPS disk                                                                                                    |
+| Database      | SQLite (Drizzle); one file on a volume                                                                                                                                                  |
+| Platform      | Responsive web + installable PWA; voice-activity detection (no push-to-talk)                                                                                                            |
+| Deploy        | docker compose to a rented VPS with a domain; ships its own Caddy for auto-HTTPS                                                                                                        |
+| Notifications | In-app only: unread badges, tab-title counter, join/leave/message sounds                                                                                                                |
 
 **Deferred to v2+:** browser/Web Push, desktop wrapper / global PTT, DMs, multiple spaces, a real
 roles engine, Postgres. The **Chat/messaging** batch (markdown, @mentions, replies, reactions,
@@ -46,6 +46,7 @@ URLs are clickable via M1 autolink.
 | ----------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Auth, invites, first-user-admin                                   | ✅ done     | `server/api/auth/*`, `server/api/invites/*`                                                                                                                                                                                    |
 | Channels CRUD (admin)                                             | ✅ done     | live-synced over WS                                                                                                                                                                                                            |
+| Moderator role (invites + channel create/rename)                  | ✅ done     | v0.10.0: `role` enum on members, DB-checked `requireRole` guards ([ADR 0002](adr/0002-db-checked-role-guards.md)), promote/demote in ManageModal, live session refresh; verified via API + two-browser Playwright              |
 | Text chat: send / edit / delete, unread, day separators, grouping | ✅ done     | `app/pages/channels/[id].vue`; message list is windowed — a bounded ~150-message DOM around the viewport (scroll-up loads older + trims newest, scroll-down reloads newer + trims oldest)                                      |
 | Realtime hub (presence, messages, channels, voice state)          | ✅ done     | `server/utils/ws-hub.ts`, `server/routes/_ws.ts`                                                                                                                                                                               |
 | Attachments (S3 upload, presigned serve, auth-gate, cleanup)      | ✅ done     | `server/utils/storage.ts`, `server/api/attachments/*`; `?proxy` streams bytes for JS readers (voice waveform — bucket has no CORS); `?preview` serves a sharp-generated WebP thumbnail for in-chat images (`image-preview.ts`) |
@@ -122,6 +123,20 @@ browser (Playwright, headless Chromium) against a 400-message-seeded channel:
   scrolling back down reloads newer + returns to the live tail
 - Server endpoint gained a symmetric `after`/`afterId` forward cursor and reports `hasMoreNewer`
   (used by the client to know when the window is detached from the live tail)
+
+**Moderator role (v0.10.0)** — verified locally against the dev server:
+
+- API smoke script (18 checks, all pass): member 403s on invites/channels; admin promotes → the
+  moderator's **pre-promotion cookie** immediately works for invite create/list/revoke and channel
+  create/rename; channel delete / password reset / role change stay 403 for moderators; the admin
+  role is immutable (400); demotion cuts powers on the very next request (DB-checked guards,
+  [ADR 0002](adr/0002-db-checked-role-guards.md))
+- Migration applied to a copy of the dev DB: `is_admin` dropped, existing admin → `role='admin'`,
+  everyone else `'member'`
+- Two real browsers (Playwright): promoting maks flipped his UI **live without reload** — «+»
+  channel buttons, rename-only dropdown (no «Удалить»), manage button appeared; his manage modal
+  shows the members roster read-only (no reset/delete buttons); «модератор» badge rendered for both
+  clients; demotion removed it all live
 
 **Not yet verified (needs a human / real environment):**
 

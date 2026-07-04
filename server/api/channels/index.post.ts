@@ -7,7 +7,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-	await requireAdmin(event)
+	await requireRole(event, 'moderator')
 	const body = await readValidatedBody(event, bodySchema.parse)
 	const db = useDb()
 	const [row] = await db.select({ n: count() }).from(schema.channels)

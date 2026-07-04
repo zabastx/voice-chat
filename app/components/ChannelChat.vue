@@ -58,7 +58,7 @@
 							class="py-2"
 						/>
 						<ChatMessage
-							:can-delete="message.authorId === user?.id || Boolean(user?.isAdmin)"
+							:can-delete="message.authorId === user?.id || isAdmin"
 							:can-edit="message.authorId === user?.id"
 							:compact="isCompact(i)"
 							:editing="editingId === message.id"
@@ -112,6 +112,7 @@ const route = useRoute()
 const store = useChannelsStore()
 const realtime = useRealtime()
 const { user } = useUserSession()
+const { isAdmin } = useRole()
 const toast = useToast()
 
 const overlay = useOverlay()

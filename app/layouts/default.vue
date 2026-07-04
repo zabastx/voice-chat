@@ -68,7 +68,7 @@ const { channelsOpen, channelsHidden } = usePanels()
 const realtime = useRealtime()
 const voice = useVoice()
 const prefs = usePreferences()
-const { user } = useUserSession()
+const { user, fetch: fetchSession } = useUserSession()
 const { currentVersion, hasUnseen, markSeen } = useChangelog()
 
 const overlay = useOverlay()
@@ -90,9 +90,27 @@ useHead({
 	)
 })
 
+// guards authorize against the DB, so the cookie role is UI-only — re-seal it
+// when it drifts (own promotion/demotion, or a pre-role cookie after deploy)
+async function refreshSession() {
+	try {
+		await $fetch('/api/auth/refresh', { method: 'POST' })
+		await fetchSession()
+	} catch {
+		// ignored: an expired session already redirects via auth middleware
+	}
+}
+
 realtime.onEvent((event) => {
 	store.apply(event)
 	membersStore.apply(event)
+	if (
+		event.type === 'member.updated' &&
+		event.member.id === user.value?.id &&
+		event.member.role !== user.value?.role
+	) {
+		void refreshSession()
+	}
 	if (event.type === 'message.created' && event.message.authorId !== user.value?.id) {
 		const mentionsMe =
 			Boolean(user.value) && mentionedIds(event.message.content).includes(user.value!.id)
@@ -160,6 +178,8 @@ function onFocus() {
 onMounted(() => {
 	realtime.start()
 	window.addEventListener('focus', onFocus)
+	// sessions sealed before the role column existed carry no role
+	if (user.value && !user.value.role) void refreshSession()
 })
 
 onUnmounted(() => {

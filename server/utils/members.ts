@@ -3,7 +3,7 @@ interface MemberRow {
 	username: string
 	displayName: string | null
 	avatarId: string | null
-	isAdmin: boolean
+	role: Role
 	createdAt: Date
 }
 
@@ -13,7 +13,7 @@ export function memberDto(row: MemberRow): MemberDto {
 		username: row.username,
 		displayName: row.displayName,
 		avatarUrl: row.avatarId ? `/api/members/${row.id}/avatar?v=${row.avatarId}` : null,
-		isAdmin: row.isAdmin,
+		role: row.role,
 		createdAt: row.createdAt.toISOString()
 	}
 }

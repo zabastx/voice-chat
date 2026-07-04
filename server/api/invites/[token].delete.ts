@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
-	await requireAdmin(event)
+	await requireRole(event, 'moderator')
 	const token = getRouterParam(event, 'token')!
 	const db = useDb()
 	const invite = await db.query.invites.findFirst({ where: eq(schema.invites.token, token) })

@@ -9,8 +9,13 @@ export default defineEventHandler(async (event) => {
 	if (!message) {
 		throw createError({ statusCode: 404, message: 'Сообщение не найдено' })
 	}
-	if (message.authorId !== user.id && !user.isAdmin) {
-		throw createError({ statusCode: 403, message: 'Это не ваше сообщение' })
+	if (message.authorId !== user.id) {
+		// deleting someone else's message is an admin power — check the DB
+		// role, not the cookie, so demotion applies immediately
+		const member = await db.query.members.findFirst({ where: eq(schema.members.id, user.id) })
+		if (member?.role !== 'admin') {
+			throw createError({ statusCode: 403, message: 'Это не ваше сообщение' })
+		}
 	}
 
 	const attachments = await db.query.attachments.findMany({

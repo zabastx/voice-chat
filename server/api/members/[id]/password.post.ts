@@ -4,7 +4,7 @@ import * as z from 'zod'
 const bodySchema = z.object({ password: passwordSchema })
 
 export default defineEventHandler(async (event) => {
-	await requireAdmin(event)
+	await requireRole(event, 'admin')
 	const id = getRouterParam(event, 'id')!
 	const body = await readValidatedBody(event, bodySchema.parse)
 	const db = useDb()

@@ -54,13 +54,16 @@ export interface SearchResultDto {
 	preview: string
 }
 
+// strictly hierarchical: admin ⊃ moderator ⊃ member
+export type Role = 'admin' | 'moderator' | 'member'
+
 export interface MemberDto {
 	id: string
 	username: string
 	displayName: string | null
 	// '/api/members/{id}/avatar?v={avatarId}' — ?v= busts the img cache on change
 	avatarUrl: string | null
-	isAdmin: boolean
+	role: Role
 	createdAt: string
 }
 

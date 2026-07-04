@@ -7,7 +7,7 @@
 			<p class="text-highlighted truncate text-sm font-medium">{{ displayName }}</p>
 			<p class="text-muted text-xs">{{ connected ? 'в сети' : 'подключение…' }}</p>
 		</div>
-		<UTooltip v-if="user?.isAdmin" text="Приглашения и участники">
+		<UTooltip v-if="canModerate" text="Приглашения и участники">
 			<UButton
 				color="neutral"
 				icon="i-lucide-users"
@@ -37,6 +37,7 @@ import ManageModal from './ManageModal.vue'
 import SettingsModal from './SettingsModal.vue'
 
 const { user, clear } = useUserSession()
+const { canModerate } = useRole()
 const { connected, stop } = useRealtime()
 const membersStore = useMembersStore()
 

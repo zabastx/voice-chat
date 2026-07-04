@@ -60,7 +60,9 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   GETs behind a session check at `GET /api/attachments/:id`. Objects deleted with their message;
   orphaned uploads swept on boot in [server/plugins/db.ts](server/plugins/db.ts).
 - **Auth** — nuxt-auth-utils sealed cookies. First account = admin, seeds `#general` + `lounge`.
-  Everyone else needs a single-use invite. `requireAdmin()` in [server/utils/auth.ts](server/utils/auth.ts).
+  Everyone else needs a single-use invite. Roles are hierarchical (`admin` > `moderator` > `member`);
+  `requireRole(event, min)` in [server/utils/auth.ts](server/utils/auth.ts) authorizes against the
+  **DB row**, never the cookie role (see [docs/adr/0002](docs/adr/0002-db-checked-role-guards.md)).
 - **DB** — Drizzle schema [server/db/schema.ts](server/db/schema.ts); migrations in
   `server/db/migrations`, applied automatically at startup. After editing the schema:
   `bun run db:generate`.
