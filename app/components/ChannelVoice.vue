@@ -1,0 +1,193 @@
+<template>
+	<UDashboardPanel
+		id="voice"
+		:ui="{ root: 'h-svh min-h-0', body: 'min-h-0 gap-0 p-0 sm:gap-0 sm:p-0' }"
+	>
+		<template #header>
+			<UDashboardNavbar
+				:title="channel ? channel.name : ''"
+				icon="i-lucide-volume-2"
+				:toggle="false"
+			>
+				<template #leading>
+					<SidebarToggle />
+				</template>
+				<template #right>
+					<MembersToggle />
+				</template>
+			</UDashboardNavbar>
+		</template>
+
+		<template #body>
+			<div class="bg-elevated/30 flex min-h-0 flex-1 flex-col">
+				<!-- focus mode: one enlarged tile -->
+				<div
+					v-if="focused && focusedTile"
+					class="flex min-h-0 flex-1 cursor-pointer flex-col p-3"
+					@click="focused = null"
+				>
+					<VoiceTile v-bind="focusedTile" contain />
+				</div>
+
+				<!-- tile grid -->
+				<div
+					v-else-if="tiles.length"
+					class="grid min-h-0 flex-1 auto-rows-fr gap-3 overflow-auto p-3"
+					:class="gridCols"
+				>
+					<VoiceTile
+						v-for="tile in tiles"
+						:key="tile.key"
+						v-bind="tile.props"
+						class="cursor-pointer"
+						@click="focused = tile.key"
+					/>
+				</div>
+
+				<!-- empty channel -->
+				<div
+					v-else
+					class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center"
+				>
+					<UIcon class="text-dimmed size-10" name="i-lucide-volume-2" />
+					<p class="text-muted text-sm">В канале пока никого нет.</p>
+				</div>
+
+				<!-- control bar -->
+				<div class="border-default flex shrink-0 items-center justify-center gap-2 border-t p-3">
+					<template v-if="connectedHere">
+						<UTooltip :text="voice.muted.value ? 'Включить микрофон' : 'Выключить микрофон'">
+							<UButton
+								:color="voice.muted.value ? 'error' : 'neutral'"
+								:icon="voice.muted.value ? 'i-lucide-mic-off' : 'i-lucide-mic'"
+								size="lg"
+								variant="soft"
+								@click="voice.toggleMute"
+							/>
+						</UTooltip>
+						<UTooltip :text="voice.camera.value ? 'Выключить камеру' : 'Включить камеру'">
+							<UButton
+								:color="voice.camera.value ? 'primary' : 'neutral'"
+								:icon="voice.camera.value ? 'i-lucide-video' : 'i-lucide-video-off'"
+								size="lg"
+								variant="soft"
+								@click="voice.toggleCamera"
+							/>
+						</UTooltip>
+						<UTooltip :text="voice.sharing.value ? 'Остановить показ' : 'Демонстрация экрана'">
+							<UButton
+								:color="voice.sharing.value ? 'primary' : 'neutral'"
+								icon="i-lucide-monitor-up"
+								size="lg"
+								variant="soft"
+								@click="voice.toggleScreenShare"
+							/>
+						</UTooltip>
+						<UTooltip text="Отключиться">
+							<UButton
+								color="error"
+								icon="i-lucide-phone-off"
+								size="lg"
+								variant="soft"
+								@click="voice.leave"
+							/>
+						</UTooltip>
+					</template>
+					<UButton
+						v-else
+						:loading="voice.connecting.value"
+						color="success"
+						icon="i-lucide-phone"
+						label="Подключиться"
+						size="lg"
+						@click="() => voice.join(channelId)"
+					/>
+				</div>
+			</div>
+		</template>
+	</UDashboardPanel>
+</template>
+
+<script lang="ts" setup>
+const route = useRoute()
+const voice = useVoice()
+const { voice: rooms } = useRealtime()
+const membersStore = useMembersStore()
+const store = useChannelsStore()
+const { user } = useUserSession()
+
+const focused = ref<string | null>(null)
+
+const channelId = computed(() => route.params.id as string)
+const channel = computed(() => store.channels.value.find((c) => c.id === channelId.value))
+const connectedHere = computed(() => voice.currentChannelId.value === channelId.value)
+const roster = computed(() => rooms.value[channelId.value] ?? [])
+
+function isSpeaking(p: VoiceParticipant) {
+	return p.speaking || (connectedHere.value && voice.speakingIds.value.includes(p.memberId))
+}
+
+function isMuted(p: VoiceParticipant) {
+	return p.memberId === user.value?.id && connectedHere.value ? voice.muted.value : p.muted
+}
+
+function participantName(p: VoiceParticipant) {
+	return membersStore.profile(p.memberId)?.displayName ?? p.username
+}
+
+const tiles = computed(() => {
+	// referencing cameraTiles keeps this reactive as camera tracks (un)subscribe
+	const camIds = new Set(voice.cameraTiles.value.map((t) => t.identity))
+	const list = roster.value.map((p) => ({
+		key: `p:${p.memberId}`,
+		props: {
+			track:
+				connectedHere.value && camIds.has(p.memberId)
+					? voice.cameraTrackFor(p.memberId)
+					: undefined,
+			label: participantName(p),
+			avatarUrl: membersStore.profile(p.memberId)?.avatarUrl,
+			muted: isMuted(p),
+			speaking: isSpeaking(p)
+		}
+	}))
+	if (connectedHere.value) {
+		for (const s of voice.screenShares.value) {
+			list.push({
+				key: `s:${s.sid}`,
+				props: {
+					track: voice.screenTrackFor(s.sid),
+					label: `${s.name} — экран`,
+					avatarUrl: undefined,
+					muted: false,
+					speaking: false,
+					icon: 'i-lucide-monitor-up'
+				} as (typeof list)[number]['props']
+			})
+		}
+	}
+	return list
+})
+
+const focusedTile = computed(() => tiles.value.find((t) => t.key === focused.value)?.props)
+
+const gridCols = computed(() => {
+	const n = tiles.value.length
+	if (n <= 1) return 'grid-cols-1'
+	if (n <= 4) return 'grid-cols-2'
+	if (n <= 9) return 'grid-cols-3'
+	return 'grid-cols-4'
+})
+
+// drop focus if the focused tile disappears (owner left / stopped video)
+watch(focusedTile, (tile) => {
+	if (!tile) focused.value = null
+})
+
+function onKeyDown(e: KeyboardEvent) {
+	if (e.key === 'Escape' && focused.value) focused.value = null
+}
+
+onMounted(() => window.addEventListener('keydown', onKeyDown))
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+</script>

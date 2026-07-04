@@ -60,9 +60,14 @@
 			<div class="flex flex-col gap-0.5">
 				<div v-for="channel in store.voiceChannels.value" :key="channel.id" class="group relative">
 					<button
-						class="text-muted hover:bg-elevated flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+						class="hover:bg-elevated flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+						:class="
+							store.activeChannelId.value === channel.id
+								? 'bg-elevated text-highlighted'
+								: 'text-muted'
+						"
 						type="button"
-						@click="voice.join(channel.id)"
+						@click="openVoice(channel.id)"
 					>
 						<UIcon class="size-4 shrink-0" name="i-lucide-volume-2" />
 						<span class="flex-1 truncate text-left">{{ channel.name }}</span>
@@ -92,6 +97,11 @@
 							v-if="isMuted(participant)"
 							class="text-dimmed size-3 shrink-0"
 							name="i-lucide-mic-off"
+						/>
+						<UIcon
+							v-if="isCameraOn(participant)"
+							class="text-primary size-3 shrink-0"
+							name="i-lucide-video"
 						/>
 						<UIcon
 							v-if="participant.screenSharing"
@@ -126,6 +136,12 @@ function openCreate(kind: 'text' | 'voice') {
 	channelModal.open({ defaultKind: kind })
 }
 
+// clicking a voice channel joins it (Discord-style) and opens its call view
+function openVoice(channelId: string) {
+	void voice.join(channelId)
+	void navigateTo(`/channels/${channelId}`)
+}
+
 // the server roster carries no live speaking data; merge in what the local
 // LiveKit connection knows about the room we are in
 function isSpeaking(channelId: string, participant: VoiceParticipant) {
@@ -143,6 +159,10 @@ function participantName(participant: VoiceParticipant) {
 
 function isMuted(participant: VoiceParticipant) {
 	return participant.memberId === user.value?.id ? voice.muted.value : participant.muted
+}
+
+function isCameraOn(participant: VoiceParticipant) {
+	return participant.memberId === user.value?.id ? voice.camera.value : participant.cameraOn
 }
 
 function channelMenu(channel: ChannelDto): DropdownMenuItem[][] {

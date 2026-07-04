@@ -41,8 +41,6 @@
 		<slot />
 
 		<MembersPanel />
-
-		<ScreenShareOverlay />
 	</UDashboardGroup>
 </template>
 

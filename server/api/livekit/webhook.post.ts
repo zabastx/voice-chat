@@ -33,11 +33,15 @@ export default defineEventHandler(async (event) => {
 		case 'track_published':
 			if (channelId && identity && hook.track?.source === TrackSource.SCREEN_SHARE) {
 				voiceSetScreenShare(channelId, identity, true)
+			} else if (channelId && identity && hook.track?.source === TrackSource.CAMERA) {
+				voiceSetCamera(channelId, identity, true)
 			}
 			break
 		case 'track_unpublished':
 			if (channelId && identity && hook.track?.source === TrackSource.SCREEN_SHARE) {
 				voiceSetScreenShare(channelId, identity, false)
+			} else if (channelId && identity && hook.track?.source === TrackSource.CAMERA) {
+				voiceSetCamera(channelId, identity, false)
 			}
 			break
 		case 'room_finished':

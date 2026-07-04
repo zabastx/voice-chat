@@ -70,6 +70,7 @@ export interface VoiceParticipant {
 	muted: boolean
 	speaking: boolean
 	screenSharing: boolean
+	cameraOn: boolean
 }
 
 export type VoiceRooms = Record<string, VoiceParticipant[]>

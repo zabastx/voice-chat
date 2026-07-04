@@ -27,7 +27,8 @@ export function voiceParticipantJoined(channelId: string, memberId: string, user
 		username,
 		muted: false,
 		speaking: false,
-		screenSharing: false
+		screenSharing: false,
+		cameraOn: false
 	})
 	broadcastVoice()
 }
@@ -47,6 +48,13 @@ export function voiceSetScreenShare(channelId: string, memberId: string, on: boo
 	const participant = rooms.get(channelId)?.get(memberId)
 	if (!participant || participant.screenSharing === on) return
 	participant.screenSharing = on
+	broadcastVoice()
+}
+
+export function voiceSetCamera(channelId: string, memberId: string, on: boolean) {
+	const participant = rooms.get(channelId)?.get(memberId)
+	if (!participant || participant.cameraOn === on) return
+	participant.cameraOn = on
 	broadcastVoice()
 }
 

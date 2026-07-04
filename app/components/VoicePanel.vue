@@ -30,6 +30,16 @@
 					@click="voice.toggleMute"
 				/>
 			</UTooltip>
+			<UTooltip :text="voice.camera.value ? 'Выключить камеру' : 'Включить камеру'" class="flex-1">
+				<UButton
+					:color="voice.camera.value ? 'primary' : 'neutral'"
+					:icon="voice.camera.value ? 'i-lucide-video' : 'i-lucide-video-off'"
+					block
+					size="sm"
+					variant="soft"
+					@click="voice.toggleCamera"
+				/>
+			</UTooltip>
 			<UTooltip
 				:text="voice.sharing.value ? 'Остановить показ' : 'Демонстрация экрана'"
 				class="flex-1"
