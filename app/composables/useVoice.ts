@@ -113,6 +113,25 @@ export function useVoice() {
 				speakingIds.value = speakers.map((s) => s.identity)
 			})
 
+			// setCameraEnabled(false) mutes rather than unpublishes, and on unmute livekit
+			// reuses the video element's MediaStream without replaying it (black feed in
+			// Chrome). Dropping the tile on mute and re-adding it on unmute forces VoiceTile
+			// to do a fresh attach() — and shows the avatar while the camera is off.
+			nextRoom.on(livekit.RoomEvent.TrackMuted, (publication, participant) => {
+				if (publication.source === livekit.Track.Source.Camera) {
+					cameraTiles.value = cameraTiles.value.filter((t) => t.identity !== participant.identity)
+				}
+			})
+
+			nextRoom.on(livekit.RoomEvent.TrackUnmuted, (publication, participant) => {
+				if (publication.source === livekit.Track.Source.Camera) {
+					cameraTiles.value = [
+						...cameraTiles.value.filter((t) => t.identity !== participant.identity),
+						{ identity: participant.identity, sid: publication.trackSid }
+					]
+				}
+			})
+
 			nextRoom.on(livekit.RoomEvent.LocalTrackPublished, (publication, participant) => {
 				if (publication.source === livekit.Track.Source.Camera && publication.track) {
 					localCameraTrack = publication.track

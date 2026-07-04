@@ -9,8 +9,7 @@
 			autoplay
 			muted
 			playsinline
-			class="h-full min-h-0 w-full"
-			:class="contain ? 'object-contain' : 'object-cover'"
+			class="h-full min-h-0 w-full object-contain"
 		/>
 		<UAvatar v-if="!track" :alt="label" :src="avatarUrl ?? undefined" size="xl" />
 		<div
@@ -33,7 +32,6 @@ const props = defineProps<{
 	muted?: boolean
 	speaking?: boolean
 	icon?: string
-	contain?: boolean
 }>()
 
 const videoEl = ref<HTMLVideoElement>()

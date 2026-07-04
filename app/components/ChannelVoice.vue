@@ -20,28 +20,40 @@
 
 		<template #body>
 			<div class="bg-elevated/30 flex min-h-0 flex-1 flex-col">
-				<!-- focus mode: one enlarged tile -->
+				<!-- focus mode: one enlarged tile (optionally fullscreen) -->
 				<div
 					v-if="focused && focusedTile"
-					class="flex min-h-0 flex-1 cursor-pointer flex-col p-3"
+					ref="focusedEl"
+					class="bg-elevated/30 relative flex min-h-0 flex-1 cursor-pointer flex-col"
+					:class="isFullscreen ? 'p-0' : 'p-3'"
 					@click="focused = null"
 				>
-					<VoiceTile v-bind="focusedTile" contain />
+					<VoiceTile v-bind="focusedTile" />
+					<UTooltip :text="isFullscreen ? 'Выйти из полноэкранного режима' : 'Во весь экран'">
+						<UButton
+							:icon="isFullscreen ? 'i-lucide-minimize' : 'i-lucide-maximize'"
+							class="absolute end-5 top-5"
+							color="neutral"
+							size="sm"
+							variant="solid"
+							@click.stop="toggleFullscreen"
+						/>
+					</UTooltip>
 				</div>
 
-				<!-- tile grid -->
+				<!-- fixed-size tiles, wrapped and centered over the whole view -->
 				<div
 					v-else-if="tiles.length"
-					class="grid min-h-0 flex-1 auto-rows-fr gap-3 overflow-auto p-3"
-					:class="gridCols"
+					class="flex min-h-0 flex-1 flex-wrap content-center-safe justify-center-safe gap-3 overflow-y-auto p-3"
 				>
-					<VoiceTile
+					<div
 						v-for="tile in tiles"
 						:key="tile.key"
-						v-bind="tile.props"
-						class="cursor-pointer"
+						class="h-45 w-80 max-w-full shrink-0 cursor-pointer"
 						@click="focused = tile.key"
-					/>
+					>
+						<VoiceTile v-bind="tile.props" />
+					</div>
 				</div>
 
 				<!-- empty channel -->
@@ -117,6 +129,8 @@ const store = useChannelsStore()
 const { user } = useUserSession()
 
 const focused = ref<string | null>(null)
+const focusedEl = ref<HTMLElement>()
+const isFullscreen = ref(false)
 
 const channelId = computed(() => route.params.id as string)
 const channel = computed(() => store.channels.value.find((c) => c.id === channelId.value))
@@ -171,23 +185,36 @@ const tiles = computed(() => {
 
 const focusedTile = computed(() => tiles.value.find((t) => t.key === focused.value)?.props)
 
-const gridCols = computed(() => {
-	const n = tiles.value.length
-	if (n <= 1) return 'grid-cols-1'
-	if (n <= 4) return 'grid-cols-2'
-	if (n <= 9) return 'grid-cols-3'
-	return 'grid-cols-4'
-})
-
-// drop focus if the focused tile disappears (owner left / stopped video)
+// drop focus if the focused tile disappears (owner left / stopped video);
+// removing the element from the DOM also exits fullscreen automatically
 watch(focusedTile, (tile) => {
 	if (!tile) focused.value = null
 })
 
-function onKeyDown(e: KeyboardEvent) {
-	if (e.key === 'Escape' && focused.value) focused.value = null
+async function toggleFullscreen() {
+	if (document.fullscreenElement) {
+		await document.exitFullscreen()
+	} else {
+		await focusedEl.value?.requestFullscreen?.()
+	}
 }
 
-onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+function onFullscreenChange() {
+	isFullscreen.value = !!document.fullscreenElement
+}
+
+function onKeyDown(e: KeyboardEvent) {
+	// while fullscreen, let the browser handle Escape (it exits fullscreen); only
+	// leave focus mode with Escape once we're back in the normal layout
+	if (e.key === 'Escape' && focused.value && !isFullscreen.value) focused.value = null
+}
+
+onMounted(() => {
+	window.addEventListener('keydown', onKeyDown)
+	document.addEventListener('fullscreenchange', onFullscreenChange)
+})
+onUnmounted(() => {
+	window.removeEventListener('keydown', onKeyDown)
+	document.removeEventListener('fullscreenchange', onFullscreenChange)
+})
 </script>
