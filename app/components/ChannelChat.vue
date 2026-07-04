@@ -198,7 +198,7 @@ async function loadOlder() {
 		const el = scroller.value
 		const prevHeight = el?.scrollHeight ?? 0
 		const res = await $fetch(`/api/channels/${channelId.value}/messages`, {
-			query: { before: first.createdAt }
+			query: { before: first.createdAt, beforeId: first.id }
 		})
 		messages.value = [...res.messages, ...messages.value]
 		hasMore.value = res.hasMore

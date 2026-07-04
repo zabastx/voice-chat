@@ -11,9 +11,15 @@ export default defineEventHandler(async (event) => {
 	if (!member) {
 		throw createError({ statusCode: 404, message: 'Участник не найден' })
 	}
+	// cascades wipe this member's attachment rows (via uploader_id and via their
+	// deleted messages) — collect object keys first so the files leave the bucket too
+	const uploads = await db
+		.select({ objectKey: schema.attachments.objectKey, previewKey: schema.attachments.previewKey })
+		.from(schema.attachments)
+		.where(eq(schema.attachments.uploaderId, id))
 	await db.delete(schema.members).where(eq(schema.members.id, id))
-	if (member.avatarId) {
-		await deleteAttachmentObjects([avatarObjectKey(member.id, member.avatarId)])
-	}
+	const keys = uploads.flatMap((a) => (a.previewKey ? [a.objectKey, a.previewKey] : [a.objectKey]))
+	if (member.avatarId) keys.push(avatarObjectKey(member.id, member.avatarId))
+	await deleteAttachmentObjects(keys)
 	return { ok: true }
 })

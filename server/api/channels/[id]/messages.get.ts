@@ -1,8 +1,11 @@
-import { and, asc, desc, eq, gt, lt, lte, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, lt, lte, or, type SQL } from 'drizzle-orm'
 import * as z from 'zod'
 
 const querySchema = z.object({
 	before: z.iso.datetime().optional(),
+	// id tiebreaker for `before`: rows can share a createdAt millisecond, and a
+	// strict timestamp cursor would skip the twins across a page boundary
+	beforeId: z.string().optional(),
 	// center a window on this message (reply / search jump)
 	aroundId: z.string().optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(50)
@@ -67,14 +70,17 @@ export default defineEventHandler(async (event) => {
 		hasMore = older.length > WINDOW
 		rows = [...older.slice(0, WINDOW).reverse(), ...newer]
 	} else {
-		const page = await selectMessages(
-			and(
-				channelFilter,
-				query.before ? lt(schema.messages.createdAt, new Date(query.before)) : undefined
-			),
-			'desc',
-			query.limit
-		)
+		const before = query.before ? new Date(query.before) : undefined
+		// matches the (createdAt, id) sort order of selectMessages
+		const cursor = before
+			? query.beforeId
+				? or(
+						lt(schema.messages.createdAt, before),
+						and(eq(schema.messages.createdAt, before), lt(schema.messages.id, query.beforeId))
+					)
+				: lt(schema.messages.createdAt, before)
+			: undefined
+		const page = await selectMessages(and(channelFilter, cursor), 'desc', query.limit)
 		hasMore = page.length === query.limit
 		rows = page.reverse()
 	}

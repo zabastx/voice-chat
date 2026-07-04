@@ -7,6 +7,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+	requireRateLimit(event, 'login', 10, 15 * 60 * 1000)
 	const body = await readValidatedBody(event, bodySchema.parse)
 	const db = useDb()
 

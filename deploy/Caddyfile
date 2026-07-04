@@ -1,5 +1,17 @@
 # Main app — automatic HTTPS via Let's Encrypt
 {$DOMAIN} {
+	# uploads are capped at 25 MB app-side, but that check reads the body into
+	# RAM first — cut oversized requests off at the proxy
+	request_body {
+		max_size 30MB
+	}
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'"
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "geolocation=(), payment=()"
+	}
 	reverse_proxy app:3000
 }
 

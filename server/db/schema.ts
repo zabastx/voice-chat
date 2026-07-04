@@ -42,27 +42,36 @@ export const messages = sqliteTable(
 			.$defaultFn(() => new Date()),
 		editedAt: integer('edited_at', { mode: 'timestamp_ms' })
 	},
-	(table) => [index('messages_channel_created_idx').on(table.channelId, table.createdAt)]
+	(table) => [
+		index('messages_channel_created_idx').on(table.channelId, table.createdAt),
+		// scanned when a parent is deleted to rebroadcast its dangling replies
+		index('messages_reply_to_idx').on(table.replyToId)
+	]
 )
 
-export const attachments = sqliteTable('attachments', {
-	id: text('id').primaryKey(),
-	// null until the message referencing this upload is sent
-	messageId: text('message_id').references(() => messages.id, { onDelete: 'cascade' }),
-	uploaderId: text('uploader_id')
-		.notNull()
-		.references(() => members.id, { onDelete: 'cascade' }),
-	filename: text('filename').notNull(),
-	mime: text('mime').notNull(),
-	size: integer('size').notNull(),
-	objectKey: text('object_key').notNull().unique(),
-	// downscaled WebP preview for in-chat display; null = no preview
-	// (non-image, gif/svg, or generation failed) → the original is served
-	previewKey: text('preview_key'),
-	createdAt: integer('created_at', { mode: 'timestamp_ms' })
-		.notNull()
-		.$defaultFn(() => new Date())
-})
+export const attachments = sqliteTable(
+	'attachments',
+	{
+		id: text('id').primaryKey(),
+		// null until the message referencing this upload is sent
+		messageId: text('message_id').references(() => messages.id, { onDelete: 'cascade' }),
+		uploaderId: text('uploader_id')
+			.notNull()
+			.references(() => members.id, { onDelete: 'cascade' }),
+		filename: text('filename').notNull(),
+		mime: text('mime').notNull(),
+		size: integer('size').notNull(),
+		objectKey: text('object_key').notNull().unique(),
+		// downscaled WebP preview for in-chat display; null = no preview
+		// (non-image, gif/svg, or generation failed) → the original is served
+		previewKey: text('preview_key'),
+		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+			.notNull()
+			.$defaultFn(() => new Date())
+	},
+	// hit on every message-page load (attachments for 50 message ids)
+	(table) => [index('attachments_message_idx').on(table.messageId)]
+)
 
 export const reactions = sqliteTable(
 	'reactions',

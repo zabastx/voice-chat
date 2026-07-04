@@ -1,4 +1,4 @@
-import { and, asc, eq, max } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
@@ -9,11 +9,16 @@ export default defineEventHandler(async (event) => {
 			name: schema.channels.name,
 			kind: schema.channels.kind,
 			position: schema.channels.position,
-			lastMessageAt: max(schema.messages.createdAt),
+			// correlated subquery seeks messages_channel_created_idx per channel;
+			// a LEFT JOIN + GROUP BY here scans the whole messages table instead
+			lastMessageAt: sql<number | null>`(
+				SELECT max(${schema.messages.createdAt})
+				FROM ${schema.messages}
+				WHERE ${schema.messages.channelId} = ${schema.channels.id}
+			)`,
 			lastReadAt: schema.memberChannelState.lastReadAt
 		})
 		.from(schema.channels)
-		.leftJoin(schema.messages, eq(schema.messages.channelId, schema.channels.id))
 		.leftJoin(
 			schema.memberChannelState,
 			and(
@@ -21,7 +26,6 @@ export default defineEventHandler(async (event) => {
 				eq(schema.memberChannelState.memberId, user.id)
 			)
 		)
-		.groupBy(schema.channels.id)
 		.orderBy(asc(schema.channels.position), asc(schema.channels.createdAt))
 
 	return rows.map(

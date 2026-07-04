@@ -9,10 +9,7 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 503, message: 'Файловое хранилище не настроено' })
 	}
 
-	const contentLength = Number(getHeader(event, 'content-length') ?? 0)
-	if (contentLength > MAX_SIZE + 1024 * 1024) {
-		throw createError({ statusCode: 413, message: 'Файл слишком большой (максимум 5 МБ)' })
-	}
+	requireDeclaredBodySize(event, MAX_SIZE, 'Файл слишком большой (максимум 5 МБ)')
 
 	const parts = await readMultipartFormData(event)
 	const file = parts?.find((part) => part.name === 'file' && part.filename)

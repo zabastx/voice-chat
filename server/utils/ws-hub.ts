@@ -11,8 +11,14 @@ const tickets = new Map<string, WsMember & { expires: number }>()
 const clients = new Map<string, WsMember & { peer: Peer }>()
 
 export function createWsTicket(member: WsMember) {
+	// tickets are only deleted on consumption — purge expired ones here or
+	// never-used tickets pile up for the life of the process
+	const now = Date.now()
+	for (const [key, entry] of tickets) {
+		if (entry.expires < now) tickets.delete(key)
+	}
 	const ticket = newToken()
-	tickets.set(ticket, { ...member, expires: Date.now() + TICKET_TTL_MS })
+	tickets.set(ticket, { ...member, expires: now + TICKET_TTL_MS })
 	return ticket
 }
 

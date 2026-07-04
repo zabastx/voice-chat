@@ -95,10 +95,28 @@ URLs are clickable via M1 autolink.
 - Screen-share _video_ rendering between two real desktop browsers
 - The actual VPS `docker compose up` — stack is live on the server
 
+**Security / performance hardening (v0.9.1)** — verified locally against the dev server + MinIO:
+
+- Session revalidation middleware ([server/middleware/session-member.ts](../server/middleware/session-member.ts)):
+  deleting a member now revokes their sealed-cookie session (channels/voice-token/ws-ticket → 401);
+  public routes (`/api/auth/*`, invite validity) still work with a stale cookie
+- Login + register rate-limited (10 / 15 min per IP, [server/utils/rate-limit.ts](../server/utils/rate-limit.ts)) — verified 429 after 10 attempts
+- Register wrapped in a single sqlite transaction — invite can't be consumed twice (verified 400 on reuse)
+- Uploaded non-media (e.g. `text/html`) forced to download on both the presigned-redirect and
+  `?proxy` paths (`Content-Disposition: attachment` + `nosniff`) — verified it does not render inline
+- Chunked upload with no Content-Length rejected (411); Caddy `request_body max_size 30MB` + security headers
+- S3 objects (incl. WebP previews) now deleted when a channel or member is deleted, not just their rows
+- Channel-list query switched from a full-table `LEFT JOIN messages … GROUP BY` to a correlated
+  index-seek subquery; new indexes on `attachments.message_id` and `messages.reply_to_id` (migration 0004→0005)
+- `PRAGMA synchronous = NORMAL` under WAL; hourly stale-upload sweep (was boot-only);
+  avatar/attachment redirects carry `Cache-Control: private, max-age=240`; WS ticket-map purge + 10 s auth timeout
+- Message pagination cursor extended with an id tiebreaker (`before` + `beforeId`) so same-millisecond rows aren't skipped
+
 **Not yet verified (needs a human / real environment):**
 
 - Real NAT traversal — test voice from two different networks (phone hotspot vs home Wi-Fi)
 - Mobile browsers (esp. iOS Safari voice)
+- Production Caddy: confirm the new `request_body`/`header` blocks parse on the live VPS
 
 ## Remaining work / next steps
 

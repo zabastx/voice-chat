@@ -1,5 +1,13 @@
 import { eq } from 'drizzle-orm'
 
+// mime types browsers render inline that we actually want inline; anything
+// else (text/html, application/pdf, …) is forced to download so an uploaded
+// file can never execute as a page — neither on the bucket origin nor,
+// via ?proxy, on the app origin with session cookies.
+function isInlineSafe(mime: string) {
+	return /^(image|video|audio)\//.test(mime)
+}
+
 export default defineEventHandler(async (event) => {
 	await requireUserSession(event)
 	const id = getRouterParam(event, 'id')!
@@ -20,13 +28,26 @@ export default defineEventHandler(async (event) => {
 	// the body in JS (voice-message waveform decoder). Following the redirect and
 	// reading it cross-origin needs CORS headers the bucket doesn't send.
 	if (query.proxy === undefined) {
-		return sendRedirect(event, await presignGetUrl(objectKey), 302)
+		// let the browser reuse the redirect target while the presign is valid
+		// instead of re-signing on every re-render (presign lives 300s)
+		setHeader(event, 'cache-control', 'private, max-age=240')
+		return sendRedirect(
+			event,
+			await presignGetUrl(objectKey, {
+				downloadAs: isInlineSafe(attachment.mime) ? undefined : attachment.filename
+			}),
+			302
+		)
 	}
 	const res = await getObject(objectKey)
 	if (!res.ok || !res.body) {
 		throw createError({ statusCode: 502, message: 'Не удалось получить файл из хранилища' })
 	}
 	setHeader(event, 'content-type', usePreview ? 'image/webp' : attachment.mime)
+	setHeader(event, 'x-content-type-options', 'nosniff')
+	// proxied bytes are only ever consumed via fetch(); a direct navigation must
+	// download, not render, since this response carries the app origin
+	setHeader(event, 'content-disposition', 'attachment')
 	const length = res.headers.get('content-length')
 	if (length) setHeader(event, 'content-length', Number(length))
 	return res.body

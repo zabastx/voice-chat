@@ -66,9 +66,20 @@ export async function getObject(objectKey: string) {
 	return s3Client().fetch(objectUrl(objectKey), { method: 'GET' })
 }
 
-export async function presignGetUrl(objectKey: string, expiresSeconds = 300) {
+export async function presignGetUrl(
+	objectKey: string,
+	opts: { expiresSeconds?: number; downloadAs?: string } = {}
+) {
 	const url = new URL(objectUrl(objectKey))
-	url.searchParams.set('X-Amz-Expires', String(expiresSeconds))
+	url.searchParams.set('X-Amz-Expires', String(opts.expiresSeconds ?? 300))
+	// force a download for types a browser would render (e.g. an uploaded HTML
+	// file must not become a live page on the bucket origin)
+	if (opts.downloadAs) {
+		url.searchParams.set(
+			'response-content-disposition',
+			`attachment; filename*=UTF-8''${encodeURIComponent(opts.downloadAs)}`
+		)
+	}
 	const signed = await s3Client().sign(new Request(url, { method: 'GET' }), {
 		aws: { signQuery: true }
 	})
