@@ -22,9 +22,24 @@
 			</template>
 
 			<template #header>
-				<div class="text-highlighted flex items-center gap-2 font-semibold">
-					<UIcon name="i-lucide-headphones" class="text-primary size-5" />
-					<span class="truncate">Voice Chat</span>
+				<div class="flex w-full items-center gap-2">
+					<UIcon name="i-lucide-headphones" class="text-primary size-5 shrink-0" />
+					<span class="text-highlighted truncate font-semibold">Voice Chat</span>
+					<span class="text-dimmed shrink-0 text-xs">v{{ currentVersion }}</span>
+					<!-- ClientOnly: hasUnseen comes from localStorage, so SSR can't know it -->
+					<ClientOnly>
+						<UTooltip text="Что нового">
+							<UChip :show="hasUnseen" class="ms-auto" color="primary" inset size="md">
+								<UButton
+									color="neutral"
+									icon="i-lucide-sparkles"
+									size="xs"
+									variant="ghost"
+									@click="openChangelog"
+								/>
+							</UChip>
+						</UTooltip>
+					</ClientOnly>
 				</div>
 			</template>
 
@@ -45,6 +60,8 @@
 </template>
 
 <script lang="ts" setup>
+import ChangelogModal from '~/components/ChangelogModal.vue'
+
 const store = useChannelsStore()
 const membersStore = useMembersStore()
 const { channelsOpen, channelsHidden } = usePanels()
@@ -52,6 +69,15 @@ const realtime = useRealtime()
 const voice = useVoice()
 const prefs = usePreferences()
 const { user } = useUserSession()
+const { currentVersion, hasUnseen, markSeen } = useChangelog()
+
+const overlay = useOverlay()
+const changelogModal = overlay.create(ChangelogModal)
+
+function openChangelog() {
+	markSeen()
+	changelogModal.open()
+}
 
 await useAsyncData('channels', async () => {
 	await Promise.all([store.refresh(), membersStore.refresh()])

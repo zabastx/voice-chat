@@ -25,20 +25,6 @@
 				@click="openSettings"
 			/>
 		</UTooltip>
-		<!-- ClientOnly: hasUnseen comes from localStorage, so SSR can't know it -->
-		<ClientOnly>
-			<UTooltip text="Что нового">
-				<UChip :show="hasUnseen" color="primary" inset size="md">
-					<UButton
-						color="neutral"
-						icon="i-lucide-sparkles"
-						size="sm"
-						variant="ghost"
-						@click="openChangelog"
-					/>
-				</UChip>
-			</UTooltip>
-		</ClientOnly>
 		<UColorModeButton size="sm" />
 		<UTooltip text="Выйти">
 			<UButton color="neutral" icon="i-lucide-log-out" size="sm" variant="ghost" @click="logout" />
@@ -47,14 +33,12 @@
 </template>
 
 <script lang="ts" setup>
-import ChangelogModal from './ChangelogModal.vue'
 import ManageModal from './ManageModal.vue'
 import SettingsModal from './SettingsModal.vue'
 
 const { user, clear } = useUserSession()
 const { connected, stop } = useRealtime()
 const membersStore = useMembersStore()
-const { hasUnseen, markSeen } = useChangelog()
 
 const self = computed(() => membersStore.profile(user.value?.id))
 const displayName = computed(() => self.value?.displayName ?? user.value?.username)
@@ -62,7 +46,6 @@ const displayName = computed(() => self.value?.displayName ?? user.value?.userna
 const overlay = useOverlay()
 const manageModal = overlay.create(ManageModal)
 const settingsModal = overlay.create(SettingsModal)
-const changelogModal = overlay.create(ChangelogModal)
 
 function openManage() {
 	manageModal.open()
@@ -70,11 +53,6 @@ function openManage() {
 
 function openSettings() {
 	settingsModal.open()
-}
-
-function openChangelog() {
-	markSeen()
-	changelogModal.open()
 }
 
 async function logout() {
