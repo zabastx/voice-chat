@@ -1,6 +1,7 @@
 import { and, eq, gt } from 'drizzle-orm'
 
-// Telegram Bot API update, narrowed to the fields we use.
+// Raw Telegram update, forwarded verbatim by the telegram-relay service, narrowed
+// to the fields we use.
 interface TgUpdate {
 	message?: {
 		text?: string
@@ -23,10 +24,10 @@ const HINTS = {
 
 export default defineEventHandler(async (event) => {
 	const config = useRuntimeConfig()
-	// verify the secret we registered via setWebhook (see server/plugins/telegram.ts)
+	// authenticate the relay (shared bearer secret); mirrors the relay's own auth
 	if (
-		!config.telegramWebhookSecret ||
-		getHeader(event, 'x-telegram-bot-api-secret-header') !== config.telegramWebhookSecret
+		!config.telegramRelaySecret ||
+		getHeader(event, 'authorization') !== `Bearer ${config.telegramRelaySecret}`
 	) {
 		throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 	}

@@ -1,7 +1,7 @@
 # 0006 — Telegram notifications with reply-to-send
 
 Date: 2026-07-05
-Status: accepted
+Status: accepted (transport superseded 2026-07-06 — see "Update: relay transport")
 
 ## Context
 
@@ -18,12 +18,8 @@ by audience through `emitChannelEvent()`. A bot token exists. The deployment is 
 
 ## Decision
 
-- **Transport is a webhook**, mirroring `livekit/webhook.post.ts`. On boot, if a bot token +
-  public URL + secret are configured, the app calls `setWebhook` with a `secret_token`; the
-  receiver at `POST /api/telegram/webhook` rejects any request whose
-  `X-Telegram-Bot-Api-Secret-Header` doesn't match. Chosen over long-polling because it needs no
-  long-lived loop and matches an existing pattern; the cost is that **local dev needs a public
-  tunnel** (documented in GOTCHAS). The whole feature is a no-op when unconfigured.
+- **Transport is a webhook** (superseded — see the Update below). Original decision: on boot the app
+  calls `setWebhook`, and `POST /api/telegram/webhook` verifies `X-Telegram-Bot-Api-Secret-Header`.
 
 - **Linking is a deep-link `/start` token.** Settings mints a short-lived (15 min), single-use
   `telegram_link_token` and opens `t.me/<bot>?start=<token>`. The bot consumes it on `/start`,
@@ -73,3 +69,30 @@ Member rows to clients must not include the telegram columns.
   both process updates. Not a concern for the current deploy; revisit if it ever scales out.
 - Media/attachments from Telegram are out of scope for this version (text replies only); nothing
   here precludes adding file forwarding later through the storage pipeline.
+
+## Update: relay transport (2026-07-06)
+
+The in-app webhook could not work in production. The prod host (`…cloud.ru`) **filters Telegram
+traffic in both directions**: outbound to `api.telegram.org` resolved to IPv6-only and timed out (a
+temporary IPv4 `extra_hosts` pin got `sendMessage` working), and inbound webhook delivery from
+Telegram's servers to the public HTTPS endpoint **timed out** (`getWebhookInfo` →
+`"Connection timed out"`), so linking and replies never arrived. The endpoint was reachable from the
+normal internet — only Telegram's path was blocked.
+
+Fix: a standalone **`telegram-relay`** Nitro service (`telegram-relay/`), hosted on a network with
+clean Telegram access. It is **stateless and owns no logic** — a pure connectivity shim:
+
+- `POST /send` (called by the main app, bearer-authed) → proxies `sendMessage`, returns
+  `{ messageId, blocked }`.
+- `POST /telegram/webhook` (called by Telegram, secret-header-authed) → forwards the raw update to
+  the main app's `POST /api/telegram/ingest` (bearer-authed); returns 502 on ingest failure so
+  Telegram retries.
+
+The main app now reaches the relay over ordinary (non-Telegram) HTTP, which the host does **not**
+filter, and no longer contacts `api.telegram.org` at all — so it needs no bot token and the
+`extra_hosts` pin was removed. Everything else in this ADR is unchanged: the main app still owns all
+linking, the mapping table, offline detection, and message posting; `tgSendMessage` just calls the
+relay instead of Telegram, and the old `webhook.post.ts` became `ingest.post.ts`. The relay
+registers the webhook (`setWebhook`) on its own boot, so the "single-instance / one webhook" caveat
+above now applies to the relay. Config moved from `NUXT_TELEGRAM_BOT_TOKEN`/`_WEBHOOK_URL`/`_SECRET`
+to `NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET` (the bot token lives only in the relay).

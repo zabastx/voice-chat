@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 404, message: 'Участник не найден' })
 	}
 	return {
-		configured: !!config.telegramBotToken && !!config.public.telegramBotUsername,
+		configured: telegramConfigured() && !!config.public.telegramBotUsername,
 		linked: !!member.telegramChatId,
 		notificationsEnabled: member.telegramNotificationsEnabled,
 		botUsername: config.public.telegramBotUsername || null

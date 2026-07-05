@@ -7,7 +7,7 @@ const TOKEN_TTL_MS = 15 * 60 * 1000
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
 	const config = useRuntimeConfig()
-	if (!config.telegramBotToken || !config.public.telegramBotUsername) {
+	if (!telegramConfigured() || !config.public.telegramBotUsername) {
 		throw createError({ statusCode: 503, message: 'Уведомления в Telegram не настроены' })
 	}
 	const token = newToken()

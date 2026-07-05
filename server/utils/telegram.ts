@@ -1,64 +1,40 @@
 import { eq, inArray } from 'drizzle-orm'
 
-// Thin wrapper over the Telegram Bot API. Kept dependency-free (plain `fetch`,
-// the established server-side pattern) so it runs identically on Node (dev) and
-// Bun (prod). The whole feature is a no-op unless a bot token is configured.
+// The main app never talks to api.telegram.org directly (its host filters
+// Telegram traffic — see adr/0006). Instead it calls the standalone
+// telegram-relay service, which proxies sendMessage and forwards inbound updates
+// back to /api/telegram/ingest. The feature is a no-op unless the relay is set.
 
 export function telegramConfigured(): boolean {
-	return !!useRuntimeConfig().telegramBotToken
+	const config = useRuntimeConfig()
+	return !!config.telegramRelayUrl && !!config.telegramRelaySecret
 }
 
-// Low-level call to any Bot API method. Returns the parsed `result`, or null on
-// failure (logged). Used for setWebhook and other fire-and-forget admin calls.
-export async function tgApi<T = unknown>(
-	method: string,
-	body: Record<string, unknown>
-): Promise<T | null> {
-	const token = useRuntimeConfig().telegramBotToken
-	if (!token) return null
-	try {
-		const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(body)
-		})
-		const data = (await res.json()) as { ok: boolean; result?: T; description?: string }
-		if (!data.ok) {
-			console.error(`telegram ${method} failed`, res.status, data.description)
-			return null
-		}
-		return data.result ?? null
-	} catch (err) {
-		console.error(`telegram ${method} error`, err)
-		return null
-	}
-}
-
-// Send a plain-text message to a chat. No parse_mode: message bodies are shown
-// verbatim, so a user's `*asterisks*` or `_underscores_` never break rendering.
-// Returns the sent message id (needed for reply routing) and whether the chat
-// rejected us with 403 (the user blocked/deleted the bot → caller auto-unlinks).
+// Ask the relay to send a plain-text message to a chat. Returns the sent message
+// id (needed for reply routing) and whether the chat blocked the bot (403 →
+// caller auto-unlinks). Any relay/transport failure is logged and swallowed.
 export async function tgSendMessage(
 	chatId: string,
 	text: string
 ): Promise<{ messageId: number | null; blocked: boolean }> {
-	const token = useRuntimeConfig().telegramBotToken
-	if (!token) return { messageId: null, blocked: false }
+	const config = useRuntimeConfig()
+	if (!telegramConfigured()) return { messageId: null, blocked: false }
 	try {
-		const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+		const res = await fetch(`${config.telegramRelayUrl.replace(/\/$/, '')}/send`, {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+			headers: {
+				'content-type': 'application/json',
+				authorization: `Bearer ${config.telegramRelaySecret}`
+			},
+			body: JSON.stringify({ chatId, text })
 		})
-		if (res.status === 403) return { messageId: null, blocked: true }
 		if (!res.ok) {
-			console.error('telegram sendMessage failed', res.status, await res.text())
+			console.error('telegram relay /send failed', res.status, await res.text())
 			return { messageId: null, blocked: false }
 		}
-		const data = (await res.json()) as { result?: { message_id?: number } }
-		return { messageId: data.result?.message_id ?? null, blocked: false }
+		return (await res.json()) as { messageId: number | null; blocked: boolean }
 	} catch (err) {
-		console.error('telegram sendMessage error', err)
+		console.error('telegram relay /send error', err)
 		return { messageId: null, blocked: false }
 	}
 }

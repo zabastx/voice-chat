@@ -253,16 +253,22 @@ Application → Service Workers → Unregister, then Clear site data.
 
 ## Telegram notifications
 
-### 20. Local dev receives no Telegram updates without a public tunnel
+### 20. The prod host filters Telegram — notifications go through a separate relay
 
-**Symptom:** linking (`/start`) and reply-to-send do nothing in local dev; the bot never reacts.
-**Cause:** Telegram delivers updates by **webhook** — it POSTs to a public HTTPS URL. `localhost` is
-unreachable from Telegram's servers, so `setWebhook` on boot is skipped (or points nowhere) and no
-updates arrive. Outbound notifications (`sendMessage`) still work; only _inbound_ is affected.
-**Fix:** expose the dev server through a tunnel (ngrok, cloudflared) and set
-`NUXT_TELEGRAM_WEBHOOK_URL=https://<tunnel>/api/telegram/webhook` (plus `NUXT_TELEGRAM_BOT_TOKEN`,
-`NUXT_TELEGRAM_WEBHOOK_SECRET`, `NUXT_PUBLIC_TELEGRAM_BOT_USERNAME`). The plugin registers the
-webhook on boot; with none of these set the whole feature no-ops cleanly.
+**Symptom:** on the VPS, `setWebhook`/`sendMessage` at boot fail with `ConnectionRefused`; after an
+IPv4 pin got outbound working, `getWebhookInfo` still shows `"Connection timed out"` and linking/
+replies never arrive — even though the site is reachable from the public internet.
+**Cause:** the prod host (`…cloud.ru`) filters Telegram traffic in **both** directions.
+`api.telegram.org` resolved to IPv6-only (no working v6 egress; Bun's fetch doesn't fall back to
+v4), and inbound webhook delivery from Telegram's servers to the public endpoint is dropped. The
+block is specific to Telegram's network path, not the firewall or Caddy.
+**Fix:** the app does **not** talk to Telegram directly. A standalone `telegram-relay/` service runs
+on a host with clean Telegram access and is the only thing that touches `api.telegram.org`; the app
+reaches the relay over ordinary HTTP (`NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET`), and
+Telegram updates come back in via `POST /api/telegram/ingest`. See
+[adr/0006 "Update: relay transport"](adr/0006-telegram-notifications.md) and
+[telegram-relay/README.md](../telegram-relay/README.md). For local dev, point `NUXT_TELEGRAM_RELAY_URL`
+at a relay instance (or leave it blank to no-op the feature).
 
 ## Deploy notes worth remembering
 
