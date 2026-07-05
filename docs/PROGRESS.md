@@ -16,13 +16,14 @@ on the VPS.
 | Auth          | Single-use invite links → username + password; cookie sessions; no email/reset (admin resets)                                                                                           |
 | Chat v1       | Persistent history, image/file attachments, edit & delete own (admin deletes any)                                                                                                       |
 | Attachments   | External **S3-compatible bucket** via aws4fetch; presigned GETs; nothing on VPS disk                                                                                                    |
-| Database      | SQLite (Drizzle); one file on a volume                                                                                                                                                  |
+| Database      | **Postgres 18** (Drizzle + postgres.js), compose service; was SQLite in v1 — reversed by [ADR 0004](adr/0004-postgres-replaces-sqlite.md) (v0.12.0)                                     |
 | Platform      | Responsive web + installable PWA; voice-activity detection (no push-to-talk)                                                                                                            |
 | Deploy        | docker compose to a rented VPS with a domain; ships its own Caddy for auto-HTTPS                                                                                                        |
 | Notifications | In-app only: unread badges, tab-title counter, join/leave/message sounds                                                                                                                |
 
 **Deferred to v2+:** browser/Web Push, desktop wrapper / global PTT, DMs, multiple spaces, a real
-roles engine, Postgres. The **Chat/messaging** batch (markdown, @mentions, replies, reactions,
+roles engine. (Postgres was on this list — shipped in v0.12.0, [ADR 0004](adr/0004-postgres-replaces-sqlite.md).)
+The **Chat/messaging** batch (markdown, @mentions, replies, reactions,
 search) shipped as v0.3.0–v0.7.0 — see "v2 — Chat/messaging" below. Only rich link previews (M6)
 remain deferred (SSRF/privacy).
 
@@ -31,14 +32,14 @@ remain deferred (SSRF/privacy).
 M1–M5 shipped; each was its own release. Rich link previews (M6) stay deferred (SSRF/privacy);
 URLs are clickable via M1 autolink.
 
-| Milestone                                  | Status  | Notes                                                            |
-| ------------------------------------------ | ------- | ---------------------------------------------------------------- |
-| M1 — Markdown (Discord subset) + autolinks | ✅ done | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose` |
-| M1 — jump-to-message foundation            | ✅ done | `aroundId=` window + client `jumpToMessage` + flash              |
-| M2 — @mentions                             | ✅ done | `shared/utils/mentions.ts`, composer autocomplete, chip + ping   |
-| M3 — Replies                               | ✅ done | `replyToId` (no FK), reply banner, quote render, deleted-live    |
-| M4 — Reactions                             | ✅ done | `reactions` table, toggle endpoint, emoji-picker-element, chips  |
-| M5 — Message search (global FTS5)          | ✅ done | FTS5 + triggers in `db.ts`, `/api/search`, SearchModal + jump    |
+| Milestone                                  | Status  | Notes                                                                  |
+| ------------------------------------------ | ------- | ---------------------------------------------------------------------- |
+| M1 — Markdown (Discord subset) + autolinks | ✅ done | `app/utils/markdown.ts` (markdown-it + DOMPurify); `.chat-prose`       |
+| M1 — jump-to-message foundation            | ✅ done | `aroundId=` window + client `jumpToMessage` + flash                    |
+| M2 — @mentions                             | ✅ done | `shared/utils/mentions.ts`, composer autocomplete, chip + ping         |
+| M3 — Replies                               | ✅ done | `replyToId` (no FK), reply banner, quote render, deleted-live          |
+| M4 — Reactions                             | ✅ done | `reactions` table, toggle endpoint, emoji-picker-element, chips        |
+| M5 — Message search (global full-text)     | ✅ done | `/api/search`, SearchModal + jump; FTS5 → Postgres tsvector in v0.12.0 |
 
 ## Feature status
 
@@ -60,6 +61,7 @@ URLs are clickable via M1 autolink.
 | Deploy stack (Dockerfile, compose, Caddy, livekit.yaml)           | ✅ deployed | live on the VPS; see [DEPLOY.md](DEPLOY.md)                                                                                                                                                                                    |
 | User settings (profile, voice/video devices, notifications)       | ✅ done     | `SettingsModal.vue`, `server/api/me/*`, prefs in localStorage                                                                                                                                                                  |
 | Versioning + changelog ("Что нового", badge on new version)       | ✅ done     | `app/data/changelog.ts`, `useChangelog.ts`, `ChangelogModal.vue`                                                                                                                                                               |
+| Postgres 18 migration (schema, driver, search, ETL)               | ✅ built    | v0.12.0, [ADR 0004](adr/0004-postgres-replaces-sqlite.md); verified locally end-to-end incl. ETL rehearsal on the real dev DB; **prod cutover still pending** — see DEPLOY.md "Migrating an existing SQLite deployment"        |
 
 ## Verification matrix
 
@@ -139,13 +141,30 @@ browser (Playwright, headless Chromium) against a 400-message-seeded channel:
   shows the members roster read-only (no reset/delete buttons); «модератор» badge rendered for both
   clients; demotion removed it all live
 
+**Postgres migration (v0.12.0)** — verified locally against the dev server + `postgres:18-alpine`:
+
+- Fresh-DB boot: baseline migration applies, first registration seeds admin + `#general`/`lounge`
+- Race guard: two parallel registrations on an empty DB → exactly one admin, channels seeded once,
+  the loser correctly told to bring an invite (`pg_advisory_xact_lock` replaces the old sync
+  SQLite transaction); invite create → use → reuse-rejected (400) re-verified
+- Search on tsvector: Russian stemming matches different word forms («книга» finds «книгу»,
+  «интересный» finds «интересную»), multi-term AND, prefix match on Latin terms, negatives empty
+- ETL rehearsal on the real dev SQLite (4 members / 3 channels / 25 messages / 5 attachments /
+  4 invites / 7 read-states): all row counts match, roles + timestamps intact, migrated login
+  works, history renders, tsvector self-populated, re-run refused on non-empty target
+- Bun-dev WS gotcha re-tested before locking the driver choice: still broken (Bun 1.3.14 +
+  Nuxt 4.4.8), so postgres.js-everywhere it is
+
 **Not yet verified (needs a human / real environment):**
 
 - Real NAT traversal — test voice from two different networks (phone hotspot vs home Wi-Fi)
 - Mobile browsers (esp. iOS Safari voice)
 - Production Caddy: confirm the new `request_body`/`header` blocks parse on the live VPS
+- Production Postgres cutover on the VPS (DEPLOY.md "Migrating an existing SQLite deployment")
 
 ## Remaining work / next steps
 
-1. **Test real NAT traversal** — voice from two different networks (phone hotspot vs home Wi-Fi).
-2. **Test on mobile browsers**, especially iOS Safari voice.
+1. **Run the Postgres cutover on the VPS** — follow DEPLOY.md; back up the SQLite file first;
+   afterwards remove the legacy `app-data` volume in a follow-up change.
+2. **Test real NAT traversal** — voice from two different networks (phone hotspot vs home Wi-Fi).
+3. **Test on mobile browsers**, especially iOS Safari voice.

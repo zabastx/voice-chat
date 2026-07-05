@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import * as z from 'zod'
 
 const querySchema = z.object({
@@ -7,25 +7,21 @@ const querySchema = z.object({
 })
 
 // Global full-text search across all text channels (single flat space — every
-// member sees them all). Ranked by FTS5 bm25; details + previews are built with
+// member sees them all). Matches the generated tsvector column ('russian'
+// config stems Cyrillic word forms), ranked by ts_rank; previews are built with
 // the shared messagePreview helper so mentions read as @name.
 export default defineEventHandler(async (event) => {
 	await requireUserSession(event)
 	const { q, limit } = await getValidatedQuery(event, querySchema.parse)
 
 	// keep only word tokens and prefix-match each (implicit AND); this also
-	// neutralises FTS5 operators so raw user input can't break the MATCH
+	// neutralises tsquery operators so raw user input can't break the query
 	const terms = q.match(/[\p{L}\p{N}]+/gu) ?? []
 	if (terms.length === 0) return { results: [] as SearchResultDto[] }
-	const match = terms.map((t) => `"${t}"*`).join(' ')
+	const match = terms.map((t) => `${t}:*`).join(' & ')
 
 	const db = useDb()
-	const hits = db.all(
-		sql`SELECT message_id as messageId FROM messages_fts WHERE messages_fts MATCH ${match} ORDER BY rank LIMIT ${limit}`
-	) as { messageId: string }[]
-	if (hits.length === 0) return { results: [] as SearchResultDto[] }
-	const ids = hits.map((h) => h.messageId)
-
+	const tsquery = sql`to_tsquery('russian', ${match})`
 	const [rows, members] = await Promise.all([
 		db
 			.select({
@@ -39,26 +35,20 @@ export default defineEventHandler(async (event) => {
 			.from(schema.messages)
 			.innerJoin(schema.members, eq(schema.messages.authorId, schema.members.id))
 			.innerJoin(schema.channels, eq(schema.messages.channelId, schema.channels.id))
-			.where(inArray(schema.messages.id, ids)),
+			.where(sql`${schema.messages.contentTsv} @@ ${tsquery}`)
+			.orderBy(sql`ts_rank(${schema.messages.contentTsv}, ${tsquery}) DESC`)
+			.limit(limit),
 		db.select({ id: schema.members.id, username: schema.members.username }).from(schema.members)
 	])
 
-	const byId = new Map(rows.map((r) => [r.id, r]))
-	// preserve FTS rank order
-	const results: SearchResultDto[] = ids.flatMap((id) => {
-		const row = byId.get(id)
-		if (!row) return []
-		return [
-			{
-				messageId: row.id,
-				channelId: row.channelId,
-				channelName: row.channelName,
-				authorName: row.authorName,
-				createdAt: row.createdAt.toISOString(),
-				preview: messagePreview(row.content, members, 160)
-			}
-		]
-	})
+	const results: SearchResultDto[] = rows.map((row) => ({
+		messageId: row.id,
+		channelId: row.channelId,
+		channelName: row.channelName,
+		authorName: row.authorName,
+		createdAt: row.createdAt.toISOString(),
+		preview: messagePreview(row.content, members, 160)
+	}))
 
 	return { results }
 })

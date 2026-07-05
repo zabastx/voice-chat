@@ -1,61 +1,12 @@
 {
 	"version": "7",
-	"dialect": "sqlite",
+	"dialect": "postgresql",
 	"entries": [
 		{
 			"idx": 0,
-			"version": "6",
-			"when": 1783008356078,
-			"tag": "0000_small_shocker",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "6",
-			"when": 1783088687676,
-			"tag": "0001_dear_reavers",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "6",
-			"when": 1783143733109,
-			"tag": "0002_old_cable",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "6",
-			"when": 1783144505955,
-			"tag": "0003_nifty_wraith",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "6",
-			"when": 1783175856808,
-			"tag": "0004_spotty_giant_man",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "6",
-			"when": 1783177879496,
-			"tag": "0005_elite_wild_child",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "6",
-			"when": 1783190222272,
-			"tag": "0006_pretty_orphan",
-			"breakpoints": true
-		},
-		{
-			"idx": 7,
-			"version": "6",
-			"when": 1783190251243,
-			"tag": "0007_shocking_vampiro",
+			"version": "7",
+			"when": 1783207831339,
+			"tag": "0000_slimy_kang",
 			"breakpoints": true
 		}
 	]

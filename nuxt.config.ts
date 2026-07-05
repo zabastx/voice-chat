@@ -33,7 +33,8 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
-		dbPath: '.data/app.sqlite',
+		// dev default matches the postgres service in compose.dev.yaml
+		databaseUrl: 'postgres://postgres:postgres@127.0.0.1:5432/voicechat',
 		migrationsDir: 'server/db/migrations',
 		livekitApiKey: 'devkey',
 		livekitApiSecret: 'devsecret_at_least_32_characters_long',

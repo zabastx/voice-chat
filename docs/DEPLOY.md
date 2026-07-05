@@ -41,17 +41,41 @@ git pull
 docker compose up -d --build
 ```
 
-The SQLite schema migrates automatically on startup.
+The database schema migrates automatically on app startup.
 
 ## Backups
 
-Everything except attachments lives in one SQLite file inside the `app-data`
-volume; attachments live in the S3 bucket. To back up the database:
+Everything except attachments lives in the bundled Postgres service (`pg-data`
+volume); attachments live in the S3 bucket. Copying the volume of a **running**
+Postgres is not a valid backup — use `pg_dump`:
 
 ```bash
-docker compose exec app bash -c "cp /data/app.sqlite /data/backup.sqlite"
-docker cp "$(docker compose ps -q app)":/data/backup.sqlite ./backup-$(date +%F).sqlite
+docker compose exec postgres pg_dump -U postgres voicechat > backup-$(date +%F).sql
 ```
+
+Restore with `docker compose exec -T postgres psql -U postgres voicechat < backup.sql`
+(into an empty database). Run a dump manually before every risky upgrade.
+
+## Migrating an existing SQLite deployment (one-time cutover)
+
+Deployments created before v0.12.0 keep their data in `/data/app.sqlite` on the
+`app-data` volume. The image ships a one-shot import script; the cutover is:
+
+```bash
+git pull                                        # brings compose.yaml with the postgres service
+# .env: add POSTGRES_PASSWORD and NUXT_DATABASE_URL (see .env.example)
+docker compose exec app bash -c "cp /data/app.sqlite /data/backup.sqlite"   # safety copy
+docker compose pull
+docker compose up -d postgres                   # start the DB first
+docker compose stop app                         # brief downtime starts here
+docker compose run --rm app bun scripts/migrate-sqlite-to-pg.ts   # applies schema + copies data
+docker compose up -d app                        # downtime over
+```
+
+Verify login, history, and search, then (optionally, later) remove the legacy
+volume: drop the `app-data` entries from `compose.yaml` and
+`docker volume rm <project>_app-data`. The script refuses to run against a
+non-empty Postgres, so re-running it can't duplicate data.
 
 ## Troubleshooting
 
@@ -64,7 +88,8 @@ docker cp "$(docker compose ps -q app)":/data/backup.sqlite ./backup-$(date +%F)
 
 ## Architecture notes
 
-- **app** — Nuxt server (Bun runtime): UI, REST API, WebSocket hub, SQLite at `/data/app.sqlite`.
+- **app** — Nuxt server (Bun runtime): UI, REST API, WebSocket hub.
+- **postgres** — Postgres 18; reachable only on the compose network, data in the `pg-data` volume.
 - **caddy** — TLS termination for the app and for LiveKit signaling (`livekit.{DOMAIN}`).
 - **livekit** — SFU on host networking; media flows directly between browsers and the VPS over the UDP range; only signaling passes through Caddy.
 - Attachments are stored in the external S3 bucket and served via short-lived presigned URLs.

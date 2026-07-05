@@ -1,7 +1,7 @@
 # AGENTS.md — agent quick reference
 
 Private Discord clone for a small friend group: text channels, voice channels, screen share.
-**All user-facing UI is in Russian.** Nuxt 4 + @nuxt/ui v4, LiveKit (self-hosted SFU), SQLite
+**All user-facing UI is in Russian.** Nuxt 4 + @nuxt/ui v4, LiveKit (self-hosted SFU), Postgres 18
 (Drizzle), attachments in an external S3-compatible bucket.
 
 New here? Read this file, then [docs/PROGRESS.md](docs/PROGRESS.md) (status) and
@@ -21,8 +21,8 @@ bun install
 bun run dev            # http://localhost:3000 — FIRST registered account becomes admin
 ```
 
-Voice needs the LiveKit container; uploads need an S3 endpoint (MinIO locally). Both are
-brought up by `docker compose -f compose.dev.yaml up -d` (see [README.md](README.md) and
+The database (Postgres 18), voice (LiveKit), and uploads (MinIO) all come from
+`docker compose -f compose.dev.yaml up -d` (see [README.md](README.md) and
 [compose.dev.yaml](compose.dev.yaml)). Dev accounts already seeded in the local DB:
 `danil` / `password123` (admin), `maks` / `password123`.
 
@@ -31,8 +31,8 @@ brought up by `docker compose -f compose.dev.yaml up -d` (see [README.md](README
 1. **Zod: always `import * as z from 'zod'`.** `import { z }` throws under Vite SSR.
 2. **Dev runs on Node, prod on Bun.** `bun run dev` is plain `nuxt dev --host` (Node). Do NOT
    switch dev to the Bun runtime — Bun's dev proxy silently drops WebSocket upgrades and `/_ws`
-   hangs. The SQLite driver auto-switches in [server/utils/db.ts](server/utils/db.ts)
-   (better-sqlite3 on Node, `bun:sqlite` on Bun).
+   hangs (re-verified on Bun 1.3.14 + Nuxt 4.4.8). The DB doesn't care: postgres.js works on
+   both runtimes ([server/utils/db.ts](server/utils/db.ts)).
 3. **Server error text is Russian, so it goes in `message`, not `statusMessage`.** Non-ASCII HTTP
    reason phrases crash Node. Clients read `err.data.message`.
 4. **SSR data fetching uses `useRequestFetch()`, not bare `$fetch`.** `$fetch` doesn't forward the
@@ -63,9 +63,11 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   Everyone else needs a single-use invite. Roles are hierarchical (`admin` > `moderator` > `member`);
   `requireRole(event, min)` in [server/utils/auth.ts](server/utils/auth.ts) authorizes against the
   **DB row**, never the cookie role (see [docs/adr/0002](docs/adr/0002-db-checked-role-guards.md)).
-- **DB** — Drizzle schema [server/db/schema.ts](server/db/schema.ts); migrations in
-  `server/db/migrations`, applied automatically at startup. After editing the schema:
-  `bun run db:generate`.
+- **DB** — Postgres 18 via postgres.js (`NUXT_DATABASE_URL`), same driver in dev and prod
+  (see [docs/adr/0004](docs/adr/0004-postgres-replaces-sqlite.md)). Drizzle schema
+  [server/db/schema.ts](server/db/schema.ts); migrations in `server/db/migrations`, applied
+  automatically at startup. After editing the schema: `bun run db:generate`. Message search =
+  generated `tsvector('russian')` column + GIN index — no triggers, no extra setup.
 
 ## Conventions
 

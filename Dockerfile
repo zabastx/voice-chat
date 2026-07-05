@@ -18,7 +18,6 @@ RUN bun install --frozen-lockfile --production --ignore-scripts
 FROM oven/bun:1
 WORKDIR /app
 ENV NODE_ENV=production
-ENV NUXT_DB_PATH=/data/app.sqlite
 ENV NUXT_MIGRATIONS_DIR=/app/migrations
 # let sharp's addon find libvips-cpp.so at runtime (see the deps stage note)
 ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib
@@ -26,6 +25,9 @@ ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/.output ./.output
 COPY server/db/migrations ./migrations
+# one-shot SQLite -> Postgres cutover script (docs/DEPLOY.md); reads /data/app.sqlite
+COPY scripts ./scripts
+COPY server/db/schema.ts ./server/db/schema.ts
 
 EXPOSE 3000
 CMD ["bun", ".output/server/index.mjs"]

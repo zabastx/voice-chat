@@ -1,6 +1,22 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
+import {
+	customType,
+	index,
+	integer,
+	pgTable,
+	primaryKey,
+	text,
+	timestamp
+} from 'drizzle-orm/pg-core'
 
-export const members = sqliteTable('members', {
+// full-text search vector; drizzle has no built-in tsvector type
+const tsvector = customType<{ data: string }>({
+	dataType() {
+		return 'tsvector'
+	}
+})
+
+export const members = pgTable('members', {
 	id: text('id').primaryKey(),
 	username: text('username').notNull().unique(),
 	passwordHash: text('password_hash').notNull(),
@@ -9,22 +25,22 @@ export const members = sqliteTable('members', {
 	role: text('role', { enum: ['admin', 'moderator', 'member'] })
 		.notNull()
 		.default('member'),
-	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+	createdAt: timestamp('created_at', { withTimezone: true })
 		.notNull()
 		.$defaultFn(() => new Date())
 })
 
-export const channels = sqliteTable('channels', {
+export const channels = pgTable('channels', {
 	id: text('id').primaryKey(),
 	name: text('name').notNull(),
 	kind: text('kind', { enum: ['text', 'voice'] }).notNull(),
 	position: integer('position').notNull().default(0),
-	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+	createdAt: timestamp('created_at', { withTimezone: true })
 		.notNull()
 		.$defaultFn(() => new Date())
 })
 
-export const messages = sqliteTable(
+export const messages = pgTable(
 	'messages',
 	{
 		id: text('id').primaryKey(),
@@ -39,19 +55,22 @@ export const messages = sqliteTable(
 		// when the parent is deleted the reference dangles so we can still show
 		// "исходное сообщение удалено" instead of silently losing the reply.
 		replyToId: text('reply_to_id'),
-		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		createdAt: timestamp('created_at', { withTimezone: true })
 			.notNull()
 			.$defaultFn(() => new Date()),
-		editedAt: integer('edited_at', { mode: 'timestamp_ms' })
+		editedAt: timestamp('edited_at', { withTimezone: true }),
+		// keeps itself in sync (STORED generated) — powers /api/search
+		contentTsv: tsvector('content_tsv').generatedAlwaysAs(sql`to_tsvector('russian', content)`)
 	},
 	(table) => [
 		index('messages_channel_created_idx').on(table.channelId, table.createdAt),
 		// scanned when a parent is deleted to rebroadcast its dangling replies
-		index('messages_reply_to_idx').on(table.replyToId)
+		index('messages_reply_to_idx').on(table.replyToId),
+		index('messages_content_tsv_idx').using('gin', table.contentTsv)
 	]
 )
 
-export const attachments = sqliteTable(
+export const attachments = pgTable(
 	'attachments',
 	{
 		id: text('id').primaryKey(),
@@ -67,7 +86,7 @@ export const attachments = sqliteTable(
 		// downscaled WebP preview for in-chat display; null = no preview
 		// (non-image, gif/svg, or generation failed) → the original is served
 		previewKey: text('preview_key'),
-		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		createdAt: timestamp('created_at', { withTimezone: true })
 			.notNull()
 			.$defaultFn(() => new Date())
 	},
@@ -75,7 +94,7 @@ export const attachments = sqliteTable(
 	(table) => [index('attachments_message_idx').on(table.messageId)]
 )
 
-export const reactions = sqliteTable(
+export const reactions = pgTable(
 	'reactions',
 	{
 		messageId: text('message_id')
@@ -85,7 +104,7 @@ export const reactions = sqliteTable(
 			.notNull()
 			.references(() => members.id, { onDelete: 'cascade' }),
 		emoji: text('emoji').notNull(),
-		createdAt: integer('created_at', { mode: 'timestamp_ms' })
+		createdAt: timestamp('created_at', { withTimezone: true })
 			.notNull()
 			.$defaultFn(() => new Date())
 	},
@@ -95,19 +114,19 @@ export const reactions = sqliteTable(
 	]
 )
 
-export const invites = sqliteTable('invites', {
+export const invites = pgTable('invites', {
 	token: text('token').primaryKey(),
 	createdBy: text('created_by')
 		.notNull()
 		.references(() => members.id, { onDelete: 'cascade' }),
-	createdAt: integer('created_at', { mode: 'timestamp_ms' })
+	createdAt: timestamp('created_at', { withTimezone: true })
 		.notNull()
 		.$defaultFn(() => new Date()),
 	usedBy: text('used_by').references(() => members.id, { onDelete: 'set null' }),
-	usedAt: integer('used_at', { mode: 'timestamp_ms' })
+	usedAt: timestamp('used_at', { withTimezone: true })
 })
 
-export const memberChannelState = sqliteTable(
+export const memberChannelState = pgTable(
 	'member_channel_state',
 	{
 		memberId: text('member_id')
@@ -116,7 +135,7 @@ export const memberChannelState = sqliteTable(
 		channelId: text('channel_id')
 			.notNull()
 			.references(() => channels.id, { onDelete: 'cascade' }),
-		lastReadAt: integer('last_read_at', { mode: 'timestamp_ms' }).notNull()
+		lastReadAt: timestamp('last_read_at', { withTimezone: true }).notNull()
 	},
 	(table) => [primaryKey({ columns: [table.memberId, table.channelId] })]
 )

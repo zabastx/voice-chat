@@ -4,10 +4,11 @@
 # containerized: `bun run dev` is `nuxt dev --host` on Node, and Bun's dev proxy
 # silently drops WebSocket upgrades (see AGENTS.md gotcha #2). `--host` is what
 # lets these containers deliver webhooks back to it. This file only brings up
-# the two supporting services the app talks to:
+# the supporting services the app talks to:
 #
-#   - livekit : voice SFU (webhooks -> http://host.docker.internal:3000/...)
-#   - minio   : S3-compatible attachment storage (bucket auto-created)
+#   - postgres : the database (-> NUXT_DATABASE_URL, default matches nuxt.config.ts)
+#   - livekit  : voice SFU (webhooks -> http://host.docker.internal:3000/...)
+#   - minio    : S3-compatible attachment storage (bucket auto-created)
 #
 # Usage:  docker compose -f compose.dev.yaml up -d
 # Stop:   docker compose -f compose.dev.yaml down        # keep data
@@ -17,6 +18,26 @@
 # standalone with the seeded minioadmin/minioadmin creds.
 
 services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: voicechat-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432' # -> NUXT_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/voicechat
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-voicechat}
+    volumes:
+      # postgres:18 images moved the VOLUME up to /var/lib/postgresql (not .../data);
+      # mounting the old path would silently keep data outside the named volume
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-voicechat}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   livekit:
     image: livekit/livekit-server:v1.13.2
     container_name: voicechat-livekit
@@ -72,4 +93,5 @@ services:
     restart: 'no'
 
 volumes:
+  postgres-data:
   minio-data:

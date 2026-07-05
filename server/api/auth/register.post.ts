@@ -1,5 +1,8 @@
-import { count, eq } from 'drizzle-orm'
+import { count, eq, sql } from 'drizzle-orm'
 import * as z from 'zod'
+
+// app-wide advisory-lock key for the registration critical section
+const REGISTER_LOCK_KEY = 730_001
 
 const bodySchema = z.object({
 	username: usernameSchema,
@@ -12,25 +15,25 @@ export default defineEventHandler(async (event) => {
 	const body = await readValidatedBody(event, bodySchema.parse)
 	const db = useDb()
 
-	// hash before opening the transaction — scrypt is async, the sqlite
-	// transaction callback is synchronous
+	// hash before opening the transaction — keeps the registration lock short
 	const passwordHash = await hashPassword(body.password)
 
-	// one synchronous transaction so two concurrent registrations can't consume
-	// the same invite twice or both become the first (admin) account
-	const member = db.transaction((tx) => {
-		const [row] = tx.select({ n: count() }).from(schema.members).all()
+	// registrations are serialised with a transaction-scoped advisory lock so two
+	// concurrent ones can't consume the same invite twice or both become the
+	// first (admin) account
+	const member = await db.transaction(async (tx) => {
+		await tx.execute(sql`SELECT pg_advisory_xact_lock(${REGISTER_LOCK_KEY})`)
+		const [row] = await tx.select({ n: count() }).from(schema.members)
 		const isFirst = (row?.n ?? 0) === 0
 
 		if (!isFirst) {
 			if (!body.invite) {
 				throw createError({ statusCode: 400, message: 'Для регистрации нужно приглашение' })
 			}
-			const invite = tx
+			const [invite] = await tx
 				.select()
 				.from(schema.invites)
 				.where(eq(schema.invites.token, body.invite))
-				.get()
 			if (!invite || invite.usedAt) {
 				throw createError({
 					statusCode: 400,
@@ -39,11 +42,10 @@ export default defineEventHandler(async (event) => {
 			}
 		}
 
-		const existing = tx
+		const [existing] = await tx
 			.select({ id: schema.members.id })
 			.from(schema.members)
 			.where(eq(schema.members.username, body.username))
-			.get()
 		if (existing) {
 			throw createError({ statusCode: 409, message: 'Это имя уже занято' })
 		}
@@ -54,20 +56,18 @@ export default defineEventHandler(async (event) => {
 			passwordHash,
 			role: isFirst ? ('admin' as const) : ('member' as const)
 		}
-		tx.insert(schema.members).values(created).run()
+		await tx.insert(schema.members).values(created)
 
 		if (isFirst) {
-			tx.insert(schema.channels)
-				.values([
-					{ id: newId(), name: 'general', kind: 'text' as const, position: 0 },
-					{ id: newId(), name: 'lounge', kind: 'voice' as const, position: 1 }
-				])
-				.run()
+			await tx.insert(schema.channels).values([
+				{ id: newId(), name: 'general', kind: 'text' as const, position: 0 },
+				{ id: newId(), name: 'lounge', kind: 'voice' as const, position: 1 }
+			])
 		} else if (body.invite) {
-			tx.update(schema.invites)
+			await tx
+				.update(schema.invites)
 				.set({ usedBy: created.id, usedAt: new Date() })
 				.where(eq(schema.invites.token, body.invite))
-				.run()
 		}
 
 		return created

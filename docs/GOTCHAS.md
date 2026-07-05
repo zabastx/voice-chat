@@ -16,10 +16,19 @@ Each entry is a real trap that already cost time.
 **Symptom:** WebSocket `/_ws` upgrade hangs forever; no error, connection never opens.
 **Cause:** running the dev server under the Bun runtime (`bun --bun nuxt dev`) routes WS upgrades
 through Nuxt's dev proxy, which drops them.
-**Fix:** `bun run dev` is plain `nuxt dev --host` (Node). Because Node can't use `bun:sqlite`, the
-DB layer picks a driver at runtime: [server/utils/db.ts](../server/utils/db.ts) uses
-`'Bun' in globalThis` to choose `bun:sqlite` (prod) vs `better-sqlite3` (dev). Both go through the
-same Drizzle sync API. Keep both drivers installed.
+**Fix:** `bun run dev` is plain `nuxt dev --host` (Node). Re-tested 2026-07-05 on Bun 1.3.14 +
+Nuxt 4.4.8 (Node dev answers the `/_ws` handshake with 101, Bun dev swallows it) — still broken,
+dev stays on Node. Since the Postgres migration ([ADR 0004](adr/0004-postgres-replaces-sqlite.md))
+the DB no longer cares: postgres.js works on both runtimes, there is no per-runtime driver fork.
+
+### 2b. postgres:18 Docker image moved its volume mount point
+
+**Symptom:** Postgres data vanishes on container recreation even though a named volume is mounted.
+**Cause:** the official `postgres:18` image declares `VOLUME /var/lib/postgresql` (the parent dir,
+to support in-place `pg_upgrade`), not `/var/lib/postgresql/data` like ≤17. A volume mounted at the
+old `.../data` path leaves the actual cluster on the container's writable layer.
+**Fix:** mount the named volume at `/var/lib/postgresql` — see [compose.dev.yaml](../compose.dev.yaml)
+and [compose.yaml](../compose.yaml).
 
 ### 3. `useToast is not defined` — stale .nuxt cache
 
@@ -106,14 +115,13 @@ bucket-side CORS config, but the proxy needs no infra dependency.
 
 **Context:** in-chat image previews are generated with `sharp` in
 [server/utils/image-preview.ts](../server/utils/image-preview.ts). sharp is a native module, so it
-faces the same dual-runtime concern as better-sqlite3 (gotcha #2): **Node in dev, Bun in prod**.
+faces the dual-runtime concern from gotcha #2: **Node in dev, Bun in prod**.
 **How it's handled:**
 
 - **Dynamic import** (`await import('sharp')`) inside the server util, so it never enters the
-  client/SSR bundle and only loads server-side. Same spirit as the db-driver import in
-  [server/utils/db.ts](../server/utils/db.ts).
-- **`trustedDependencies`** in [package.json](../package.json) includes `sharp` (next to
-  `better-sqlite3`) so Bun installs its platform packages. sharp 0.33+ ships prebuilt binaries as
+  client/SSR bundle and only loads server-side.
+- **`trustedDependencies`** in [package.json](../package.json) includes `sharp` so Bun installs
+  its platform packages. sharp 0.33+ ships prebuilt binaries as
   `optionalDependencies` (`@img/sharp-*`), so the Dockerfile's `bun install --ignore-scripts` is
   fine — no build step needed.
 - **Cross-platform lockfile trap:** we dev on **Windows** but the prod image is **linux/glibc**
@@ -252,5 +260,5 @@ Application → Service Workers → Unregister, then Clear site data.
     7880 — loopback/proxied only. The TURN relay range (57000–57100) stays internal
     (SFU↔TURN share the host), so it needs no firewall hole.
 - Prod smoke test locally: `bun --bun nuxt build` then run `.output/server/index.mjs` under Bun with
-  `NUXT_DB_PATH` / `NUXT_MIGRATIONS_DIR` set — this exercises the exact `bun:sqlite` + migration path
-  the container uses.
+  `NUXT_DATABASE_URL` / `NUXT_MIGRATIONS_DIR` set — this exercises the exact Bun + postgres.js +
+  migration path the container uses.
