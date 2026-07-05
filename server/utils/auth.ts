@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { H3Event } from 'h3'
 
 const rank: Record<Role, number> = { member: 0, moderator: 1, admin: 2 }
@@ -21,4 +21,32 @@ export async function requireRole(event: H3Event, min: 'moderator' | 'admin') {
 		})
 	}
 	return { id: member.id, username: member.username, role: member.role }
+}
+
+// The single access chokepoint for reading/writing a channel's messages. Text
+// and voice channels are open to every member (single flat server), so this is a
+// no-op for them. A DM channel is private: the caller must be a participant, and
+// a non-member gets 404 — not 403 — so the endpoint never reveals that a DM even
+// exists. Returns the channel row so callers can branch on kind.
+export async function requireChannelMember(event: H3Event, channelId: string) {
+	const { user } = await requireUserSession(event)
+	const db = useDb()
+	const channel = await db.query.channels.findFirst({
+		where: eq(schema.channels.id, channelId)
+	})
+	if (!channel) {
+		throw createError({ statusCode: 404, message: 'Канал не найден' })
+	}
+	if (channel.kind === 'dm') {
+		const participant = await db.query.channelParticipants.findFirst({
+			where: and(
+				eq(schema.channelParticipants.channelId, channelId),
+				eq(schema.channelParticipants.memberId, user.id)
+			)
+		})
+		if (!participant) {
+			throw createError({ statusCode: 404, message: 'Канал не найден' })
+		}
+	}
+	return { channel, user }
 }

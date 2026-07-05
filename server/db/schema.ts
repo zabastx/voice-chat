@@ -32,13 +32,36 @@ export const members = pgTable('members', {
 
 export const channels = pgTable('channels', {
 	id: text('id').primaryKey(),
+	// empty for DM channels — their title is derived from the other participant
 	name: text('name').notNull(),
-	kind: text('kind', { enum: ['text', 'voice'] }).notNull(),
+	kind: text('kind', { enum: ['text', 'voice', 'dm'] }).notNull(),
 	position: integer('position').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true })
 		.notNull()
 		.$defaultFn(() => new Date())
 })
+
+// membership of a DM channel (kind='dm'). Text/voice channels are open to every
+// member and carry no rows here; access to a DM is gated on participation.
+export const channelParticipants = pgTable(
+	'channel_participants',
+	{
+		channelId: text('channel_id')
+			.notNull()
+			.references(() => channels.id, { onDelete: 'cascade' }),
+		memberId: text('member_id')
+			.notNull()
+			.references(() => members.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true })
+			.notNull()
+			.$defaultFn(() => new Date())
+	},
+	(table) => [
+		primaryKey({ columns: [table.channelId, table.memberId] }),
+		// "my conversations" lists every DM channel a member participates in
+		index('channel_participants_member_idx').on(table.memberId)
+	]
+)
 
 export const messages = pgTable(
 	'messages',

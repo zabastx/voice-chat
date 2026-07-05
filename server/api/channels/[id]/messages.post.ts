@@ -8,8 +8,13 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-	const { user } = await requireUserSession(event)
 	const channelId = getRouterParam(event, 'id')!
+	// gates DM channels to their participants; returns the channel row
+	const { channel, user } = await requireChannelMember(event, channelId)
+	// messages are for text channels and DMs; voice channels carry no chat
+	if (channel.kind === 'voice') {
+		throw createError({ statusCode: 404, message: 'Канал не найден' })
+	}
 	const body = await readValidatedBody(event, bodySchema.parse)
 	const trimmed = body.content.trim()
 	if (!trimmed && body.attachmentIds.length === 0) {
@@ -17,10 +22,6 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const db = useDb()
-	const channel = await db.query.channels.findFirst({ where: eq(schema.channels.id, channelId) })
-	if (!channel || channel.kind !== 'text') {
-		throw createError({ statusCode: 404, message: 'Канал не найден' })
-	}
 
 	const content = await encodeMessageMentions(trimmed)
 
@@ -68,6 +69,7 @@ export default defineEventHandler(async (event) => {
 		})
 
 	const dto = (await messageDto(message.id))!
-	wsBroadcast({ type: 'message.created', message: dto })
+	// broadcast to everyone for text channels, only the two participants for a DM
+	await emitChannelEvent(channel, { type: 'message.created', message: dto })
 	return dto
 })

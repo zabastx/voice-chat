@@ -23,7 +23,12 @@ export default defineEventHandler(async (event) => {
 		.set({ content, editedAt: new Date() })
 		.where(eq(schema.messages.id, id))
 
+	// the author (checked above) is always a participant, so no membership gate
+	// is needed — but a DM edit must reach only the two participants
+	const channel = (await db.query.channels.findFirst({
+		where: eq(schema.channels.id, message.channelId)
+	}))!
 	const dto = (await messageDto(id))!
-	wsBroadcast({ type: 'message.updated', message: dto })
+	await emitChannelEvent(channel, { type: 'message.updated', message: dto })
 	return dto
 })

@@ -39,7 +39,15 @@
 			</button>
 
 			<div v-if="!compact" class="flex items-baseline gap-2">
-				<span class="text-highlighted text-sm font-semibold">{{ authorName }}</span>
+				<UDropdownMenu v-if="canDm" :items="authorMenu">
+					<button
+						class="text-highlighted cursor-pointer text-sm font-semibold hover:underline"
+						type="button"
+					>
+						{{ authorName }}
+					</button>
+				</UDropdownMenu>
+				<span v-else class="text-highlighted text-sm font-semibold">{{ authorName }}</span>
 				<span class="text-dimmed text-xs">{{ formatTimestamp(message.createdAt) }}</span>
 			</div>
 
@@ -122,6 +130,8 @@
 </template>
 
 <script lang="ts" setup>
+import type { DropdownMenuItem } from '@nuxt/ui'
+
 const props = defineProps<{
 	message: MessageDto
 	compact: boolean
@@ -143,6 +153,26 @@ const emit = defineEmits<{
 }>()
 
 const { user } = useUserSession()
+const dm = useDmStore()
+const toast = useToast()
+
+// you can DM any author other than yourself, straight from their name
+const canDm = computed(() => props.message.authorId !== user.value?.id)
+const authorMenu = computed<DropdownMenuItem[][]>(() => [
+	[
+		{
+			label: 'Написать',
+			icon: 'i-lucide-message-square',
+			onSelect: async () => {
+				try {
+					await dm.openDm(props.message.authorId)
+				} catch {
+					toast.add({ title: 'Не удалось открыть диалог', color: 'error' })
+				}
+			}
+		}
+	]
+])
 
 function onQuoteClick() {
 	if (props.message.replyTo && !props.message.replyTo.deleted) {

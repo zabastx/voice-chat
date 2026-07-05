@@ -67,6 +67,15 @@ export interface MemberDto {
 	createdAt: string
 }
 
+// a 1:1 direct-message conversation, from the perspective of the current member;
+// `member` is the OTHER participant (the DM's title/avatar are derived from them)
+export interface DmConversationDto {
+	channelId: string
+	member: MemberDto
+	lastMessageAt: string | null
+	lastReadAt: string | null
+}
+
 export interface VoiceParticipant {
 	memberId: string
 	username: string
@@ -89,6 +98,9 @@ export type ServerEvent =
 	| { type: 'message.updated'; message: MessageDto }
 	| { type: 'message.deleted'; channelId: string; messageId: string }
 	| { type: 'member.updated'; member: MemberDto }
+	// a DM conversation involving the recipient was just created — sent only to
+	// its two participants so their sidebar list updates without a refetch
+	| { type: 'dm.created'; conversation: DmConversationDto }
 	| { type: 'auth.error' }
 	// client-side synthetic event, emitted after a reconnect so views refetch
 	| { type: 'resync' }

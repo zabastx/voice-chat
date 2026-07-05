@@ -41,6 +41,18 @@ export function wsBroadcast(event: ServerEvent) {
 	}
 }
 
+// Targeted delivery for private events (DMs): only sockets belonging to one of
+// `memberIds` receive the payload. A member may have several open tabs, so this
+// matches on memberId, not peer id.
+export function wsSendToMembers(memberIds: string[], event: ServerEvent) {
+	if (memberIds.length === 0) return
+	const targets = new Set(memberIds)
+	const payload = JSON.stringify(event)
+	for (const client of clients.values()) {
+		if (targets.has(client.memberId)) client.peer.send(payload)
+	}
+}
+
 export function wsMemberFor(peer: Peer): WsMember | undefined {
 	return clients.get(peer.id)
 }

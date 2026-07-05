@@ -9,10 +9,17 @@ export default defineEventHandler(async (event) => {
 	if (!message) {
 		throw createError({ statusCode: 404, message: 'Сообщение не найдено' })
 	}
+	const channel = (await db.query.channels.findFirst({
+		where: eq(schema.channels.id, message.channelId)
+	}))!
 	if (message.authorId !== user.id) {
-		// deleting someone else's message is an admin power — check the DB
-		// role, not the cookie, so demotion applies immediately
-		const member = await db.query.members.findFirst({ where: eq(schema.members.id, user.id) })
+		// deleting someone else's message is an admin power on public channels —
+		// check the DB role, not the cookie, so demotion applies immediately. A DM
+		// is private: admins have no reach into a conversation they aren't part of.
+		const member =
+			channel.kind === 'dm'
+				? undefined
+				: await db.query.members.findFirst({ where: eq(schema.members.id, user.id) })
 		if (member?.role !== 'admin') {
 			throw createError({ statusCode: 403, message: 'Это не ваше сообщение' })
 		}
@@ -28,7 +35,11 @@ export default defineEventHandler(async (event) => {
 		)
 	}
 
-	wsBroadcast({ type: 'message.deleted', channelId: message.channelId, messageId: id })
+	await emitChannelEvent(channel, {
+		type: 'message.deleted',
+		channelId: message.channelId,
+		messageId: id
+	})
 
 	// replies to this message now dangle — rebroadcast them so their quote
 	// flips to "исходное сообщение удалено" live
@@ -38,7 +49,7 @@ export default defineEventHandler(async (event) => {
 		.where(eq(schema.messages.replyToId, id))
 	for (const reply of replies) {
 		const dto = await messageDto(reply.id)
-		if (dto) wsBroadcast({ type: 'message.updated', message: dto })
+		if (dto) await emitChannelEvent(channel, { type: 'message.updated', message: dto })
 	}
 
 	return { ok: true }

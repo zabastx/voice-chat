@@ -64,6 +64,7 @@ import ChangelogModal from '~/components/ChangelogModal.vue'
 
 const store = useChannelsStore()
 const membersStore = useMembersStore()
+const dmStore = useDmStore()
 const { channelsOpen, channelsHidden } = usePanels()
 const realtime = useRealtime()
 const voice = useVoice()
@@ -80,13 +81,15 @@ function openChangelog() {
 }
 
 await useAsyncData('channels', async () => {
-	await Promise.all([store.refresh(), membersStore.refresh()])
+	await Promise.all([store.refresh(), membersStore.refresh(), dmStore.refresh()])
 	return true
 })
 
+const totalUnread = computed(() => store.unreadCount.value + dmStore.unreadCount.value)
+
 useHead({
 	title: computed(() =>
-		store.unreadCount.value > 0 ? `(${store.unreadCount.value}) Voice Chat` : 'Voice Chat'
+		totalUnread.value > 0 ? `(${totalUnread.value}) Voice Chat` : 'Voice Chat'
 	)
 })
 
@@ -104,6 +107,7 @@ async function refreshSession() {
 realtime.onEvent((event) => {
 	store.apply(event)
 	membersStore.apply(event)
+	dmStore.apply(event)
 	if (
 		event.type === 'member.updated' &&
 		event.member.id === user.value?.id &&
@@ -112,13 +116,16 @@ realtime.onEvent((event) => {
 		void refreshSession()
 	}
 	if (event.type === 'message.created' && event.message.authorId !== user.value?.id) {
+		const isDm = dmStore.isDm(event.message.channelId)
 		const mentionsMe =
 			Boolean(user.value) && mentionedIds(event.message.content).includes(user.value!.id)
 		const away = !document.hasFocus() || store.activeChannelId.value !== event.message.channelId
-		// a mention pings even when the channel is focused; it wins over the
-		// plain message sound so we never play both
+		// a DM or a mention pings even when another channel is focused; a DM stays
+		// quiet only while you're actually looking at that conversation
 		if (prefs.value.messageSound) {
-			if (mentionsMe) playMentionSound()
+			if (isDm) {
+				if (away) playMentionSound()
+			} else if (mentionsMe) playMentionSound()
 			else if (away) playMessageSound()
 		}
 		if (away) notifyDesktop(event.message)
@@ -173,6 +180,8 @@ watch(realtime.voice, (rooms) => {
 function onFocus() {
 	const active = store.activeChannel.value
 	if (active && store.isUnread(active)) store.markRead(active.id)
+	const dmConvo = dmStore.conversation(dmStore.activeChannelId.value)
+	if (dmConvo && dmStore.isUnread(dmConvo)) dmStore.markRead(dmConvo.channelId)
 }
 
 onMounted(() => {

@@ -11,11 +11,20 @@ function isInlineSafe(mime: string) {
 export default defineEventHandler(async (event) => {
 	await requireUserSession(event)
 	const id = getRouterParam(event, 'id')!
-	const attachment = await useDb().query.attachments.findFirst({
+	const db = useDb()
+	const attachment = await db.query.attachments.findFirst({
 		where: eq(schema.attachments.id, id)
 	})
 	if (!attachment) {
 		throw createError({ statusCode: 404, message: 'Файл не найден' })
+	}
+	// an attachment bound to a DM message is only fetchable by that DM's
+	// participants — attachment ids are unguessable, but access must still be gated
+	if (attachment.messageId) {
+		const message = await db.query.messages.findFirst({
+			where: eq(schema.messages.id, attachment.messageId)
+		})
+		if (message) await requireChannelMember(event, message.channelId)
 	}
 	const query = getQuery(event)
 	// `?preview` serves the downscaled WebP for in-chat display; falls back to the

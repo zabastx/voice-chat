@@ -29,9 +29,16 @@ import type { ContextMenuItem } from '@nuxt/ui'
 const props = defineProps<{ identity: string; disabled?: boolean }>()
 
 const voice = useVoice()
+const dm = useDmStore()
+const { user } = useUserSession()
+const toast = useToast()
 
-const items = computed<ContextMenuItem[][]>(() => [
-	[
+const items = computed<ContextMenuItem[][]>(() => {
+	const groups: ContextMenuItem[][] = []
+	if (props.identity !== user.value?.id) {
+		groups.push([{ label: 'Написать', icon: 'i-lucide-message-square', onSelect: openDm }])
+	}
+	groups.push([
 		voice.isLocallyMuted(props.identity)
 			? {
 					label: 'Включить звук',
@@ -43,8 +50,17 @@ const items = computed<ContextMenuItem[][]>(() => [
 					icon: 'i-lucide-volume-x',
 					onSelect: () => voice.toggleLocalMute(props.identity)
 				}
-	]
-])
+	])
+	return groups
+})
+
+async function openDm() {
+	try {
+		await dm.openDm(props.identity)
+	} catch {
+		toast.add({ title: 'Не удалось открыть диалог', color: 'error' })
+	}
+}
 
 function onVolume(value: number | undefined) {
 	if (typeof value === 'number') voice.setLocalVolume(props.identity, value)

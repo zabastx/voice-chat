@@ -6,7 +6,6 @@ const bodySchema = z.object({ emoji: z.string().trim().min(1).max(32) })
 // Toggle the caller's reaction with `emoji` on a message, then rebroadcast the
 // updated message so every client refreshes its reaction chips.
 export default defineEventHandler(async (event) => {
-	const { user } = await requireUserSession(event)
 	const id = getRouterParam(event, 'id')!
 	const { emoji } = await readValidatedBody(event, bodySchema.parse)
 	const db = useDb()
@@ -15,6 +14,8 @@ export default defineEventHandler(async (event) => {
 	if (!message) {
 		throw createError({ statusCode: 404, message: 'Сообщение не найдено' })
 	}
+	// reacting in a DM requires being a participant; no-op gate for text/voice
+	const { channel, user } = await requireChannelMember(event, message.channelId)
 
 	const mine = and(
 		eq(schema.reactions.messageId, id),
@@ -29,6 +30,6 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const dto = (await messageDto(id))!
-	wsBroadcast({ type: 'message.updated', message: dto })
+	await emitChannelEvent(channel, { type: 'message.updated', message: dto })
 	return dto
 })

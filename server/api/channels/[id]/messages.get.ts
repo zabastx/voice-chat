@@ -19,8 +19,9 @@ const querySchema = z.object({
 const WINDOW = 25
 
 export default defineEventHandler(async (event) => {
-	await requireUserSession(event)
 	const channelId = getRouterParam(event, 'id')!
+	// gates DM channels to their participants (404 for outsiders); no-op for text/voice
+	await requireChannelMember(event, channelId)
 	const query = await getValidatedQuery(event, querySchema.parse)
 	const db = useDb()
 

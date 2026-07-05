@@ -127,6 +127,57 @@
 				</div>
 			</div>
 		</div>
+
+		<div>
+			<div class="mb-1 flex items-center justify-between px-1.5">
+				<span class="text-muted text-xs font-semibold uppercase">Личные сообщения</span>
+				<UButton
+					aria-label="Новое сообщение"
+					color="neutral"
+					icon="i-lucide-plus"
+					size="xs"
+					variant="ghost"
+					@click="
+						() => {
+							dmModal.open()
+						}
+					"
+				/>
+			</div>
+			<div class="flex flex-col gap-0.5">
+				<ULink
+					v-for="convo in dm.sorted.value"
+					:key="convo.channelId"
+					class="hover:bg-elevated group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+					:class="
+						dm.activeChannelId.value === convo.channelId
+							? 'bg-elevated text-highlighted'
+							: dm.isUnread(convo)
+								? 'text-highlighted font-medium'
+								: 'text-muted'
+					"
+					:to="`/channels/${convo.channelId}`"
+				>
+					<UChip
+						color="success"
+						inset
+						position="bottom-right"
+						:show="onlineSet.has(convo.member.id)"
+						size="sm"
+					>
+						<UAvatar :alt="dmName(convo)" size="2xs" :src="convo.member.avatarUrl ?? undefined" />
+					</UChip>
+					<span class="flex-1 truncate">{{ dmName(convo) }}</span>
+					<span
+						v-if="dm.isUnread(convo)"
+						class="bg-primary size-2 shrink-0 rounded-full group-hover:hidden"
+					/>
+				</ULink>
+				<p v-if="!dm.sorted.value.length" class="text-dimmed px-2 py-1 text-xs">
+					Пока нет диалогов
+				</p>
+			</div>
+		</div>
 	</nav>
 </template>
 
@@ -135,11 +186,13 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 
 import ChannelFormModal from './ChannelFormModal.vue'
 import ConfirmModal from './ConfirmModal.vue'
+import DmCreateModal from './DmCreateModal.vue'
 
 const store = useChannelsStore()
 const membersStore = useMembersStore()
+const dm = useDmStore()
 const voice = useVoice()
-const { voice: rooms } = useRealtime()
+const { voice: rooms, online } = useRealtime()
 const { user } = useUserSession()
 const { isAdmin, canModerate } = useRole()
 const toast = useToast()
@@ -147,6 +200,10 @@ const toast = useToast()
 const overlay = useOverlay()
 const channelModal = overlay.create(ChannelFormModal)
 const confirmModal = overlay.create(ConfirmModal)
+const dmModal = overlay.create(DmCreateModal)
+
+const onlineSet = computed(() => new Set(online.value))
+const dmName = (convo: DmConversationDto) => convo.member.displayName ?? convo.member.username
 
 function openCreate(kind: 'text' | 'voice') {
 	channelModal.open({ defaultKind: kind })

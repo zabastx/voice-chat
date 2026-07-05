@@ -49,16 +49,22 @@
 				<p class="text-dimmed px-2 pb-1 text-xs font-semibold uppercase">
 					В сети — {{ onlineMembers.length }}
 				</p>
-				<div
+				<UDropdownMenu
 					v-for="member in onlineMembers"
 					:key="member.id"
-					class="flex items-center gap-2 rounded-md px-2 py-1 text-sm"
+					:disabled="member.id === user?.id"
+					:items="memberMenu(member)"
 				>
-					<UChip color="success" inset position="bottom-right">
-						<UAvatar :alt="name(member)" size="2xs" :src="member.avatarUrl ?? undefined" />
-					</UChip>
-					<span class="text-muted truncate">{{ name(member) }}</span>
-				</div>
+					<button
+						class="hover:bg-elevated flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm"
+						type="button"
+					>
+						<UChip color="success" inset position="bottom-right">
+							<UAvatar :alt="name(member)" size="2xs" :src="member.avatarUrl ?? undefined" />
+						</UChip>
+						<span class="text-muted truncate">{{ name(member) }}</span>
+					</button>
+				</UDropdownMenu>
 			</section>
 
 			<!-- ClientOnly: the pref comes from localStorage, so SSR can't know it -->
@@ -67,14 +73,20 @@
 					<p class="text-dimmed px-2 pb-1 text-xs font-semibold uppercase">
 						Не в сети — {{ offlineMembers.length }}
 					</p>
-					<div
+					<UDropdownMenu
 						v-for="member in offlineMembers"
 						:key="member.id"
-						class="flex items-center gap-2 rounded-md px-2 py-1 text-sm opacity-60"
+						:disabled="member.id === user?.id"
+						:items="memberMenu(member)"
 					>
-						<UAvatar :alt="name(member)" size="2xs" :src="member.avatarUrl ?? undefined" />
-						<span class="text-muted truncate">{{ name(member) }}</span>
-					</div>
+						<button
+							class="hover:bg-elevated flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm opacity-60"
+							type="button"
+						>
+							<UAvatar :alt="name(member)" size="2xs" :src="member.avatarUrl ?? undefined" />
+							<span class="text-muted truncate">{{ name(member) }}</span>
+						</button>
+					</UDropdownMenu>
 				</section>
 			</ClientOnly>
 		</div>
@@ -82,12 +94,36 @@
 </template>
 
 <script lang="ts" setup>
+import type { DropdownMenuItem } from '@nuxt/ui'
+
 const membersStore = useMembersStore()
+const dm = useDmStore()
 const { online } = useRealtime()
+const { user } = useUserSession()
 const prefs = usePreferences()
 const { membersOpen, membersHidden } = usePanels()
+const toast = useToast()
 
 const name = (m: MemberDto) => m.displayName ?? m.username
+
+function memberMenu(member: MemberDto): DropdownMenuItem[][] {
+	if (member.id === user.value?.id) return []
+	return [
+		[
+			{
+				label: 'Написать',
+				icon: 'i-lucide-message-square',
+				onSelect: async () => {
+					try {
+						await dm.openDm(member.id)
+					} catch {
+						toast.add({ title: 'Не удалось открыть диалог', color: 'error' })
+					}
+				}
+			}
+		]
+	]
+}
 const sorted = computed(() =>
 	Object.values(membersStore.members.value).sort((a, b) => name(a).localeCompare(name(b), 'ru'))
 )

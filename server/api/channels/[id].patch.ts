@@ -9,7 +9,8 @@ export default defineEventHandler(async (event) => {
 	const body = await readValidatedBody(event, bodySchema.parse)
 	const db = useDb()
 	const channel = await db.query.channels.findFirst({ where: eq(schema.channels.id, id) })
-	if (!channel) {
+	if (!channel || channel.kind === 'dm') {
+		// DM channels have no name and aren't managed through the channel routes
 		throw createError({ statusCode: 404, message: 'Канал не найден' })
 	}
 	await db.update(schema.channels).set({ name: body.name }).where(eq(schema.channels.id, id))

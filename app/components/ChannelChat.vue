@@ -4,11 +4,7 @@
 		:ui="{ root: 'h-svh min-h-0', body: 'min-h-0 gap-0 p-0 sm:gap-0 sm:p-0' }"
 	>
 		<template #header>
-			<UDashboardNavbar
-				:title="channel ? `#${channel.name}` : ''"
-				icon="i-lucide-hash"
-				:toggle="false"
-			>
+			<UDashboardNavbar :title="title" :icon="headerIcon" :toggle="false">
 				<template #leading>
 					<SidebarToggle />
 				</template>
@@ -40,7 +36,7 @@
 						<UIcon class="text-muted size-4 animate-spin" name="i-lucide-loader-2" />
 					</div>
 					<p v-else-if="!hasMore && messages.length" class="text-dimmed px-4 py-2 text-xs">
-						Это начало канала #{{ channel?.name }}.
+						{{ startText }}
 					</p>
 					<div
 						v-if="!messages.length && !loading"
@@ -95,10 +91,7 @@
 						"
 					/>
 				</div>
-				<MessageComposer
-					:placeholder="channel ? `Написать в #${channel.name}` : 'Написать сообщение'"
-					@send="send"
-				/>
+				<MessageComposer :placeholder="placeholder" @send="send" />
 			</div>
 		</template>
 	</UDashboardPanel>
@@ -120,8 +113,27 @@ const confirmModal = overlay.create(ConfirmModal)
 const searchModal = overlay.create(SearchModal)
 const pendingJump = useMessageJump()
 
+const dmStore = useDmStore()
 const channelId = computed(() => route.params.id as string)
 const channel = computed(() => store.channels.value.find((c) => c.id === channelId.value))
+// a DM channel is not in the public channels store; resolve it separately and
+// derive the header/placeholder from the other participant instead of a #name
+const dmConvo = computed(() => dmStore.conversation(channelId.value))
+const dmName = computed(() => dmConvo.value?.member.displayName ?? dmConvo.value?.member.username)
+
+const title = computed(() => {
+	if (dmConvo.value) return dmName.value ?? ''
+	return channel.value ? `#${channel.value.name}` : ''
+})
+const headerIcon = computed(() => (dmConvo.value ? 'i-lucide-at-sign' : 'i-lucide-hash'))
+const placeholder = computed(() => {
+	if (dmConvo.value) return `Написать @${dmName.value}`
+	return channel.value ? `Написать в #${channel.value.name}` : 'Написать сообщение'
+})
+const startText = computed(() => {
+	if (dmConvo.value) return `Это начало вашего диалога с ${dmName.value}.`
+	return channel.value ? `Это начало канала #${channel.value.name}.` : ''
+})
 
 const messages = ref<MessageDto[]>([])
 const hasMore = ref(false)
@@ -196,7 +208,9 @@ async function loadInitial() {
 		atLiveEdge.value = true
 		await nextTick()
 		scrollToBottom()
-		store.markRead(channelId.value)
+		// DM read-state lives in the DM store, not the public channels store
+		if (dmStore.isDm(channelId.value)) dmStore.markRead(channelId.value)
+		else store.markRead(channelId.value)
 	} catch {
 		messages.value = []
 	} finally {

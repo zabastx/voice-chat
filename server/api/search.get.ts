@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import * as z from 'zod'
 
 const querySchema = z.object({
@@ -35,7 +35,10 @@ export default defineEventHandler(async (event) => {
 			.from(schema.messages)
 			.innerJoin(schema.members, eq(schema.messages.authorId, schema.members.id))
 			.innerJoin(schema.channels, eq(schema.messages.channelId, schema.channels.id))
-			.where(sql`${schema.messages.contentTsv} @@ ${tsquery}`)
+			// only public text channels are searchable — DM history stays private
+			.where(
+				and(eq(schema.channels.kind, 'text'), sql`${schema.messages.contentTsv} @@ ${tsquery}`)
+			)
 			.orderBy(sql`ts_rank(${schema.messages.contentTsv}, ${tsquery}) DESC`)
 			.limit(limit),
 		db.select({ id: schema.members.id, username: schema.members.username }).from(schema.members)
