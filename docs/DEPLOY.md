@@ -72,10 +72,35 @@ docker compose run --rm app bun scripts/migrate-sqlite-to-pg.ts   # applies sche
 docker compose up -d app                        # downtime over
 ```
 
+The script prints a per-role member count (e.g. `roles: {"admin":1,"member":3}`).
+**Confirm exactly one `admin`** before declaring success — the source `members`
+table has carried different role columns across releases (`is_admin` in early
+DBs, then a `role` column), and the script maps whichever it finds. Double-check:
+
+```bash
+docker compose exec postgres psql -U postgres voicechat -c "SELECT username, role FROM members;"
+```
+
 Verify login, history, and search, then (optionally, later) remove the legacy
 volume: drop the `app-data` entries from `compose.yaml` and
 `docker volume rm <project>_app-data`. The script refuses to run against a
 non-empty Postgres, so re-running it can't duplicate data.
+
+### Recovering from a bad role import
+
+If a cutover done with an older version of the script left the admin (or everyone)
+with the wrong role, re-import cleanly from the SQLite backup — the current script
+maps roles correctly:
+
+```bash
+docker compose stop app
+docker compose exec postgres psql -U postgres -c "DROP DATABASE voicechat;" -c "CREATE DATABASE voicechat;"
+docker compose run --rm app bun scripts/migrate-sqlite-to-pg.ts /data/backup.sqlite
+docker compose up -d app
+```
+
+Or, if you only need to fix one account without re-importing:
+`docker compose exec postgres psql -U postgres voicechat -c "UPDATE members SET role='admin' WHERE username='<name>';"`
 
 ## Troubleshooting
 

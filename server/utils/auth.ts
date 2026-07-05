@@ -12,7 +12,9 @@ export async function requireRole(event: H3Event, min: 'moderator' | 'admin') {
 	const member = await useDb().query.members.findFirst({
 		where: eq(schema.members.id, user.id)
 	})
-	if (!member || rank[member.role] < rank[min]) {
+	// an unrecognised role (e.g. bad data) must fail closed: `rank[x] < rank[min]`
+	// is `undefined < n` → false, which would wrongly PASS the guard, so floor it to -1
+	if (!member || (rank[member.role] ?? -1) < rank[min]) {
 		throw createError({
 			statusCode: 403,
 			message: min === 'admin' ? 'Только для админа' : 'Недостаточно прав'

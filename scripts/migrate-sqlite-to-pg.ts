@@ -58,6 +58,29 @@ if (n > 0) {
 
 const read = (table: string): Row[] => sqlite.query(`SELECT * FROM ${table}`).all() as Row[]
 
+// The `members` role column has changed shape across releases: early DBs only had
+// `is_admin` (integer), v0.10.0 added `role` and set it from is_admin, then dropped
+// is_admin. A source that predates v0.10.0 has no `role` column, so reading r.role
+// blindly yields undefined → the admin (and everyone) lands as a non-admin role.
+// Map explicitly from whichever column the source actually has, and reject any role
+// that isn't one of the three known values.
+const memberColumns = new Set(
+	(sqlite.query(`PRAGMA table_info('members')`).all() as { name: string }[]).map((c) => c.name)
+)
+const VALID_ROLES = new Set(['admin', 'moderator', 'member'])
+function memberRole(r: Row): 'admin' | 'moderator' | 'member' {
+	if (memberColumns.has('role') && typeof r.role === 'string' && VALID_ROLES.has(r.role)) {
+		return r.role as 'admin' | 'moderator' | 'member'
+	}
+	if (memberColumns.has('is_admin')) {
+		return Number(r.is_admin) === 1 ? 'admin' : 'member'
+	}
+	console.warn(
+		`  ! member ${String(r.username)}: no usable role in source → defaulting to 'member'`
+	)
+	return 'member'
+}
+
 const members = read('members')
 const channels = read('channels')
 const messages = read('messages')
@@ -75,7 +98,7 @@ await db.transaction(async (tx) => {
 				passwordHash: str(r.password_hash),
 				displayName: strOrNull(r.display_name),
 				avatarId: strOrNull(r.avatar_id),
-				role: str(r.role) as 'admin' | 'moderator' | 'member',
+				role: memberRole(r),
 				createdAt: date(r.created_at)
 			}))
 		)
@@ -151,8 +174,14 @@ await db.transaction(async (tx) => {
 	)
 })
 
+const roleCounts = members.reduce<Record<string, number>>((acc, r) => {
+	const role = memberRole(r)
+	acc[role] = (acc[role] ?? 0) + 1
+	return acc
+}, {})
+
 console.log('Imported:')
-console.log(`  members:              ${members.length}`)
+console.log(`  members:              ${members.length} (roles: ${JSON.stringify(roleCounts)})`)
 console.log(`  channels:             ${channels.length}`)
 console.log(`  messages:             ${messages.length}`)
 console.log(`  attachments:          ${attachments.length}`)
