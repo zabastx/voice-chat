@@ -1,0 +1,5 @@
+# Terminates TLS for the relay so Telegram can deliver webhooks over HTTPS.
+# The domain comes from RELAY_DOMAIN in .env.
+{$RELAY_DOMAIN} {
+	reverse_proxy relay:3000
+}

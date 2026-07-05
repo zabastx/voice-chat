@@ -1,0 +1,29 @@
+services:
+  relay:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    # not published — reached only via Caddy on the compose network
+    expose:
+      - '3000'
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    # Caddy fetches a real Let's Encrypt cert for RELAY_DOMAIN (Telegram requires
+    # a valid HTTPS endpoint). Needs the domain's A/AAAA -> this host and 80/443 open.
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - relay
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,16 @@
+{
+	"name": "telegram-relay",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Stateless Telegram Bot API relay for voice-chat. Runs on a host with clean Telegram connectivity; proxies sendMessage and forwards updates to the main app.",
+	"type": "module",
+	"scripts": {
+		"dev": "nitro dev",
+		"build": "nitro build",
+		"prepare": "nitro prepare",
+		"start": "bun .output/server/index.mjs"
+	},
+	"devDependencies": {
+		"nitropack": "^2.10.4"
+	}
+}
