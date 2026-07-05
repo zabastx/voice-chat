@@ -251,6 +251,19 @@ every worker, clears Cache Storage, and reloads once (guarded via `sessionStorag
 currently controlling the page — cleaning up all users automatically. Manual one-off: DevTools →
 Application → Service Workers → Unregister, then Clear site data.
 
+## Telegram notifications
+
+### 20. Local dev receives no Telegram updates without a public tunnel
+
+**Symptom:** linking (`/start`) and reply-to-send do nothing in local dev; the bot never reacts.
+**Cause:** Telegram delivers updates by **webhook** — it POSTs to a public HTTPS URL. `localhost` is
+unreachable from Telegram's servers, so `setWebhook` on boot is skipped (or points nowhere) and no
+updates arrive. Outbound notifications (`sendMessage`) still work; only _inbound_ is affected.
+**Fix:** expose the dev server through a tunnel (ngrok, cloudflared) and set
+`NUXT_TELEGRAM_WEBHOOK_URL=https://<tunnel>/api/telegram/webhook` (plus `NUXT_TELEGRAM_BOT_TOKEN`,
+`NUXT_TELEGRAM_WEBHOOK_SECRET`, `NUXT_PUBLIC_TELEGRAM_BOT_USERNAME`). The plugin registers the
+webhook on boot; with none of these set the whole feature no-ops cleanly.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_;

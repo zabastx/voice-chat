@@ -1,12 +1,15 @@
 import { sql } from 'drizzle-orm'
 import {
+	bigint,
+	boolean,
 	customType,
 	index,
 	integer,
 	pgTable,
 	primaryKey,
 	text,
-	timestamp
+	timestamp,
+	uniqueIndex
 } from 'drizzle-orm/pg-core'
 
 // full-text search vector; drizzle has no built-in tsvector type
@@ -25,6 +28,13 @@ export const members = pgTable('members', {
 	role: text('role', { enum: ['admin', 'moderator', 'member'] })
 		.notNull()
 		.default('member'),
+	// Telegram bridge. chatId is null until the member links their account; it is
+	// a SECRET — never surfaced in memberDto or the session cookie (see adr/0006).
+	telegramChatId: text('telegram_chat_id'),
+	telegramNotificationsEnabled: boolean('telegram_notifications_enabled').notNull().default(true),
+	// single-use deep-link token; cleared once the bot consumes `/start <token>`
+	telegramLinkToken: text('telegram_link_token'),
+	telegramLinkTokenExpiresAt: timestamp('telegram_link_token_expires_at', { withTimezone: true }),
 	createdAt: timestamp('created_at', { withTimezone: true })
 		.notNull()
 		.$defaultFn(() => new Date())
@@ -148,6 +158,38 @@ export const invites = pgTable('invites', {
 	usedBy: text('used_by').references(() => members.id, { onDelete: 'set null' }),
 	usedAt: timestamp('used_at', { withTimezone: true })
 })
+
+// Maps a notification the bot delivered back to the app context, so a Telegram
+// reply lands in the right channel/DM authored by the right member. Rows are
+// swept after 7 days (server/plugins/telegram.ts); a reply to an older/expired
+// notification falls through to the "reply to a recent notification" hint.
+export const telegramNotifications = pgTable(
+	'telegram_notifications',
+	{
+		id: text('id').primaryKey(),
+		// the member a reply is posted AS (the notification's recipient)
+		memberId: text('member_id')
+			.notNull()
+			.references(() => members.id, { onDelete: 'cascade' }),
+		// recipient's Telegram chat — half of the reply lookup key
+		chatId: text('chat_id').notNull(),
+		// the bot message the user replies to — the other half of the lookup key
+		telegramMessageId: bigint('telegram_message_id', { mode: 'number' }).notNull(),
+		// where the reply is posted
+		channelId: text('channel_id')
+			.notNull()
+			.references(() => channels.id, { onDelete: 'cascade' }),
+		createdAt: timestamp('created_at', { withTimezone: true })
+			.notNull()
+			.$defaultFn(() => new Date())
+	},
+	(table) => [
+		// reply routing looks up by (chat, replied-to message id); unique because a
+		// Telegram message id is unique within a chat — also a guard against a reply
+		// ever resolving to two different members
+		uniqueIndex('telegram_notifications_lookup_idx').on(table.chatId, table.telegramMessageId)
+	]
+)
 
 export const memberChannelState = pgTable(
 	'member_channel_state',

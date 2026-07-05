@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 
 // Batch-load reactions grouped by message, then by emoji in first-reacted
 // order. `me` is intentionally omitted — the client derives it from memberIds
@@ -116,6 +116,61 @@ export function resolveReplyRef(
 ): ReplyRefDto | null {
 	if (!replyToId) return null
 	return refs.get(replyToId) ?? { id: replyToId, authorName: null, preview: '', deleted: true }
+}
+
+// Persist a channel/DM message and fan it out: insert, claim the author's own
+// attachments, mark the author's read cursor, build the DTO, broadcast it to the
+// right audience, and notify offline recipients over Telegram. Shared by the HTTP
+// send route and the Telegram reply webhook so both produce identical messages.
+// `content` must already be canonical (`<@id>` tokens); `replyToId` must already
+// be validated against this channel by the caller.
+export async function createChannelMessage(opts: {
+	channel: { id: string; kind: 'text' | 'voice' | 'dm'; name: string }
+	authorId: string
+	content: string
+	replyToId?: string | null
+	attachmentIds?: string[]
+}): Promise<MessageDto> {
+	const db = useDb()
+	const message = {
+		id: newId(),
+		channelId: opts.channel.id,
+		authorId: opts.authorId,
+		content: opts.content,
+		replyToId: opts.replyToId ?? null,
+		createdAt: new Date()
+	}
+	await db.insert(schema.messages).values(message)
+
+	if (opts.attachmentIds && opts.attachmentIds.length > 0) {
+		// claim only this member's own unbound uploads; anything else is silently dropped
+		await db
+			.update(schema.attachments)
+			.set({ messageId: message.id })
+			.where(
+				and(
+					inArray(schema.attachments.id, opts.attachmentIds),
+					eq(schema.attachments.uploaderId, opts.authorId),
+					isNull(schema.attachments.messageId)
+				)
+			)
+	}
+
+	// the author has obviously read their own message
+	await db
+		.insert(schema.memberChannelState)
+		.values({ memberId: opts.authorId, channelId: opts.channel.id, lastReadAt: message.createdAt })
+		.onConflictDoUpdate({
+			target: [schema.memberChannelState.memberId, schema.memberChannelState.channelId],
+			set: { lastReadAt: message.createdAt }
+		})
+
+	const dto = (await messageDto(message.id))!
+	// broadcast to everyone for text channels, only the two participants for a DM
+	await emitChannelEvent(opts.channel, { type: 'message.created', message: dto })
+	// bridge to Telegram for offline recipients (fire-and-forget; never blocks the send)
+	void notifyOffline(opts.channel, dto).catch((err) => console.error('telegram notify failed', err))
+	return dto
 }
 
 export async function messageDto(messageId: string): Promise<MessageDto | null> {

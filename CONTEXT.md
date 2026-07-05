@@ -17,7 +17,12 @@ Glossary for the voice-chat project — a private Discord-style app for one frie
 - **Participant** — a Member belonging to a DM Conversation (rows in `channel_participants`). Public Channels have no Participants; access to a DM is gated on Participation.
 - **Audience** — the delivery scope of a realtime Message event: every connected client for a public Channel (broadcast), or only the two Participants for a DM Conversation (targeted). Keeps DM traffic off non-participant sockets.
 - **Invite** — a single-use registration token created by the Admin or a Moderator. Redeeming it is the only way to register (except the very first Member, who becomes the Admin).
-- **Presence** — whether a Member is currently connected (online/offline).
+- **Presence** — whether a Member is currently connected (online/offline). A Member is _offline_ exactly when they have no live WebSocket connection (`wsOnline()`); this is the trigger condition for a Telegram Notification.
+- **Telegram Link** — the opt-in binding between a Member and a Telegram chat, established via a Linking Token. Stored as the Member's `telegram_chat_id` — a secret that never appears in a Member DTO or the session cookie; a Member sees only their own status via `GET /api/me/telegram`.
+- **Linking Token** — a short-lived (15 min), single-use secret embedded in the `t.me/<bot>?start=<token>` deep link. The bot consumes it on `/start` to bind the sender's chat to the Member.
+- **Telegram Notification** — a message the bot sends to an offline, linked Member when they are `@`-mentioned in a Text Channel or receive any DM. Contains the sender, place, and full text.
+- **Notification Mapping** — a stored row `{chat_id, telegram_message_id, member_id, channel_id}` recorded for each Telegram Notification, so a Telegram reply can be routed back to the exact Channel/DM as the right Member. Swept after 7 days.
+- **Reply-to-send** — replying to a Telegram Notification posts the reply back into the app: resolved through the Notification Mapping, run through the normal Message send path (mentions encoded, same Audience), authored as the linked Member.
 - **Voice State** — which Voice Channel a Member is currently in, plus mute/speaking status; visible to all Members without joining.
 - **Self-Mute** — a Member muting their own microphone. Broadcast to everyone via Voice State; the whole room stops hearing that Member.
 - **Local Volume** — a listener's per-speaker playback level (0–200%, default 100%), applied only in the listener's own browser. Purely client-side: it never touches the speaker's mic or any other listener. Persisted per-device (localStorage), keyed by the speaker's Member id.

@@ -43,9 +43,16 @@ export default defineNuxtConfig({
 		s3Region: '',
 		s3AccessKeyId: '',
 		s3SecretAccessKey: '',
+		// Telegram notifications bridge (all optional; unset = feature disabled)
+		telegramBotToken: '',
+		telegramWebhookSecret: '',
+		// public HTTPS URL of /api/telegram/webhook (registered via setWebhook on boot)
+		telegramWebhookUrl: '',
 		public: {
 			livekitUrl: 'ws://127.0.0.1:7880',
-			appVersion: pkg.version
+			appVersion: pkg.version,
+			// bot @username, used to build the t.me/<bot>?start=<token> deep link
+			telegramBotUsername: ''
 		}
 	}
 })
