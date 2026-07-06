@@ -1,6 +1,6 @@
 services:
   relay:
-    build: .
+    image: zabastx.cr.cloud.ru/chat-relay:latest
     restart: unless-stopped
     env_file: .env
     # not published — reached only via Caddy on the compose network
