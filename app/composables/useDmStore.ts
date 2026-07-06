@@ -2,6 +2,7 @@ export function useDmStore() {
 	const conversations = useState<DmConversationDto[]>('dm-conversations', () => [])
 	const route = useRoute()
 	const requestFetch = useRequestFetch()
+	const { user } = useUserSession()
 
 	// most recent activity first; empty conversations sink to the bottom
 	const sorted = computed(() =>
@@ -66,6 +67,14 @@ export function useDmStore() {
 				const convo = conversation(event.message.channelId)
 				if (!convo) break
 				convo.lastMessageAt = event.message.createdAt
+				// the author has obviously read their own message; createChannelMessage
+				// already persisted their read cursor on the server, so mirror it here
+				// and skip the /read POST. This stays correct even when the tab is
+				// unfocused or the client clock is skewed relative to the server.
+				if (event.message.authorId === user.value?.id) {
+					convo.lastReadAt = event.message.createdAt
+					break
+				}
 				if (activeChannelId.value === convo.channelId && document.hasFocus()) {
 					await markRead(convo.channelId)
 				}

@@ -3,6 +3,7 @@ export function useChannelsStore() {
 	const route = useRoute()
 	// forwards the session cookie during SSR; identical to $fetch on the client
 	const requestFetch = useRequestFetch()
+	const { user } = useUserSession()
 
 	const textChannels = computed(() => channels.value.filter((c) => c.kind === 'text'))
 	const voiceChannels = computed(() => channels.value.filter((c) => c.kind === 'voice'))
@@ -59,6 +60,14 @@ export function useChannelsStore() {
 				const channel = channels.value.find((c) => c.id === event.message.channelId)
 				if (!channel) break
 				channel.lastMessageAt = event.message.createdAt
+				// the author has obviously read their own message; createChannelMessage
+				// already persisted their read cursor on the server, so mirror it here
+				// and skip the /read POST. This stays correct even when the tab is
+				// unfocused or the client clock is skewed relative to the server.
+				if (event.message.authorId === user.value?.id) {
+					channel.lastReadAt = event.message.createdAt
+					break
+				}
 				const isActive = activeChannelId.value === channel.id
 				if (isActive && document.hasFocus()) {
 					await markRead(channel.id)

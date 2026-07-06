@@ -11,6 +11,14 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.15.1',
+		date: '2026-07-06',
+		title: 'Исправление счётчика непрочитанных',
+		changes: [
+			'Канал больше не помечается непрочитанным для вашего собственного сообщения, если вкладка не в фокусе или вы уже ушли в другой канал'
+		]
+	},
+	{
 		version: '0.15.0',
 		date: '2026-07-06',
 		title: 'Богаче уведомления в Telegram',
