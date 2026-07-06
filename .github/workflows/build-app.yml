@@ -48,5 +48,5 @@ jobs:
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           status: failure
-          message: "CI failed on ${{ github.repository }} — commit ${{ github.sha }}"
-          notify_fields: "actor,repository,workflow"
+          message: 'CI failed on ${{ github.repository }} — commit ${{ github.sha }}'
+          notify_fields: 'actor,repository,workflow'
