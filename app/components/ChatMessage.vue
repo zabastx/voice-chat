@@ -49,6 +49,12 @@
 				</UDropdownMenu>
 				<span v-else class="text-highlighted text-sm font-semibold">{{ authorName }}</span>
 				<span class="text-dimmed text-xs">{{ formatTimestamp(message.createdAt) }}</span>
+				<span
+					v-if="message.source === 'telegram'"
+					class="text-dimmed bg-elevated rounded px-1 py-0.5 text-[10px]"
+				>
+					через Telegram
+				</span>
 			</div>
 
 			<template v-if="!editing">

@@ -88,6 +88,12 @@ export const messages = pgTable(
 		// when the parent is deleted the reference dangles so we can still show
 		// "исходное сообщение удалено" instead of silently losing the reply.
 		replyToId: text('reply_to_id'),
+		// the channel through which the author posted this message: the app UI
+		// ('app') or the Telegram bridge ('telegram'). Set once at creation; an
+		// edit in-app does not change it. See adr/0007.
+		source: text('source', { enum: ['app', 'telegram'] })
+			.notNull()
+			.default('app'),
 		createdAt: timestamp('created_at', { withTimezone: true })
 			.notNull()
 			.$defaultFn(() => new Date()),

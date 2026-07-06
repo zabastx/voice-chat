@@ -96,3 +96,40 @@ relay instead of Telegram, and the old `webhook.post.ts` became `ingest.post.ts`
 registers the webhook (`setWebhook`) on its own boot, so the "single-instance / one webhook" caveat
 above now applies to the relay. Config moved from `NUXT_TELEGRAM_BOT_TOKEN`/`_WEBHOOK_URL`/`_SECRET`
 to `NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET` (the bot token lives only in the relay).
+
+## Update: media forwarding (2026-07-06)
+
+Notifications were text-only: `notifyOffline` sent `decodeMentions(content)` via `sendMessage` and
+dropped every Attachment. Now a Telegram Notification carries the **full text and the attachments**:
+voice messages → `sendVoice`, images → `sendPhoto`, video → `sendVideo`, other files →
+`sendDocument`, each routed through a new multipart relay route `POST /sendMedia`. Text becomes the
+caption of the first media message when it fits Telegram's 1024-char caption limit; otherwise it
+goes as its own `sendMessage` ahead of the media. Each delivered Telegram message (text or media)
+gets its own `telegram_notifications` mapping row, so a reply to any of them still routes.
+
+**Transport is app-downloads-then-uploads, not a presigned-URL passthrough.** Telegram's servers
+would have to fetch a presigned URL directly from S3, but the bucket is private and in dev its
+endpoint (MinIO on `localhost`) is unreachable from Telegram; relying on a public prod endpoint
+would be fragile across environments. Instead the app fetches the object via the existing header-
+signed `getObject` (streamable `Response`), uploads the bytes multipart to the relay's `/sendMedia`,
+and the relay re-packs them under Telegram's expected field name (`voice`/`photo`/`video`/`document`)
+and forwards to the matching `send*` method. The app↔relay hop is plain HTTP (which the prod host
+does not filter); the relay↔Telegram hop is on the relay's clean network. Bytes are buffered in
+memory (≤25 MB) — acceptable at friend-group scale; streaming is a future optimization.
+
+**Links stay clickable via plain text.** `disable_web_page_preview` stays `true` (no rich preview
+cards, preserving the SSRF/privacy posture that deferred M6 link previews). URLs are made clickable
+by sending plain text (no `parse_mode`) and pre-processing the body with `plainTextBody` — markdown
+link syntax `[t](url)` is collapsed to the bare URL (auto-linked by Telegram), and URLs are stashed
+during markdown-marker stripping so `_` inside a URL is not lost.
+
+**Failure handling is unchanged in spirit.** `notifyOffline` stays fire-and-forget and never throws
+into the send path. A media fetch/upload failure is logged and swallowed for that one attachment. If
+the message had **text** and none of it was delivered (the text was meant to ride as a caption on
+the first media item but every media send failed, or the standalone `sendMessage` for overlong text
+itself failed), the text is recovered as its own `sendMessage` — appending
+`(вложение не удалось переслать)` when the media also failed, so the recipient knows an attachment
+didn't come through. If the message had **no text** and _all_ its media failed, the header
+(who/where) plus a `(вложение не удалось переслать)` note is sent so the recipient still has
+context (no mapping row — a reply to the hint must not route into a channel). A 403 from Telegram
+still auto-unlinks the Member on the first send that hits it.

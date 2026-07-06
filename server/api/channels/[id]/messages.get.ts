@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
 				authorName: schema.members.username,
 				content: schema.messages.content,
 				replyToId: schema.messages.replyToId,
+				source: schema.messages.source,
 				createdAt: schema.messages.createdAt,
 				editedAt: schema.messages.editedAt
 			})

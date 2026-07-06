@@ -42,6 +42,8 @@ export interface MessageDto {
 	attachments: AttachmentDto[]
 	replyTo: ReplyRefDto | null
 	reactions: ReactionDto[]
+	// the channel through which the author posted: 'app' (UI) or 'telegram' (bridge)
+	source: 'app' | 'telegram'
 }
 
 export interface SearchResultDto {

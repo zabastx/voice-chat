@@ -117,6 +117,6 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const content = await encodeMessageMentions(text)
-	await createChannelMessage({ channel, authorId: mapping.memberId, content })
+	await createChannelMessage({ channel, authorId: mapping.memberId, content, source: 'telegram' })
 	return { ok: true }
 })

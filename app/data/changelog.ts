@@ -11,6 +11,16 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.15.0',
+		date: '2026-07-06',
+		title: 'Богаче уведомления в Telegram',
+		changes: [
+			'Уведомления в Telegram теперь пересылают голосовые сообщения, картинки, видео и файлы — а не только текст',
+			'Ссылки в уведомлениях кликабельны прямо в Telegram',
+			'Сообщения, отправленные ответом через бота, помечены значком «через Telegram» в чате'
+		]
+	},
+	{
 		version: '0.14.0',
 		date: '2026-07-05',
 		title: 'Уведомления в Telegram',

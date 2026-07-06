@@ -63,20 +63,42 @@ export async function attachmentDtosFor(messageIds: string[]) {
 	return map
 }
 
-// Plain-text snippet of a message for reply quotes / search results: mentions
-// decoded to @name, markdown markers stripped, whitespace collapsed.
-export function messagePreview(
+// Plain-text rendering of message content for Telegram notifications and search
+// previews: mentions decoded, markdown markers stripped, and URLs preserved
+// intact (stashed during stripping so characters like `_` inside a URL are not
+// lost — they must stay clickable in Telegram). `max` truncates for previews.
+export function plainTextBody(
 	content: string,
-	members: { id: string; username: string }[],
-	max = 120
+	members: { id: string; username: string }[]
 ): string {
+	const urls: string[] = []
+	const stash = (url: string) => {
+		urls.push(url)
+		return `\uE000${urls.length - 1}\uE000`
+	}
 	const text = decodeMentions(content, members)
+		// markdown link [label](url) → "label <placeholder>" (URL stashed)
+		.replace(/\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, label, url) =>
+			label ? `${label} ${stash(url)}` : stash(url)
+		)
+		// bare URL → placeholder (stashed, preserved verbatim)
+		.replace(/\bhttps?:\/\/[^\s<>)]+/g, (url) => stash(url))
 		.replace(/```[\s\S]*?```/g, '[код]')
 		.replace(/`([^`]*)`/g, '$1')
 		.replace(/[*_~]/g, '')
 		.replace(/^\s*>\s?/gm, '')
 		.replace(/\s+/g, ' ')
 		.trim()
+	return text.replace(/\uE000(\d+)\uE000/g, (_m, i) => urls[Number(i)] ?? '')
+}
+
+// Plain-text snippet of a message for reply quotes / search results.
+export function messagePreview(
+	content: string,
+	members: { id: string; username: string }[],
+	max = 120
+): string {
+	const text = plainTextBody(content, members)
 	return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
@@ -123,13 +145,15 @@ export function resolveReplyRef(
 // right audience, and notify offline recipients over Telegram. Shared by the HTTP
 // send route and the Telegram reply webhook so both produce identical messages.
 // `content` must already be canonical (`<@id>` tokens); `replyToId` must already
-// be validated against this channel by the caller.
+// be validated against this channel by the caller. `source` defaults to 'app';
+// the Telegram reply path passes 'telegram' so the chat can badge it.
 export async function createChannelMessage(opts: {
 	channel: { id: string; kind: 'text' | 'voice' | 'dm'; name: string }
 	authorId: string
 	content: string
 	replyToId?: string | null
 	attachmentIds?: string[]
+	source?: 'app' | 'telegram'
 }): Promise<MessageDto> {
 	const db = useDb()
 	const message = {
@@ -138,6 +162,7 @@ export async function createChannelMessage(opts: {
 		authorId: opts.authorId,
 		content: opts.content,
 		replyToId: opts.replyToId ?? null,
+		source: opts.source ?? 'app',
 		createdAt: new Date()
 	}
 	await db.insert(schema.messages).values(message)
@@ -183,6 +208,7 @@ export async function messageDto(messageId: string): Promise<MessageDto | null> 
 			authorName: schema.members.username,
 			content: schema.messages.content,
 			replyToId: schema.messages.replyToId,
+			source: schema.messages.source,
 			createdAt: schema.messages.createdAt,
 			editedAt: schema.messages.editedAt
 		})
