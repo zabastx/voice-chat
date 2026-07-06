@@ -1,19 +1,12 @@
 import { config } from '../../utils/config'
 
-// Telegram delivers updates here. We verify the secret header, then forward the
-// raw update to the main app's ingest endpoint (which owns all the linking/reply
-// logic). If the main app is unreachable we return 502 so Telegram retries later
-// rather than dropping the update.
+// Telegram delivers updates here. We verify the secret it echoes back in the
+// X-Telegram-Bot-Api-Secret-Token header (the value we passed as secret_token to
+// setWebhook), then forward the raw update to the main app's ingest endpoint
+// (which owns all the linking/reply logic). If the main app is unreachable we
+// return 502 so Telegram retries later rather than dropping the update.
 export default defineEventHandler(async (event) => {
-	const received = getHeader(event, 'x-telegram-bot-api-secret-header')
-	const expected = config.webhookSecret()
-	if (received !== expected) {
-		// TEMP DEBUG: reveal why real Telegram requests are rejected. Remove after diagnosis.
-		console.error('[relay] webhook secret mismatch', {
-			received: received ?? '<none>',
-			receivedLen: received?.length ?? 0,
-			expectedLen: expected.length
-		})
+	if (getHeader(event, 'x-telegram-bot-api-secret-token') !== config.webhookSecret()) {
 		throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 	}
 	const update = await readBody(event)

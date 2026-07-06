@@ -13,7 +13,7 @@ export const config = {
 	botToken: () => required('TELEGRAM_BOT_TOKEN'),
 	/** Public HTTPS URL of THIS relay's webhook route, e.g. https://relay.example.com/telegram/webhook */
 	webhookUrl: () => required('TELEGRAM_WEBHOOK_URL'),
-	/** Secret Telegram echoes back in X-Telegram-Bot-Api-Secret-Header. */
+	/** Secret Telegram echoes back in the X-Telegram-Bot-Api-Secret-Token header. */
 	webhookSecret: () => required('TELEGRAM_WEBHOOK_SECRET'),
 	/** Main app ingest endpoint, e.g. https://chat.example.com/api/telegram/ingest */
 	ingestUrl: () => required('INGEST_URL'),
