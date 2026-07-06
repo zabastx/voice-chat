@@ -9,17 +9,24 @@
 					<SidebarToggle />
 				</template>
 				<template #right>
-					<UButton
-						aria-label="Поиск"
-						color="neutral"
-						icon="i-lucide-search"
-						variant="ghost"
-						@click="
-							() => {
-								searchModal.open()
-							}
-						"
-					/>
+					<UTooltip text="Поиск">
+						<UButton
+							aria-label="Поиск"
+							color="neutral"
+							icon="i-lucide-search"
+							variant="ghost"
+							@click="
+								() => {
+									searchModal.open()
+								}
+							"
+						>
+							<template #trailing>
+								<UKbd class="hidden sm:inline-flex" value="meta" />
+								<UKbd class="hidden sm:inline-flex">K</UKbd>
+							</template>
+						</UButton>
+					</UTooltip>
 					<MembersToggle />
 				</template>
 			</UDashboardNavbar>
@@ -112,6 +119,13 @@ const overlay = useOverlay()
 const confirmModal = overlay.create(ConfirmModal)
 const searchModal = overlay.create(SearchModal)
 const pendingJump = useMessageJump()
+
+defineShortcuts({
+	meta_k: {
+		usingInput: true,
+		handler: () => searchModal.open()
+	}
+})
 
 const dmStore = useDmStore()
 const channelId = computed(() => route.params.id as string)

@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.15.2',
+		date: '2026-07-06',
+		title: 'Горячая клавиша поиска',
+		changes: [
+			'Поиск сообщений теперь открывается сочетанием Ctrl+K (⌘K на macOS) с любой страницы канала',
+			'Рядом с иконкой поиска в шапке канала показывается подсказка с клавишами'
+		]
+	},
+	{
 		version: '0.15.1',
 		date: '2026-07-06',
 		title: 'Исправление счётчика непрочитанных',
