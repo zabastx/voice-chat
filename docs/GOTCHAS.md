@@ -1,294 +1,127 @@
-# Gotchas — problems hit during the build and how they were solved
+# Gotchas — traps that already cost time
 
-Read this before touching the dev workflow, the WebSocket/voice path, or the storage layer.
-Each entry is a real trap that already cost time.
+Read before touching the dev workflow, the WebSocket/voice path, or the storage layer.
 
 ## Runtime & tooling
 
-### 1. Zod 4 must be imported as a namespace
+### 1. Zod 4: namespace import only
 
-**Symptom:** SSR 500 `undefined is not an object (evaluating '__vite_ssr_import_0__.z.string')`.
-**Cause:** `import { z } from 'zod'` breaks under Vite's SSR transform for Zod 4.
-**Fix:** always `import * as z from 'zod'`. Applies to server handlers, pages, and shared schemas.
+`import { z } from 'zod'` → SSR 500 (`undefined is not an object (evaluating '__vite_ssr_import_0__.z.string')`) under Vite's SSR transform. Always `import * as z from 'zod'` — server handlers, pages, shared schemas.
 
 ### 2. Dev = Node runtime, prod = Bun runtime
 
-**Symptom:** WebSocket `/_ws` upgrade hangs forever; no error, connection never opens.
-**Cause:** running the dev server under the Bun runtime (`bun --bun nuxt dev`) routes WS upgrades
-through Nuxt's dev proxy, which drops them.
-**Fix:** `bun run dev` is plain `nuxt dev --host` (Node). Re-tested 2026-07-05 on Bun 1.3.14 +
-Nuxt 4.4.8 (Node dev answers the `/_ws` handshake with 101, Bun dev swallows it) — still broken,
-dev stays on Node. Since the Postgres migration ([ADR 0004](adr/0004-postgres-replaces-sqlite.md))
-the DB no longer cares: postgres.js works on both runtimes, there is no per-runtime driver fork.
+Running dev under Bun (`bun --bun nuxt dev`) routes WS upgrades through Nuxt's dev proxy, which silently drops them — `/_ws` hangs forever. `bun run dev` stays plain `nuxt dev --host` (Node). Re-verified still broken 2026-07-05 (Bun 1.3.14 + Nuxt 4.4.8). Since [ADR 0004](adr/0004-postgres-replaces-sqlite.md) the DB doesn't care: postgres.js works on both runtimes, no driver fork.
 
-### 2b. postgres:18 Docker image moved its volume mount point
+### 2b. postgres:18 image moved its volume mount point
 
-**Symptom:** Postgres data vanishes on container recreation even though a named volume is mounted.
-**Cause:** the official `postgres:18` image declares `VOLUME /var/lib/postgresql` (the parent dir,
-to support in-place `pg_upgrade`), not `/var/lib/postgresql/data` like ≤17. A volume mounted at the
-old `.../data` path leaves the actual cluster on the container's writable layer.
-**Fix:** mount the named volume at `/var/lib/postgresql` — see [compose.dev.yaml](../compose.dev.yaml)
-and [compose.yaml](../compose.yaml).
+`postgres:18` declares `VOLUME /var/lib/postgresql` (parent dir, for in-place `pg_upgrade`), not `.../data` like ≤17. A volume mounted at the old `.../data` path leaves the cluster on the container's writable layer — data vanishes on recreate. Mount the named volume at `/var/lib/postgresql` (done in [compose.dev.yaml](../compose.dev.yaml) and [compose.yaml](../compose.yaml)).
 
 ### 3. `useToast is not defined` — stale .nuxt cache
 
-**Symptom:** SSR 500 `useToast is not defined` after heavy HMR churn (lots of edits in one session).
-**Cause:** stale Nuxt auto-import cache, not a real code error.
-**Fix:** stop the server, delete `.nuxt`, `bun run postinstall` (regenerates types/imports), restart.
+SSR 500 after heavy HMR churn; not a real code error. Stop the server, delete `.nuxt`, `bun run postinstall`, restart.
 
 ### 4. vue-tsc "Excessive stack depth" on `$fetch('/api/...')`
 
-**Symptom:** typecheck error TS2321 "Excessive stack depth comparing types" pointing at a route string.
-**Cause:** Nuxt's typed-route inference chokes on some `$fetch` calls without an explicit return type.
-**Fix:** give `$fetch` an explicit generic — `$fetch<ChannelDto[]>('/api/channels')` — or use
-`useRequestFetch<T>()`.
+TS2321 — Nuxt's typed-route inference chokes without an explicit return type. Give `$fetch` a generic: `$fetch<ChannelDto[]>('/api/channels')`, or use `useRequestFetch<T>()`.
 
-### 4b. `typescript@7` (Go-based tsc) breaks `nuxt typecheck`
+### 4b. `typescript@7` (tsgo) breaks `nuxt typecheck`
 
-**Symptom:** `bun run typecheck` crashes with `ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath
-'./lib/tsc' is not defined by exports in node_modules/typescript/package.json`.
-**Cause:** a dependency bump moved `typescript` from `^6.0.3` to `^7.x` — the Go-based compiler
-(tsgo), which no longer ships `lib/tsc`. `vue-tsc` 3.x patches into that file, so it needs the
-JS-based compiler (5.x/6.x).
-**Fix:** keep `typescript` pinned to `^6.0.3` in devDependencies until a vue-tsc release supports
-TS 7. Watch for this on future blanket dependency upgrades — `(v7.x available)` in bun's install
-output is the tell.
+`ERR_PACKAGE_PATH_NOT_EXPORTED: … './lib/tsc'` — TS 7 is the Go-based compiler and no longer ships `lib/tsc`, which `vue-tsc` 3.x patches into. Keep `typescript` pinned to `^6.0.3` until a vue-tsc release supports TS 7. On blanket dependency upgrades, `(v7.x available)` in bun's install output is the tell.
 
 ### 5. `@click` handlers that return a value
 
-**Symptom:** TS2322 "Type '(e: MouseEvent) => OpenedOverlay<...>' is not assignable to ... => void".
-**Cause:** `overlay.open()` / `modal.open()` return a value; Vue's click handler type wants `void`.
-**Fix:** wrap in a void arrow: `@click="() => modal.open()"` or a named `function openX() { modal.open() }`.
+`overlay.open()` / `modal.open()` return a value; Vue's click handler type wants `void` → TS2322. Wrap: `@click="() => modal.open()"`.
 
 ### 6. Reka `USelect` items cannot use `''` as a value
 
-**Symptom:** console error `A <SelectItem /> must have a value prop that is not an empty string`
-and the select misbehaves.
-**Cause:** Reka UI reserves the empty string for "cleared" state.
-**Fix:** use a non-empty sentinel for the "default" option — device pickers use `'default'`
-(Chrome's own `'default'` pseudo-device is filtered out of the list first). See
-[app/components/settings/SettingsVoice.vue](../app/components/settings/SettingsVoice.vue).
+Empty string is reserved for "cleared" — console error + broken select. Use a non-empty sentinel: device pickers use `'default'` (Chrome's own `'default'` pseudo-device filtered out of the list first). See [SettingsVoice.vue](../app/components/settings/SettingsVoice.vue).
 
 ### 7. `UDashboardGroup` storage prop value
 
-`storage="local"`, not `"localStorage"`. The valid values are `'cookie' | 'local'`.
+`storage="local"`, not `"localStorage"` (valid: `'cookie' | 'local'`).
 
-### 8. `UDashboardSidebarToggle` / `UDashboardSidebarCollapse` act on ALL sidebars
+### 8. `UDashboardSidebarToggle` / `Collapse` act on ALL sidebars
 
-**Symptom:** with two `UDashboardSidebar`s in the group (channels + members), one toggle button
-opens/collapses **both** panels at once (on mobile, both slideovers open together).
-**Cause:** the built-in buttons fire group-wide Nuxt hooks (`dashboard:sidebar:toggle` /
-`dashboard:sidebar:collapse`) that every sidebar in the `UDashboardGroup` listens to; the `side`
-prop only affects styling.
-**Fix:** don't use the built-in buttons. Drive each sidebar's `v-model:open` (mobile slideover)
-individually and hide desktop panels via `:ui="{ root: '... lg:hidden' }"` — see
-[app/composables/usePanels.ts](../app/composables/usePanels.ts),
-[app/components/SidebarToggle.vue](../app/components/SidebarToggle.vue),
-[app/components/MembersToggle.vue](../app/components/MembersToggle.vue). Also set
-`:toggle="false"` on `UDashboardNavbar` (its default hamburger fires the same global hook) and
-override the sidebar `#toggle` slot for the slideover close button. A right-side sidebar's
-slideover also needs `:menu="{ side: 'right' }"` or it slides in from the left.
+The built-in buttons (and `UDashboardNavbar`'s default hamburger) fire group-wide hooks every sidebar listens to — with two sidebars, one button opens/collapses both; the `side` prop only styles. Don't use them: drive each sidebar's `v-model:open` individually, hide desktop panels via `:ui="{ root: '... lg:hidden' }"`, set `:toggle="false"` on `UDashboardNavbar`, override the sidebar `#toggle` slot for the slideover close. A right-side slideover also needs `:menu="{ side: 'right' }"`. See [usePanels.ts](../app/composables/usePanels.ts), [SidebarToggle.vue](../app/components/SidebarToggle.vue), [MembersToggle.vue](../app/components/MembersToggle.vue).
 
 ### 9. `UDashboardPanel`: default slot content suppresses `#header`
 
-**Symptom:** a `UDashboardNavbar` inside `<template #header>` never renders — the channel page
-had an invisible navbar for a while.
-**Cause:** `UDashboardPanel` renders header/body/footer as _fallback_ of its default slot. Any
-direct child outside a named template becomes default-slot content and replaces all three.
-**Fix:** when using `#header`, put the page content in `<template #body>` (neutralize the body
-wrapper's own padding/scroll via `:ui="{ body: 'min-h-0 gap-0 p-0 sm:gap-0 sm:p-0' }"` if the
-page manages its own scrolling). See [app/pages/channels/[id].vue](../app/pages/channels/[id].vue).
+Header/body/footer render as _fallback_ of the default slot — any direct child outside a named template replaces all three (invisible navbar). When using `#header`, put page content in `<template #body>`; if the page manages its own scroll, neutralize body padding via `:ui="{ body: 'min-h-0 gap-0 p-0 sm:gap-0 sm:p-0' }"`. See [channels/[id].vue](../app/pages/channels/[id].vue).
 
 ### 10. fetch `BodyInit` rejects `Uint8Array`
 
-**Symptom:** TS2322 in `putObject` — `Uint8Array<ArrayBufferLike>` not assignable to `BodyInit`,
-and `SharedArrayBuffer` leaking into the union.
-**Fix:** copy into a fresh, plain-`ArrayBuffer`-backed view before passing to `fetch`:
-`const bytes = new Uint8Array(body.byteLength); bytes.set(body);` — see
-[server/utils/storage.ts](../server/utils/storage.ts).
+TS2322 in `putObject` (`SharedArrayBuffer` leaks into the union). Copy into a fresh plain-`ArrayBuffer`-backed view: `const bytes = new Uint8Array(body.byteLength); bytes.set(body);` — see [storage.ts](../server/utils/storage.ts).
 
-### 10b. Presigned-redirect attachments break when read in JS (CORS)
+### 10b. Presigned-redirect attachments break JS readers (CORS)
 
-**Symptom:** in production, voice messages fail to play — console shows
-`CORS Missing Allow Origin` for a `s3.cloud.ru/.../voice-message-*.webm?X-Amz-...` request.
-Images, video, and plain `<audio>` all work fine.
-**Cause:** `GET /api/attachments/:id` 302-redirects to a presigned S3 URL. Media elements render
-cross-origin responses **opaquely** (no CORS needed), but `VoiceMessagePlayer` reads the raw bytes
-in JS (`fetch(...).arrayBuffer()` → `decodeAudioData` for the waveform). Following the redirect and
-reading the body cross-origin requires `Access-Control-Allow-Origin`, which the bucket doesn't send.
-**Fix:** the endpoint takes a `?proxy` query param that streams the object bytes **through the app**
-(same-origin) instead of redirecting; the voice player fetches `?proxy`. Media elements keep the
-cheap redirect. See [server/api/attachments/[id].get.ts](../server/api/attachments/[id].get.ts),
-`getObject` in [server/utils/storage.ts](../server/utils/storage.ts). Alternative would have been
-bucket-side CORS config, but the proxy needs no infra dependency.
+`GET /api/attachments/:id` 302-redirects to a presigned S3 URL. Media elements load cross-origin responses opaquely (fine), but `VoiceMessagePlayer` reads raw bytes in JS (`fetch → decodeAudioData` for the waveform) → prod console `CORS Missing Allow Origin`; the bucket sends no CORS headers. Fix: the endpoint's `?proxy` query param streams bytes through the app (same-origin) — the voice player uses it, media elements keep the cheap redirect. See [attachments/[id].get.ts](../server/api/attachments/[id].get.ts), `getObject` in [storage.ts](../server/utils/storage.ts).
 
-### 10c. `sharp` (image previews) is native — dev on Node, prod on Bun
+### 10c. `sharp` (image previews) — native module: dual-runtime + Docker traps
 
-**Context:** in-chat image previews are generated with `sharp` in
-[server/utils/image-preview.ts](../server/utils/image-preview.ts). sharp is a native module, so it
-faces the dual-runtime concern from gotcha #2: **Node in dev, Bun in prod**.
-**How it's handled:**
+In-chat previews via `sharp` in [image-preview.ts](../server/utils/image-preview.ts). How it's handled:
 
-- **Dynamic import** (`await import('sharp')`) inside the server util, so it never enters the
-  client/SSR bundle and only loads server-side.
-- **`trustedDependencies`** in [package.json](../package.json) includes `sharp` so Bun installs
-  its platform packages. sharp 0.33+ ships prebuilt binaries as
-  `optionalDependencies` (`@img/sharp-*`), so the Dockerfile's `bun install --ignore-scripts` is
-  fine — no build step needed.
-- **Cross-platform lockfile trap:** we dev on **Windows** but the prod image is **linux/glibc**
-  (`oven/bun:1`, Debian). `bun.lock` must contain `@img/sharp-linux-x64` **and**
-  `@img/sharp-libvips-linux-x64` or the Docker `bun install --frozen-lockfile` won't fetch the
-  binary and sharp throws at runtime. `bun add sharp` on Windows _did_ record every platform (bun
-  locks the full graph, install filters by OS), so this works — but re-verify after any lockfile
-  regeneration.
-- **The Docker trap — libvips .so is invisible to Nitro's trace.** sharp's prebuilt addon
-  (`@img/sharp-linux-x64/…​.node`) **dlopens** `libvips-cpp.so` from the sibling
-  `@img/sharp-libvips-linux-x64` package at runtime. Nitro's static dependency trace can't follow a
-  dlopen, so the `.so` never lands in `.output`. A runtime image that ships **only `.output`**
-  (which ours originally did) will throw `Could not load the "sharp" module … cannot open shared object file on the first upload.`
-  **Fix (in the [Dockerfile](../Dockerfile)):** a `deps`stage
-  does`bun install --production`, the runtime stage copies that `node_modules`, and
-  `ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib`points the dynamic linker
-  at the `.so`. (Pattern proven on another Bun+sharp+Nitro project.)
-
-- **Verify under Bun before deploy:** the fastest local check is running the helper under the Bun
-  runtime directly (`bun run` a script that calls `generateImagePreview`) — done, it resizes to WebP
-  correctly. The full Docker path (libvips `.so` + `LD_LIBRARY_PATH`) is only proven by building the
-  image and uploading an image in the container / after deploy.
-- **Failure is non-fatal:** `generateImagePreview` never throws — on any error it returns null, the
-  upload still succeeds, and `?preview` falls back to the original.
+- Dynamic `await import('sharp')` in the server util — never enters the client/SSR bundle.
+- `trustedDependencies` includes `sharp`; 0.33+ ships prebuilds as `optionalDependencies` (`@img/sharp-*`), so the Dockerfile's `bun install --ignore-scripts` is fine.
+- **Lockfile trap:** dev is Windows, prod image is linux/glibc. `bun.lock` must contain `@img/sharp-linux-x64` **and** `@img/sharp-libvips-linux-x64` or the frozen Docker install skips the binary and sharp throws at runtime. Bun locks the full platform graph, but re-verify after any lockfile regeneration.
+- **Docker trap:** the sharp addon **dlopens** `libvips-cpp.so` from the sibling libvips package; Nitro's static trace can't follow dlopen, so a runtime image shipping only `.output` throws `Could not load the "sharp" module … cannot open shared object file` on first upload. Fix in the [Dockerfile](../Dockerfile): a `deps` stage runs `bun install --production`, the runtime stage copies that `node_modules`, and `ENV LD_LIBRARY_PATH=/app/node_modules/@img/sharp-libvips-linux-x64/lib` points the linker at the `.so`.
+- Verified under the Bun runtime locally (direct script run resizes to WebP); the full Docker path is only proven by building the image and uploading in the container.
+- Non-fatal: `generateImagePreview` never throws — returns null, upload succeeds, `?preview` falls back to the original.
 
 ## SSR / data
 
 ### 11. Session cookie not forwarded during SSR
 
-**Symptom:** channel list empty (or channel names render as `#`) on first server-rendered paint;
-works after client navigation.
-**Cause:** bare `$fetch` on the server doesn't carry the incoming request's session cookie.
-**Fix:** use `useRequestFetch()` for any authed fetch that can run during SSR. See
-[app/composables/useChannelsStore.ts](../app/composables/useChannelsStore.ts).
+Bare `$fetch` on the server drops the incoming request's session cookie → empty channel list / anonymous first paint; works after client nav. Use `useRequestFetch()` for any authed fetch that can run during SSR. See [useChannelsStore.ts](../app/composables/useChannelsStore.ts).
 
 ### 12. Playwright fills the login form before hydration
 
-**Symptom:** submit shows "Invalid input: expected string, received undefined" — form state empty.
-**Cause:** filling inputs before Vue hydrates doesn't populate the reactive form model.
-**Fix (test-side):** wait for hydration, then fill (re-fill if the first attempt landed too early).
-Not an app bug.
+Form model stays empty → "expected string, received undefined" on submit. Test-side fix: wait for hydration, then fill (re-fill if the first attempt landed early). Not an app bug.
 
 ## Localization
 
 ### 13. Cyrillic in `statusMessage` breaks Node
 
-**Symptom:** requests with Russian `createError({ statusMessage: 'Только...' })` fail oddly.
-**Cause:** HTTP reason phrases must be ASCII; Node rejects non-ASCII.
-**Fix:** put Russian text in `message`, keep `statusMessage` ASCII or omit it. Clients read
-`err.data.message`. The one exception is `server/api/livekit/webhook.post.ts` — machine-facing, so
-its messages stay English.
+HTTP reason phrases must be ASCII. Russian text goes in `message` (clients read `err.data.message`); keep `statusMessage` ASCII or omit. Exception: `server/api/livekit/webhook.post.ts` is machine-facing, stays English.
 
 ## LiveKit / voice (local dev)
 
 ### 14. Webhooks can't resolve the app
 
-**Symptom:** LiveKit log: `dial tcp: lookup host.docker.internal on 8.8.8.8:53: no such host`;
-sidebar voice roster never populates.
-**Fix:** run the container with `--add-host=host.docker.internal:host-gateway`.
+LiveKit log: `lookup host.docker.internal … no such host`; voice roster never populates. Run the container with `--add-host=host.docker.internal:host-gateway`.
 
-### 15. Vite blocks the webhook host
+### 15. Vite blocks the webhook host (403)
 
-**Symptom:** container reaches the app but gets HTTP 403.
-**Cause:** Vite dev server host allowlist.
-**Fix:** `vite.server.allowedHosts: ['host.docker.internal']` in `nuxt.config.ts` (already set),
-and run `nuxt dev --host` so it binds all interfaces.
+`vite.server.allowedHosts: ['host.docker.internal']` in `nuxt.config.ts` (already set), and run `nuxt dev --host`.
 
 ### 16. Browsers on the host can't reach RTC media
 
-**Symptom:** signaling connects, then immediately disconnects; `WebSocket ... 7880 ... refused`
-and RTC never establishes. LiveKit advertises its container-internal IP (172.17.x.x).
-**Fix:** pass `--node-ip 127.0.0.1` as a **CLI flag** to `livekit-server`.
-**Trap within the trap:** `node_ip: 127.0.0.1` as a config-file _key_ does NOT work — LiveKit
-exits with `could not parse config: field node_ip not found`. It must be the CLI flag.
-**Second trap:** the value must be an **IP, not a hostname**. `--node-ip host.docker.internal`
-silently falls back to the container IP (startup log shows `nodeIP: 172.x.x.x` instead of your
-value), so the browser still can't reach RTC and ICE fails with no obvious cause. Always use
-`127.0.0.1` (works on Docker Desktop Win/Mac and native Linux — the host kernel forwards
-loopback UDP to the published RTC ports).
+LiveKit advertises its container-internal IP (172.17.x.x) → signaling connects, then drops. Pass `--node-ip 127.0.0.1` as a **CLI flag** to `livekit-server`. Traps: `node_ip` as a config-file key crashes the server (`field node_ip not found`); a hostname value (`host.docker.internal`) is **silently ignored** — startup log shows the container IP as `nodeIP` and ICE fails with no obvious cause. Always a literal IP; `127.0.0.1` works on Docker Desktop Win/Mac and native Linux.
 
 ### 17. Screen share can't be tested headless
 
-Headless Chromium has no screen to capture, so the video path is unverified. The publish/subscribe
-plumbing is identical to the audio path (which IS verified). Test in a headed browser or after deploy.
+Headless Chromium has no screen to capture. Publish/subscribe plumbing is identical to the (verified) audio path. Test headed or after deploy.
 
 ### 18. Firefox ICE fails, Chrome works (mDNS + loopback TURN)
 
-**Symptom:** in Firefox, voice connects to signaling then drops with
-`WebRTC: ICE failed, your TURN server appears to be broken`. Chrome on the same
-machine works perfectly.
-**Cause (two-part):** (1) Firefox obfuscates its own local ICE candidates as
-mDNS `*.local` hostnames, which the containerized LiveKit can't resolve — in the
-LiveKit logs the remote candidates show up as `[filtered] udp host :port` (no
-IP). So direct ICE can't pair. (2) The built-in TURN relay (which would give
-Firefox a non-mDNS relay candidate) is advertised at the node IP, and with the
-default `--node-ip 127.0.0.1` Firefox **refuses TURN allocations to loopback**
-(STUN works, but the authenticated Allocate fails). Chrome doesn't obfuscate for
-localhost origins, so it never needs TURN and is unaffected.
-**Fix:** set `LIVEKIT_NODE_IP` to your machine's LAN IP in `.env` (e.g.
-`192.168.1.x`). [compose.dev.yaml](../compose.dev.yaml) passes it to LiveKit as
-`--node-ip`, so the built-in TURN is advertised at a non-loopback address and
-Firefox allocates successfully. The browser must reach that IP on the published
-RTC/TURN ports (it can — UDP forwarding to the host LAN IP works on Docker
-Desktop). Find your IP with `ipconfig` (Windows) / `ip addr` (Linux). Chrome
-works with or without it; Firefox needs it.
-**Trap:** LiveKit v1.x has NO `turn_servers` config key for external relays
-(`could not parse config: field turn_servers not found`). Use the built-in
-`turn:` section in [livekit.dev.yaml](../livekit.dev.yaml). And `--node-ip` must
-be an IP — a hostname (`host.docker.internal`) is silently ignored and falls
-back to the container IP.
-**Manual fallback:** if `LIVEKIT_NODE_IP` is unset, Firefox also works by
-setting `media.peerconnection.ice.obfuscate_host_addresses` = `false` in
-`about:config` (reveals real local IPs so direct ICE pairs without TURN).
+Firefox connects to signaling then drops with `ICE failed, your TURN server appears to be broken`; Chrome on the same machine is fine. Two causes: (1) Firefox obfuscates local ICE candidates as mDNS `*.local` hostnames, which containerized LiveKit can't resolve (LiveKit logs show `[filtered] udp host :port`), so direct ICE can't pair; (2) with `--node-ip 127.0.0.1` the built-in TURN relay is advertised at loopback, and Firefox refuses TURN allocations to loopback. Chrome doesn't obfuscate for localhost origins, never needs TURN.
+**Fix:** set `LIVEKIT_NODE_IP` to your machine's LAN IP in `.env` (`ipconfig` / `ip addr`) — [compose.dev.yaml](../compose.dev.yaml) passes it as `--node-ip`, so TURN gets a non-loopback address. Chrome works either way.
+**Traps:** LiveKit v1.x has no `turn_servers` config key (`field turn_servers not found`) — use the built-in `turn:` section in [livekit.dev.yaml](../livekit.dev.yaml); `--node-ip` must be an IP, not a hostname (see #16).
+**Manual fallback:** Firefox `about:config` → `media.peerconnection.ice.obfuscate_host_addresses = false`.
 
 ## Client / PWA
 
-### 19. A leftover service worker from a previous app hijacks the origin
+### 19. Leftover service worker from a previous app hijacks the origin
 
-**Symptom:** the main page shows a _different, old app_ (this origin previously hosted Stoat, a
-self-hosted Discord alternative); a hard reload flashes the correct app (redirects to `/login`),
-but normal navigations keep serving the stale shell. Every user who opened the old app is affected.
-**Cause:** a PWA service worker outlives the app that registered it. It keeps controlling its scope
-and serving its cached app shell. Hard reload bypasses the SW for the top-level navigation only.
-**Fix:** this app ships **no** service worker, so any registration can only be stale. A client
-plugin [app/plugins/unregister-sw.client.ts](../app/plugins/unregister-sw.client.ts) unregisters
-every worker, clears Cache Storage, and reloads once (guarded via `sessionStorage`) if one is
-currently controlling the page — cleaning up all users automatically. Manual one-off: DevTools →
-Application → Service Workers → Unregister, then Clear site data.
+The origin previously hosted another app (Stoat); its SW outlives it and keeps serving the stale cached shell — hard reload only bypasses the top-level navigation. This app ships **no** SW, so any registration is stale: [unregister-sw.client.ts](../app/plugins/unregister-sw.client.ts) unregisters every worker, clears Cache Storage, and reloads once (sessionStorage-guarded) when a worker controls the page. Manual: DevTools → Application → Service Workers → Unregister + Clear site data.
 
 ## Telegram notifications
 
-### 20. The prod host filters Telegram — notifications go through a separate relay
+### 20. Prod host filters Telegram — notifications go through a separate relay
 
-**Symptom:** on the VPS, `setWebhook`/`sendMessage` at boot fail with `ConnectionRefused`; after an
-IPv4 pin got outbound working, `getWebhookInfo` still shows `"Connection timed out"` and linking/
-replies never arrive — even though the site is reachable from the public internet.
-**Cause:** the prod host (`…cloud.ru`) filters Telegram traffic in **both** directions.
-`api.telegram.org` resolved to IPv6-only (no working v6 egress; Bun's fetch doesn't fall back to
-v4), and inbound webhook delivery from Telegram's servers to the public endpoint is dropped. The
-block is specific to Telegram's network path, not the firewall or Caddy.
-**Fix:** the app does **not** talk to Telegram directly. A standalone `telegram-relay/` service runs
-on a host with clean Telegram access and is the only thing that touches `api.telegram.org`; the app
-reaches the relay over ordinary HTTP (`NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET`), and
-Telegram updates come back in via `POST /api/telegram/ingest`. See
-[adr/0006 "Update: relay transport"](adr/0006-telegram-notifications.md) and
-[telegram-relay/README.md](../telegram-relay/README.md). For local dev, point `NUXT_TELEGRAM_RELAY_URL`
-at a relay instance (or leave it blank to no-op the feature).
+The VPS (`…cloud.ru`) blocks Telegram **both ways**: `api.telegram.org` resolves IPv6-only (no working v6 egress; Bun's fetch won't fall back to v4) and inbound webhook delivery is dropped — even though the site is publicly reachable. The app never talks to Telegram directly: the standalone stateless `telegram-relay/` service (hosted where Telegram is reachable) is the only thing touching `api.telegram.org`; the app reaches it over plain HTTP (`NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET`) and updates come back via `POST /api/telegram/ingest`. See [ADR 0006 "Update: relay transport"](adr/0006-telegram-notifications.md) and [telegram-relay/README.md](../telegram-relay/README.md). Local dev: point at a relay instance, or leave unset to no-op the feature.
 
 ## Deploy notes worth remembering
 
-- Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_;
-  RTC media flows directly over the UDP range (LiveKit runs on host networking in prod).
-- Firewall: 80/443 tcp, 7881 tcp (RTC fallback), 3478 udp (built-in TURN — Firefox
-  - symmetric-NAT clients), 50000–60000 udp (RTC media). Do **not** expose 3000 or
-    7880 — loopback/proxied only. The TURN relay range (57000–57100) stays internal
-    (SFU↔TURN share the host), so it needs no firewall hole.
-- Prod smoke test locally: `bun --bun nuxt build` then run `.output/server/index.mjs` under Bun with
-  `NUXT_DATABASE_URL` / `NUXT_MIGRATIONS_DIR` set — this exercises the exact Bun + postgres.js +
-  migration path the container uses.
+- Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).
+- Firewall: 80/443 tcp, 7881 tcp (RTC fallback), 3478 udp (built-in TURN — Firefox + symmetric-NAT clients), 50000–60000 udp (RTC media). Do **not** expose 3000 or 7880. TURN relay range 57000–57100 stays internal (SFU↔TURN share the host).
+- Local prod smoke test: `bun --bun nuxt build`, then run `.output/server/index.mjs` under Bun with `NUXT_DATABASE_URL` / `NUXT_MIGRATIONS_DIR` set — the exact Bun + postgres.js + migration path the container uses.
