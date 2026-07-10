@@ -43,6 +43,17 @@ and [compose.yaml](../compose.yaml).
 **Fix:** give `$fetch` an explicit generic — `$fetch<ChannelDto[]>('/api/channels')` — or use
 `useRequestFetch<T>()`.
 
+### 4b. `typescript@7` (Go-based tsc) breaks `nuxt typecheck`
+
+**Symptom:** `bun run typecheck` crashes with `ERR_PACKAGE_PATH_NOT_EXPORTED: Package subpath
+'./lib/tsc' is not defined by exports in node_modules/typescript/package.json`.
+**Cause:** a dependency bump moved `typescript` from `^6.0.3` to `^7.x` — the Go-based compiler
+(tsgo), which no longer ships `lib/tsc`. `vue-tsc` 3.x patches into that file, so it needs the
+JS-based compiler (5.x/6.x).
+**Fix:** keep `typescript` pinned to `^6.0.3` in devDependencies until a vue-tsc release supports
+TS 7. Watch for this on future blanket dependency upgrades — `(v7.x available)` in bun's install
+output is the tell.
+
 ### 5. `@click` handlers that return a value
 
 **Symptom:** TS2322 "Type '(e: MouseEvent) => OpenedOverlay<...>' is not assignable to ... => void".
