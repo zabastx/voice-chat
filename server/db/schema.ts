@@ -28,8 +28,9 @@ export const members = pgTable('members', {
 	role: text('role', { enum: ['admin', 'moderator', 'member'] })
 		.notNull()
 		.default('member'),
-	// Telegram bridge. chatId is null until the member links their account; it is
-	// a SECRET — never surfaced in memberDto or the session cookie (see adr/0006).
+	// Telegram bridge. chatId is null until the member links their account; the raw
+	// chatId and link token are SECRETS — never surfaced in memberDto or the session
+	// cookie; only the derived `telegramNotifications` boolean is public (see adr/0006).
 	telegramChatId: text('telegram_chat_id'),
 	telegramNotificationsEnabled: boolean('telegram_notifications_enabled').notNull().default(true),
 	// single-use deep-link token; cleared once the bot consumes `/start <token>`

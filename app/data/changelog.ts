@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.16.0',
+		date: '2026-07-10',
+		title: 'Значок Telegram в списке участников',
+		changes: [
+			'Рядом с именем участника показывается значок Telegram, если он получает уведомления в Telegram',
+			'Значок обновляется в реальном времени при подключении, отключении или переключении уведомлений'
+		]
+	},
+	{
 		version: '0.15.2',
 		date: '2026-07-06',
 		title: 'Горячая клавиша поиска',

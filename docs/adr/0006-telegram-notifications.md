@@ -57,6 +57,13 @@ is broadcast to everyone via `member.updated`) nor the sealed session cookie. A 
 status is exposed only through the authenticated `GET /api/me/telegram`. Any new code that returns
 Member rows to clients must not include the telegram columns.
 
+**Update (2026-07-10, v0.16.0):** the invariant is relaxed for one derived field. `memberDto` now
+carries `telegramNotifications: boolean` (`telegram_chat_id` set AND notifications enabled), so any
+authenticated Member can see who is reachable via Telegram — it powers the Telegram icon in the
+members panel and rides along inside `DmConversationDto`. The raw `telegram_chat_id` and the link
+token remain secrets exactly as above; every Telegram state change (link, unlink, toggle, 403
+auto-unlink) now broadcasts a `member.updated` frame so the icon stays live.
+
 ## Consequences
 
 - Reply-from-Telegram is a first-class Message: same DTO, same audience isolation as a DM, same

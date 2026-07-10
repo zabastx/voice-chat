@@ -63,6 +63,9 @@
 							<UAvatar :alt="name(member)" size="2xs" :src="member.avatarUrl ?? undefined" />
 						</UChip>
 						<span class="text-muted truncate">{{ name(member) }}</span>
+						<UTooltip v-if="member.telegramNotifications" text="Получает уведомления в Telegram">
+							<UIcon class="text-dimmed size-3.5 shrink-0" name="i-simple-icons-telegram" />
+						</UTooltip>
 					</button>
 				</UDropdownMenu>
 			</section>
@@ -85,6 +88,9 @@
 						>
 							<UAvatar :alt="name(member)" size="2xs" :src="member.avatarUrl ?? undefined" />
 							<span class="text-muted truncate">{{ name(member) }}</span>
+							<UTooltip v-if="member.telegramNotifications" text="Получает уведомления в Telegram">
+								<UIcon class="text-dimmed size-3.5 shrink-0" name="i-simple-icons-telegram" />
+							</UTooltip>
 						</button>
 					</UDropdownMenu>
 				</section>

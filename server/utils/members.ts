@@ -5,6 +5,8 @@ interface MemberRow {
 	avatarId: string | null
 	role: Role
 	createdAt: Date
+	telegramChatId: string | null
+	telegramNotificationsEnabled: boolean
 }
 
 export function memberDto(row: MemberRow): MemberDto {
@@ -14,7 +16,8 @@ export function memberDto(row: MemberRow): MemberDto {
 		displayName: row.displayName,
 		avatarUrl: row.avatarId ? `/api/members/${row.id}/avatar?v=${row.avatarId}` : null,
 		role: row.role,
-		createdAt: row.createdAt.toISOString()
+		createdAt: row.createdAt.toISOString(),
+		telegramNotifications: !!row.telegramChatId && row.telegramNotificationsEnabled
 	}
 }
 

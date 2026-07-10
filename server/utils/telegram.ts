@@ -43,7 +43,7 @@ export async function tgSendMessage(
 // (403) so a member who blocked the bot doesn't re-link with notifications still
 // firing into the void; the manual unlink endpoint leaves the flag untouched.
 export async function clearTelegramLink(memberId: string, disableNotifications = false) {
-	await useDb()
+	const [member] = await useDb()
 		.update(schema.members)
 		.set({
 			telegramChatId: null,
@@ -52,6 +52,8 @@ export async function clearTelegramLink(memberId: string, disableNotifications =
 			...(disableNotifications ? { telegramNotificationsEnabled: false } : {})
 		})
 		.where(eq(schema.members.id, memberId))
+		.returning()
+	if (member) wsBroadcast({ type: 'member.updated', member: memberDto(member) })
 }
 
 // Telegram caps a media caption at 1024 chars (vs 4096 for sendMessage); text

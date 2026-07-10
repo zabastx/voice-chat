@@ -9,7 +9,9 @@ export default defineEventHandler(async (event) => {
 			displayName: schema.members.displayName,
 			avatarId: schema.members.avatarId,
 			role: schema.members.role,
-			createdAt: schema.members.createdAt
+			createdAt: schema.members.createdAt,
+			telegramChatId: schema.members.telegramChatId,
+			telegramNotificationsEnabled: schema.members.telegramNotificationsEnabled
 		})
 		.from(schema.members)
 		.orderBy(asc(schema.members.createdAt))

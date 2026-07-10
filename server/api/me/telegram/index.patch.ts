@@ -9,9 +9,11 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
 	const body = await readValidatedBody(event, bodySchema.parse)
-	await useDb()
+	const [member] = await useDb()
 		.update(schema.members)
 		.set({ telegramNotificationsEnabled: body.notificationsEnabled })
 		.where(eq(schema.members.id, user.id))
+		.returning()
+	if (member) wsBroadcast({ type: 'member.updated', member: memberDto(member) })
 	return { notificationsEnabled: body.notificationsEnabled }
 })

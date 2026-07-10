@@ -62,7 +62,8 @@ export default defineEventHandler(async (event) => {
 					gt(schema.members.telegramLinkTokenExpiresAt, new Date())
 				)
 			)
-			.returning({ id: schema.members.id })
+			.returning()
+		if (member) wsBroadcast({ type: 'member.updated', member: memberDto(member) })
 		await tgSendMessage(chat, member ? HINTS.linked : HINTS.badToken)
 		return { ok: true }
 	}

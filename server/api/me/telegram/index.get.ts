@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm'
 
-// The caller's own Telegram link status. Telegram fields are secrets, so they
-// are only ever exposed here (never in memberDto / the session). See adr/0006.
+// The caller's own Telegram link status. The raw chat id and link token are
+// secrets (never in memberDto / the session); memberDto carries only the derived
+// `telegramNotifications` boolean. See adr/0006.
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
 	const config = useRuntimeConfig()

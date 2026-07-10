@@ -53,7 +53,9 @@ export async function dmConversationDto(
 			displayName: schema.members.displayName,
 			avatarId: schema.members.avatarId,
 			role: schema.members.role,
-			createdAt: schema.members.createdAt
+			createdAt: schema.members.createdAt,
+			telegramChatId: schema.members.telegramChatId,
+			telegramNotificationsEnabled: schema.members.telegramNotificationsEnabled
 		})
 		.from(schema.channelParticipants)
 		.innerJoin(schema.members, eq(schema.channelParticipants.memberId, schema.members.id))

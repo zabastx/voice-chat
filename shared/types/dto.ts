@@ -67,6 +67,9 @@ export interface MemberDto {
 	avatarUrl: string | null
 	role: Role
 	createdAt: string
+	// derived: linked to Telegram AND notifications enabled. The chat id and link
+	// token stay server-only secrets (adr/0006); only this boolean is public.
+	telegramNotifications: boolean
 }
 
 // a 1:1 direct-message conversation, from the perspective of the current member;
