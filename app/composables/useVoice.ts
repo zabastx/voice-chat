@@ -22,6 +22,17 @@ let localCameraTrack: LocalTrack | null = null
 // one cached ShareSettingsModal controller; created lazily on first share click
 type ShareOverlayController = ReturnType<ReturnType<typeof useOverlay>['create']>
 let shareOverlay: ShareOverlayController | null = null
+// guards re-entrant share clicks: reopening the dialog would overwrite the first
+// open()'s resolvePromise and orphan its awaiting caller forever. Reset in a finally.
+let shareDialogOpen = false
+
+// Safari 17 has a getDisplayMedia bug where passing any resolution constraint yields a
+// low-res capture (see livekit-client ScreenShareCaptureOptions docs), so we omit the
+// resolution there and let capture run native; other browsers cap it to the preset's 1080.
+function isSafariBrowser(): boolean {
+	if (typeof navigator === 'undefined') return false
+	return /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent)
+}
 
 export function useVoice() {
 	const toast = useToast()
@@ -224,33 +235,39 @@ export function useVoice() {
 				sharing.value = room.localParticipant.isScreenShareEnabled
 				return
 			}
-			// open the pre-share dialog (quality preset). Confirm returns the chosen
-			// preset; cancel (or backdrop/Esc) returns undefined → no share attempt.
-			if (!shareOverlay) {
-				const overlay = useOverlay()
-				shareOverlay = overlay.create(ShareSettingsModal) as ShareOverlayController
+			// single-instance dialog: ignore clicks while it's already open
+			if (shareDialogOpen) return
+			shareDialogOpen = true
+			try {
+				// open the pre-share dialog (quality preset). Confirm returns the chosen
+				// preset; cancel (or backdrop/Esc) returns undefined → no share attempt.
+				if (!shareOverlay) {
+					const overlay = useOverlay()
+					shareOverlay = overlay.create(ShareSettingsModal) as ShareOverlayController
+				}
+				const instance = shareOverlay.open({ preset: prefs.value.screenSharePreset })
+				const chosen = (await instance.result) as ScreenSharePresetId | undefined
+				if (!chosen) return
+				// persist the choice so the next share dialog opens on the previous one —
+				// Preferences lives in localStorage and the prefs watcher auto-persists
+				prefs.value.screenSharePreset = chosen
+				// resolve the LiveKit ScreenSharePreset object from the user-facing id
+				const livekit = await import('livekit-client')
+				const presetMap = {
+					h1080fps15: livekit.ScreenSharePresets.h1080fps15,
+					h1080fps30: livekit.ScreenSharePresets.h1080fps30,
+					original: livekit.ScreenSharePresets.original
+				} satisfies Record<ScreenSharePresetId, (typeof livekit.ScreenSharePresets)['h1080fps15']>
+				const preset = presetMap[chosen]
+				await room.localParticipant.setScreenShareEnabled(
+					true,
+					{ audio: true, ...(isSafariBrowser() ? {} : { resolution: preset.resolution }) },
+					{ screenShareEncoding: preset.encoding }
+				)
+				sharing.value = room.localParticipant.isScreenShareEnabled
+			} finally {
+				shareDialogOpen = false
 			}
-			const prefs = usePreferences()
-			const instance = shareOverlay.open({ preset: prefs.value.screenSharePreset })
-			const chosen = (await instance.result) as ScreenSharePresetId | undefined
-			if (!chosen) return
-			// persist the choice so the next share dialog opens on the previous one —
-			// Preferences lives in localStorage and the prefs watcher auto-persists
-			prefs.value.screenSharePreset = chosen
-			// resolve the LiveKit ScreenSharePreset object from the user-facing id
-			const livekit = await import('livekit-client')
-			const presetMap = {
-				h1080fps15: livekit.ScreenSharePresets.h1080fps15,
-				h1080fps30: livekit.ScreenSharePresets.h1080fps30,
-				original: livekit.ScreenSharePresets.original
-			} satisfies Record<ScreenSharePresetId, (typeof livekit.ScreenSharePresets)['h1080fps15']>
-			const preset = presetMap[chosen]
-			await room.localParticipant.setScreenShareEnabled(
-				true,
-				{ audio: true, resolution: preset.resolution },
-				{ screenShareEncoding: preset.encoding }
-			)
-			sharing.value = room.localParticipant.isScreenShareEnabled
 		} catch {
 			// user dismissed the browser's share picker, or capture failed
 			sharing.value = room?.localParticipant.isScreenShareEnabled ?? false
