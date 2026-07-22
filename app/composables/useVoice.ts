@@ -1,5 +1,8 @@
 import type { LocalTrack, RemoteTrack, Room } from 'livekit-client'
 
+import ShareSettingsModal from '../components/ShareSettingsModal.vue'
+import type { ScreenSharePresetId } from './usePreferences'
+
 interface ScreenShareRef {
 	identity: string
 	name: string
@@ -16,6 +19,9 @@ const audioElements = new Set<HTMLMediaElement>()
 const remoteScreenTracks = new Map<string, RemoteTrack>()
 const remoteCameraTracks = new Map<string, RemoteTrack>()
 let localCameraTrack: LocalTrack | null = null
+// one cached ShareSettingsModal controller; created lazily on first share click
+type ShareOverlayController = ReturnType<ReturnType<typeof useOverlay>['create']>
+let shareOverlay: ShareOverlayController | null = null
 
 export function useVoice() {
 	const toast = useToast()
@@ -213,10 +219,40 @@ export function useVoice() {
 	async function toggleScreenShare() {
 		if (!room) return
 		try {
-			await room.localParticipant.setScreenShareEnabled(!sharing.value, { audio: true })
+			if (sharing.value) {
+				await room.localParticipant.setScreenShareEnabled(false)
+				sharing.value = room.localParticipant.isScreenShareEnabled
+				return
+			}
+			// open the pre-share dialog (quality preset). Confirm returns the chosen
+			// preset; cancel (or backdrop/Esc) returns undefined → no share attempt.
+			if (!shareOverlay) {
+				const overlay = useOverlay()
+				shareOverlay = overlay.create(ShareSettingsModal) as ShareOverlayController
+			}
+			const prefs = usePreferences()
+			const instance = shareOverlay.open({ preset: prefs.value.screenSharePreset })
+			const chosen = (await instance.result) as ScreenSharePresetId | undefined
+			if (!chosen) return
+			// persist the choice so the next share dialog opens on the previous one —
+			// Preferences lives in localStorage and the prefs watcher auto-persists
+			prefs.value.screenSharePreset = chosen
+			// resolve the LiveKit ScreenSharePreset object from the user-facing id
+			const livekit = await import('livekit-client')
+			const presetMap = {
+				h1080fps15: livekit.ScreenSharePresets.h1080fps15,
+				h1080fps30: livekit.ScreenSharePresets.h1080fps30,
+				original: livekit.ScreenSharePresets.original
+			} satisfies Record<ScreenSharePresetId, (typeof livekit.ScreenSharePresets)['h1080fps15']>
+			const preset = presetMap[chosen]
+			await room.localParticipant.setScreenShareEnabled(
+				true,
+				{ audio: true, resolution: preset.resolution },
+				{ screenShareEncoding: preset.encoding }
+			)
 			sharing.value = room.localParticipant.isScreenShareEnabled
 		} catch {
-			// user dismissed the share picker
+			// user dismissed the browser's share picker, or capture failed
 			sharing.value = room?.localParticipant.isScreenShareEnabled ?? false
 		}
 	}

@@ -6,6 +6,14 @@ export interface LocalVolume {
 	muted: boolean // local mute, independent of `volume` so it preserves the level
 }
 
+// screen-share quality preset lives here (not in @nuxt/ui modal props) because
+// the value is persisted as the next-share default; only the dialog pre-fills it.
+// Three LiveKit ScreenSharePresets are exported to the user as named Russian modes:
+//   - 'h1080fps15'  «Текст и презентации»  (default; crisp static content)
+//   - 'h1080fps30'  «Видео и игры»          (smooth motion)
+//   - 'original'   «Без сжатия»             (native capture, no downscale)
+export type ScreenSharePresetId = 'h1080fps15' | 'h1080fps30' | 'original'
+
 export interface Preferences {
 	micDeviceId: string | null
 	speakerDeviceId: string | null
@@ -17,6 +25,9 @@ export interface Preferences {
 	localVolumes: Record<string, LocalVolume>
 	// last app version whose changelog the user has seen; null until first load seeds it
 	lastSeenVersion: string | null
+	// last-used screen-share quality preset, applied at share start; persisted so the
+	// pre-share dialog pre-fills from it and the next share opens on the prior choice
+	screenSharePreset: ScreenSharePresetId
 }
 
 const STORAGE_KEY = 'voice-chat:prefs'
@@ -30,7 +41,8 @@ function defaults(): Preferences {
 		desktopNotifications: false,
 		showOfflineMembers: false,
 		localVolumes: {},
-		lastSeenVersion: null
+		lastSeenVersion: null,
+		screenSharePreset: 'h1080fps15'
 	}
 }
 
