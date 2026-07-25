@@ -23,6 +23,16 @@ export function useRealtime() {
 			voice.value = event.voice
 		}
 		for (const handler of handlers) handler(event)
+
+		// Deleting a member cascades away far more than the member row: their
+		// messages, their reactions on everyone else's messages, and the resolved
+		// parent behind every reply that pointed at one of their messages. None of
+		// that is derivable on the client — ReplyRefDto carries no authorId, and
+		// `deleted: true` is computed server-side when the parent is missing — so
+		// filtering the local list by authorId would trade stale messages for stale
+		// quotes and reaction counts. Reuse the reconnect signal instead: one
+		// refetch per view, on an action an admin takes maybe twice a year.
+		if (event.type === 'member.deleted') dispatch({ type: 'resync' })
 	}
 
 	async function connect() {
