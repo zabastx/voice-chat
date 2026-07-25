@@ -111,7 +111,13 @@ M6 (rich link previews) stays deferred; URLs are clickable via M1 autolink.
 - Non-media uploads forced to download on redirect and `?proxy` paths
   (`Content-Disposition: attachment` + nosniff) — doesn't render inline
 - Chunked upload without Content-Length → 411; Caddy `request_body max_size 30MB` + security headers
-- S3 objects (incl. WebP previews) deleted with channel/member deletion, not just rows
+- S3 objects (incl. WebP previews) deleted with channel/member deletion, not just rows. Member
+  deletion also takes their `kind='dm'` channels (the `channels` row has no member FK, so those
+  survived every deletion with one participant — invisible via `dmConversationDto`'s null, but
+  accumulating). The S3 sweep covers both participants: dropping the channel cascades the
+  **surviving** member's messages away too, and their attachment keys are not in the `uploader_id`
+  query. Verified with a file uploaded from each side — both left the bucket, DB rows and MinIO
+  objects still 5/5 in sync afterwards
 - Channel-list query → correlated index-seek subquery; new indexes on `attachments.message_id`
   and `messages.reply_to_id`
 - Hourly stale-upload sweep (was boot-only); redirects carry `Cache-Control: private, max-age=240`;
