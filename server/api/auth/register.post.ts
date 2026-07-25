@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
 			passwordHash,
 			role: isFirst ? ('admin' as const) : ('member' as const)
 		}
-		await tx.insert(schema.members).values(created)
+		const [inserted] = await tx.insert(schema.members).values(created).returning()
 
 		if (isFirst) {
 			await tx.insert(schema.channels).values([
@@ -70,11 +70,19 @@ export default defineEventHandler(async (event) => {
 				.where(eq(schema.invites.token, body.invite))
 		}
 
-		return created
+		return inserted!
 	})
 
 	await setUserSession(event, {
 		user: { id: member.id, username: member.username, role: member.role }
 	})
+
+	// everyone already online holds a client-side member directory that is only
+	// refetched on page load — announce the newcomer so they show up in the members
+	// panel, @mention autocomplete and DM picker without a refresh. Kept after the
+	// session is sealed: the row is already committed and the invite spent, so a
+	// throw from here must not cost the newcomer their login.
+	wsBroadcast({ type: 'member.updated', member: memberDto(member) })
+
 	return { id: member.id, username: member.username, role: member.role }
 })

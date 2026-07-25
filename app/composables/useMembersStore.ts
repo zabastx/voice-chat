@@ -1,5 +1,7 @@
 // client-side member directory: avatars and display names for all rendering,
-// kept live via the `member.updated` WS event
+// kept live via the `member.updated` WS event — an upsert, so it also carries
+// members who registered after this page loaded. Removals are not broadcast yet:
+// a deleted member lingers here until the next refresh/`resync`.
 export function useMembersStore() {
 	const members = useState<Record<string, MemberDto>>('members', () => ({}))
 	const requestFetch = useRequestFetch()
