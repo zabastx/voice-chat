@@ -18,6 +18,13 @@ export default defineEventHandler(async (event) => {
 		.from(schema.attachments)
 		.where(eq(schema.attachments.uploaderId, id))
 	await db.delete(schema.members).where(eq(schema.members.id, id))
+
+	// drop their sockets before announcing it, so the removed member never gets
+	// their own deletion event — every remaining client prunes them from the
+	// member directory and from any DM list without a reload
+	wsDisconnectMember(id)
+	wsBroadcast({ type: 'member.deleted', memberId: id })
+
 	const keys = uploads.flatMap((a) => (a.previewKey ? [a.objectKey, a.previewKey] : [a.objectKey]))
 	if (member.avatarId) keys.push(avatarObjectKey(member.id, member.avatarId))
 	await deleteAttachmentObjects(keys)

@@ -53,6 +53,20 @@ export function wsSendToMembers(memberIds: string[], event: ServerEvent) {
 	}
 }
 
+// Close every socket belonging to `memberId`. WS auth happens once, at connect
+// time, so a deleted member's socket would otherwise keep receiving every
+// broadcast for the life of the process — the same leak the session-member
+// middleware closes for HTTP. The client reconnects, its ticket request 401s,
+// and it backs off.
+export function wsDisconnectMember(memberId: string) {
+	for (const [id, client] of clients) {
+		if (client.memberId !== memberId) continue
+		clients.delete(id)
+		client.peer.close(4003, 'Member removed')
+	}
+	wsBroadcast({ type: 'presence', online: wsOnline() })
+}
+
 export function wsMemberFor(peer: Peer): WsMember | undefined {
 	return clients.get(peer.id)
 }

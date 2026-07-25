@@ -103,6 +103,9 @@ export type ServerEvent =
 	| { type: 'message.updated'; message: MessageDto }
 	| { type: 'message.deleted'; channelId: string; messageId: string }
 	| { type: 'member.updated'; member: MemberDto }
+	// the member row is gone — clients drop them from the directory (and from any
+	// DM list). Never delivered to the removed member: their sockets are closed first
+	| { type: 'member.deleted'; memberId: string }
 	// a DM conversation involving the recipient was just created — sent only to
 	// its two participants so their sidebar list updates without a refetch
 	| { type: 'dm.created'; conversation: DmConversationDto }

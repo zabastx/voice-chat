@@ -80,6 +80,17 @@ export function useDmStore() {
 				}
 				break
 			}
+			case 'member.deleted': {
+				// deleting a member cascades their participant row away, so the
+				// conversation is already gone from GET /api/dm — mirror that here
+				const orphaned = conversations.value.filter((c) => c.member.id === event.memberId)
+				if (!orphaned.length) break
+				conversations.value = conversations.value.filter((c) => c.member.id !== event.memberId)
+				if (orphaned.some((c) => c.channelId === activeChannelId.value)) {
+					await navigateTo('/')
+				}
+				break
+			}
 			case 'resync': {
 				await refresh()
 				break

@@ -31,9 +31,14 @@ Two sessions for realtime tests: `playwright-cli -s=danil open http://localhost:
 - **Aria snapshots hide UIcon** (`aria-hidden` spans) — a missing icon in `snapshot` output
   proves nothing. Check the DOM: `--raw eval "() => !!document.querySelector('button ... [class*=telegram]')"`,
   or screenshot.
+- **Never `open` twice in one session — use `goto`.** A second `open` starts a fresh context and
+  silently drops the session cookie, so the tab lands back on /login and every `/api/*` 401s. It
+  looks exactly like a session bug in the app.
 - Members panel: offline members hidden by default — click «Показать не в сети» (persists in
-  localStorage). `#members` is not a DOM id; find rows via `document.querySelectorAll('button')`
-  + textContent.
+  localStorage). The panel root is `#voice-chat-sidebar-members` (not `#members`); rows are
+  `#voice-chat-sidebar-members button`, section headers are its `p` elements («В сети — N»).
+- Registration for a throwaway account: `POST /api/invites` from the admin session, then
+  `goto /register?invite=<token>` (there is no `/invite/<token>` route).
 - Call authed APIs as a user from their browser session: `--raw eval "async () => fetch('/api/…')…"` —
   much easier than cookie juggling in PowerShell.
 - Attachment 502s in console = S3 endpoint mismatch, usually pre-existing env noise, not your bug.
@@ -42,3 +47,11 @@ Two sessions for realtime tests: `playwright-cli -s=danil open http://localhost:
 
 Undo any direct SQL you ran (e.g. `telegram_chat_id`), close sessions
 (`playwright-cli -s=… close`), delete snapshot/screenshot scratch files from the repo dir.
+
+Deleting a test member leaves an orphaned `kind='dm'` channel behind (the channel row has no
+member FK, so only the participant rows cascade). It is invisible in the UI but real in the DB —
+clean it up:
+
+```bash
+docker exec voicechat-postgres psql -U postgres -d voicechat -c "DELETE FROM channels c WHERE c.kind='dm' AND (SELECT count(*) FROM channel_participants p WHERE p.channel_id=c.id) < 2;"
+```
