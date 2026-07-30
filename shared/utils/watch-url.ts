@@ -11,6 +11,10 @@ export interface ParsedWatchSource {
 	// start offset from `&t=` / `?t=`, 0 when absent. Only meaningful for VODs;
 	// a live broadcast ignores it.
 	startSec: number
+	// Shorts are 9:16 and embed at that aspect; every other form is 16:9. The
+	// player itself doesn't care (a Short is an ordinary embeddable video id),
+	// so this exists purely so a chat embed can size its card without guessing.
+	kind: 'video' | 'shorts'
 }
 
 // YouTube ids are exactly 11 chars of base64url. Anchored so a longer garbage
@@ -47,7 +51,9 @@ export function parseWatchUrl(input: string): ParsedWatchSource | null {
 	if (!trimmed) return null
 
 	// a bare video id, pasted straight from the address bar's `v=` param
-	if (VIDEO_ID.test(trimmed)) return { source: 'youtube', ref: trimmed, startSec: 0 }
+	if (VIDEO_ID.test(trimmed)) {
+		return { source: 'youtube', ref: trimmed, startSec: 0, kind: 'video' }
+	}
 
 	let url: URL
 	try {
@@ -64,7 +70,7 @@ export function parseWatchUrl(input: string): ParsedWatchSource | null {
 	// youtu.be/<id>
 	if (host === 'youtu.be') {
 		const ref = segments[0]
-		return ref && VIDEO_ID.test(ref) ? { source: 'youtube', ref, startSec } : null
+		return ref && VIDEO_ID.test(ref) ? { source: 'youtube', ref, startSec, kind: 'video' } : null
 	}
 
 	const hosts = ['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com']
@@ -72,14 +78,14 @@ export function parseWatchUrl(input: string): ParsedWatchSource | null {
 
 	// youtube.com/watch?v=<id>
 	const v = url.searchParams.get('v')
-	if (v && VIDEO_ID.test(v)) return { source: 'youtube', ref: v, startSec }
+	if (v && VIDEO_ID.test(v)) return { source: 'youtube', ref: v, startSec, kind: 'video' }
 
 	// youtube.com/{shorts,live,embed,v}/<id> — Shorts and premieres/streams
 	// resolve to ordinary embeddable video ids, so they need no special casing
 	// beyond the path shape.
 	const [prefix, ref] = segments
 	if (prefix && ref && ['shorts', 'live', 'embed', 'v'].includes(prefix) && VIDEO_ID.test(ref)) {
-		return { source: 'youtube', ref, startSec }
+		return { source: 'youtube', ref, startSec, kind: prefix === 'shorts' ? 'shorts' : 'video' }
 	}
 
 	return null

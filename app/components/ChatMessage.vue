@@ -64,6 +64,14 @@
 					class="chat-prose text-default text-sm break-words"
 					v-html="rendered"
 				/>
+				<YoutubeEmbed
+					v-for="embed in embeds"
+					:key="embed.videoId"
+					:kind="embed.kind"
+					:start-sec="embed.startSec"
+					:url="embed.url"
+					:video-id="embed.videoId"
+				/>
 				<MessageAttachments v-if="message.attachments.length" :attachments="message.attachments" />
 
 				<div v-if="message.reactions.length" class="mt-1 flex flex-wrap gap-1">
@@ -210,6 +218,12 @@ const rendered = computed(() => {
 })
 const authorName = computed(
 	() => author.value?.displayName ?? author.value?.username ?? props.message.authorName
+)
+
+// Read off the plain markdown pass, not `rendered` — embeds don't depend on the
+// member directory, and renderMarkdown is memoized so this costs a cache hit.
+const embeds = computed(() =>
+	messageEmbeds(renderMarkdown(props.message.content), props.message.content)
 )
 
 const draft = ref('')
