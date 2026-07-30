@@ -16,6 +16,13 @@ useHead({
 		{ rel: 'manifest', href: '/manifest.webmanifest' },
 		{ rel: 'apple-touch-icon', href: '/icon-192.png' }
 	],
-	meta: [{ name: 'theme-color', content: '#059669' }]
+	meta: [
+		{ name: 'theme-color', content: '#059669' },
+		// private site — see robots.txt / X-Robots-Tag in nuxt.config.ts
+		{
+			name: 'robots',
+			content: 'noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate'
+		}
+	]
 })
 </script>

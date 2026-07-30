@@ -11,8 +11,28 @@
 		Content-Security-Policy "frame-ancestors 'none'"
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "geolocation=(), payment=()"
+		# private site — robots.txt + <meta name="robots"> say the same thing;
+		# this is the copy a crawler sees even when it fetched first and read later
+		X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate, noai, noimageai"
 	}
-	reverse_proxy app:3000
+
+	# Named AI-training / assistant / SEO crawlers get nothing at all — the app is
+	# never reached, so a scraper that ignores robots.txt still burns no resources.
+	# robots.txt itself stays reachable for them on purpose: a 4xx on robots.txt is
+	# specified to mean "no restrictions", which is the opposite of the intent.
+	# Only explicit crawler UAs are listed; generic clients (curl, browsers, the
+	# LiveKit/Telegram machinery) must keep working.
+	@crawlers {
+		not path /robots.txt
+		header_regexp User-Agent "(?i)(gptbot|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|anthropic-ai|google-extended|googleother|applebot-extended|meta-externalagent|meta-externalfetcher|facebookbot|perplexitybot|perplexity-user|ccbot|bytespider|amazonbot|cohere-ai|cohere-training-data-crawler|mistralai-user|duckassistbot|youbot|ai2bot|diffbot|imagesiftbot|omgili|timpibot|pangubot|webzio-extended|kangaroo bot|scrapy|ahrefsbot|semrushbot|mj12bot|dotbot|petalbot|dataforseobot|blexbot|seekportbot)"
+	}
+	handle @crawlers {
+		respond 403
+	}
+
+	handle {
+		reverse_proxy app:3000
+	}
 }
 
 # LiveKit signaling (WebSocket) — RTC media itself flows directly over UDP/TCP

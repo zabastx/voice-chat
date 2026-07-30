@@ -25,6 +25,21 @@ export default defineNuxtConfig({
 		}
 	},
 
+	// Private site: never index, never archive, never train on it. `robots.txt`
+	// stops well-behaved crawlers before they fetch anything, so this header is
+	// what covers the ones that fetch first and read directives after — and it
+	// applies to API responses and static assets too, which robots.txt rules do
+	// not describe individually. `noai`/`noimageai` are non-standard but honoured
+	// by a few scrapers; the rest is the Google/Bing set.
+	routeRules: {
+		'/**': {
+			headers: {
+				'X-Robots-Tag':
+					'noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate, noai, noimageai'
+			}
+		}
+	},
+
 	vite: {
 		server: {
 			// lets the LiveKit dev container deliver webhooks to the dev server
