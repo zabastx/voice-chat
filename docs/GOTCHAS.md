@@ -20,6 +20,8 @@ Running dev under Bun (`bun --bun nuxt dev`) routes WS upgrades through Nuxt's d
 
 SSR 500 after heavy HMR churn; not a real code error. Stop the server, delete `.nuxt`, `bun run postinstall`, restart.
 
+Presents as any auto-import being "not defined" (`useRealtime is not defined`, `useToast is not defined`) with hydration-mismatch warnings alongside. **Adding a new auto-imported composable while the dev server is running is a reliable trigger** — hit twice while building Watch Together (`useWatch.ts`, `useWatchStage.ts`). Restart after creating one rather than debugging the phantom error.
+
 ### 4. vue-tsc "Excessive stack depth" on `$fetch('/api/...')`
 
 TS2321 — Nuxt's typed-route inference chokes without an explicit return type. Give `$fetch` a generic: `$fetch<ChannelDto[]>('/api/channels')`, or use `useRequestFetch<T>()`.

@@ -9,6 +9,28 @@
 // stall, not to chase frame accuracy nobody can perceive.
 export const DRIFT_TOLERANCE_SEC = 2
 
+// How long an attribution notice stays on the player before fading.
+export const NOTICE_MS = 2500
+
+/**
+ * A transient "who just did that" caption, drawn inside the player rather than
+ * as an app-wide toast.
+ *
+ * Toasts were wrong for this: during a seek war they stack up over whatever
+ * the member is actually reading, and they are least welcome exactly when
+ * they fire most. The player is on screen the whole time anyone is in the
+ * Audience — docked in the call view, or as the mini player everywhere else —
+ * so an in-player caption reaches the same people while staying attached to
+ * the thing it describes.
+ */
+export interface WatchNotice {
+	// bumped per notice so a repeat of the same text still re-triggers the
+	// enter transition instead of sitting there unchanged
+	id: number
+	text: string
+	icon: string
+}
+
 /**
  * The Playback Anchor as this device sees it. `at` is a `performance.now()`
  * reading taken when the DTO ARRIVED, never a server timestamp — the server
@@ -33,6 +55,8 @@ let anchorStarted = false
 // that "no session is playing" and "we are in a different room" stay
 // distinguishable — the anchor is null in both cases
 let lastChannelId: string | null = null
+let noticeTimer: ReturnType<typeof setTimeout> | null = null
+let noticeSeq = 0
 
 export function useWatch() {
 	const realtime = useRealtime()
@@ -42,6 +66,17 @@ export function useWatch() {
 	const { user } = useUserSession()
 
 	const anchor = useState<LocalAnchor | null>('watch-anchor', () => null)
+	const notice = useState<WatchNotice | null>('watch-notice', () => null)
+
+	function showNotice(text: string, icon: string) {
+		noticeSeq += 1
+		notice.value = { id: noticeSeq, text, icon }
+		if (noticeTimer) clearTimeout(noticeTimer)
+		noticeTimer = setTimeout(() => {
+			notice.value = null
+			noticeTimer = null
+		}, NOTICE_MS)
+	}
 
 	// The Watch Session for the channel we are connected to. Watching requires
 	// being in the room — the Audience is the roster (adr/0009).
@@ -86,8 +121,17 @@ export function useWatch() {
 
 					if (!next) {
 						anchor.value = null
+						// a pending caption belongs to a player that no longer exists
+						if (noticeTimer) clearTimeout(noticeTimer)
+						noticeTimer = null
+						notice.value = null
 						// Was this the session ending, or did we just leave the room?
 						// Both null the session; only the first is worth announcing.
+						//
+						// The one message that stays a toast: the player is gone by the
+						// time it fires, so there is nothing to draw it on — and in mini
+						// mode the video otherwise just vanishes from the corner with no
+						// explanation. Fires once per session, not per control action.
 						if (prev && channelId && sameRoom) {
 							toast.add({ title: 'Совместный просмотр остановлен', icon: 'i-lucide-tv' })
 						}
@@ -126,18 +170,18 @@ export function useWatch() {
 					// Russian verbs agree with the actor's gender; a noun phrase doesn't,
 					// so these read correctly whoever performed the action.
 					if (!prev || prev.ref !== next.ref) {
-						toast.add({ title: `Включено видео · ${who}`, icon: 'i-lucide-tv' })
+						showNotice(`Включено видео · ${who}`, 'i-lucide-tv')
 					} else if (prev.paused !== next.paused) {
-						toast.add({
-							title: next.paused ? `Пауза · ${who}` : `Продолжаем · ${who}`,
-							icon: next.paused ? 'i-lucide-pause' : 'i-lucide-play'
-						})
+						showNotice(
+							next.paused ? `Пауза · ${who}` : `Продолжаем · ${who}`,
+							next.paused ? 'i-lucide-pause' : 'i-lucide-play'
+						)
 					} else if (
 						!next.live &&
 						predicted !== null &&
 						Math.abs(predicted - next.positionSec) > DRIFT_TOLERANCE_SEC
 					) {
-						toast.add({ title: `Перемотка · ${who}`, icon: 'i-lucide-fast-forward' })
+						showNotice(`Перемотка · ${who}`, 'i-lucide-fast-forward')
 					}
 				},
 				{ immediate: true }
@@ -204,6 +248,7 @@ export function useWatch() {
 		session,
 		sessionFor,
 		anchor,
+		notice,
 		expectedPosition,
 		start,
 		stop,

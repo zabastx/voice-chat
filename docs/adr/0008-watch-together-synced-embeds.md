@@ -121,6 +121,14 @@ Consequences worth knowing:
   watch stops or you leave voice. Clicking it navigates back to the channel.
 - Its transparent overlay deliberately swallows clicks on YouTube's own controls. A 320px player
   is too small to aim at them, and the room's controls live in the call view the click returns to.
+- **Attribution is drawn on the player, not as an app-wide toast.** «Пауза · Данил» and friends are
+  transient captions in the corner of the video. Toasts were wrong for this: during a seek war they
+  stack over whatever the member is actually reading, so they are least welcome exactly when they
+  fire most. The mini player is what makes the caption viable — the player is on screen for
+  everyone in the Audience, so a caption reaches the same people a toast would while staying
+  attached to the thing it describes. The single exception is «Совместный просмотр остановлен»,
+  which stays a toast because the player is gone by the time it fires; it announces once per
+  session rather than once per control action.
 - Tracking the docked box needs an rAF loop, not a `ResizeObserver`: collapsing the sidebar moves
   the stage without resizing it.
 

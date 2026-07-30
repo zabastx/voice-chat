@@ -197,8 +197,9 @@ cancel at dialog or browser picker leaves `sharing=false` with no spurious toast
   attribute is the IFrame API's own list **including `autoplay`** — confirming the removed
   `setAttribute` was narrowing it
 - Playback agreed within **0.6 s** at steady state; pause from maks froze danil within **0.04 s**;
-  resume propagated with the toast «Продолжаем · maks» (neutral phrasing, attributed to the actor,
-  never to the observer)
+  resume propagated with «Продолжаем · maks» (neutral phrasing, attributed to the actor, never to
+  the observer) as a transient caption **on the player**, not an app-wide toast — re-verified after
+  the change: caption present bottom-left, zero toasts, faded within ~2.5s
 - **Seek propagates**: maks → 420 s pulled danil from 165 s to 434 s, delta **0.77 s**
 - **Late joiner in sync**: maks left, video ran 25 s, maks rejoined **by clicking «Подключиться»**
   (not by reloading — reload takes the fresh `snapshot` path and hides the bug) → delta **1.89 s**,

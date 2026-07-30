@@ -17,6 +17,30 @@
 		-->
 		<div ref="hostEl" class="h-full w-full [&>iframe]:h-full [&>iframe]:w-full" />
 
+		<!--
+			Who just did what, drawn on the player instead of as an app-wide toast:
+			during a seek war toasts stack up over whatever the member is reading,
+			and they are least welcome exactly when they fire most. Bottom-left,
+			subtitle-style — clear of the mini player's title bar, and YouTube's own
+			control bar only appears on mouse-move so any overlap is brief.
+			pointer-events-none so it never eats a click meant for the player.
+		-->
+		<Transition
+			enter-active-class="transition-opacity duration-150"
+			enter-from-class="opacity-0"
+			leave-active-class="transition-opacity duration-500"
+			leave-to-class="opacity-0"
+		>
+			<div
+				v-if="watchSession.notice.value"
+				:key="watchSession.notice.value.id"
+				class="pointer-events-none absolute bottom-3 left-3 z-10 flex max-w-[85%] items-center gap-1.5 rounded-md bg-black/75 px-2.5 py-1.5 text-xs text-white"
+			>
+				<UIcon class="size-3.5 shrink-0" :name="watchSession.notice.value.icon" />
+				<span class="truncate">{{ watchSession.notice.value.text }}</span>
+			</div>
+		</Transition>
+
 		<!-- embedding refused by the uploader, or the video is gone -->
 		<div
 			v-if="error"
