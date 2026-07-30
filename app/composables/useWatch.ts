@@ -47,6 +47,13 @@ interface LocalAnchor {
 	at: number
 	paused: boolean
 	live: boolean
+	// slope: seconds of video per second of wall clock
+	rate: number
+}
+
+/** 1 -> «1x», 1.5 -> «1.5x» — trailing zeros are noise at these values. */
+export function formatRate(rate: number): string {
+	return `${Number(rate.toFixed(2))}×`
 }
 
 // exactly one anchoring watcher regardless of how many components call this
@@ -159,7 +166,8 @@ export function useWatch() {
 						positionSec: next.positionSec,
 						at: realtime.watchAt.value,
 						paused: next.paused,
-						live: next.live
+						live: next.live,
+						rate: next.rate
 					}
 					const wasSameRoom = sameRoom
 					lastChannelId = channelId
@@ -176,6 +184,11 @@ export function useWatch() {
 							next.paused ? `Пауза · ${who}` : `Продолжаем · ${who}`,
 							next.paused ? 'i-lucide-pause' : 'i-lucide-play'
 						)
+					} else if (prev.rate !== next.rate) {
+						// MUST be tested before the seek branch below: changing the rate
+						// re-anchors the position, so the predicted-vs-actual gap can
+						// exceed the tolerance and be mis-captioned as a scrub.
+						showNotice(`Скорость ${formatRate(next.rate)} · ${who}`, 'i-lucide-gauge')
 					} else if (
 						!next.live &&
 						predicted !== null &&
@@ -195,7 +208,7 @@ export function useWatch() {
 		if (!a) return 0
 		// a paused session is frozen; a live one has no shared timeline at all
 		if (a.paused || a.live) return a.positionSec
-		return a.positionSec + (performance.now() - a.at) / 1000
+		return a.positionSec + ((performance.now() - a.at) / 1000) * a.rate
 	}
 
 	function channelId(): string | null {
@@ -219,13 +232,17 @@ export function useWatch() {
 	}
 
 	/** Push a local play/pause/seek to everyone else. */
-	async function pushState(paused: boolean, positionSec: number) {
+	async function pushState(paused: boolean, positionSec: number, rate?: number) {
 		const id = channelId()
 		if (!id) return
 		try {
 			await $fetch(`/api/channels/${id}/watch/state`, {
 				method: 'POST',
-				body: { paused, positionSec: Math.max(0, positionSec) }
+				body: {
+					paused,
+					positionSec: Math.max(0, positionSec),
+					...(rate === undefined ? {} : { rate })
+				}
 			})
 		} catch {
 			// the session was stopped or replaced under us; the next broadcast

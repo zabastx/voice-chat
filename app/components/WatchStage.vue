@@ -187,6 +187,7 @@ async function createPlayer() {
 		events: {
 			onReady: onPlayerReady,
 			onStateChange: onPlayerStateChange,
+			onPlaybackRateChange: onPlayerRateChange,
 			onError: onPlayerError
 		}
 	})
@@ -274,6 +275,21 @@ function onPlayerStateChange(event: YT.StateChangeEvent) {
 	void watchSession.pushState(paused, position)
 }
 
+/**
+ * Speed changed locally (YouTube's own settings menu). Unlike a seek, this
+ * needs no heuristic: the API reports it explicitly, so it is unambiguous
+ * user intent and can be broadcast as-is.
+ */
+function onPlayerRateChange(event: YT.PlaybackRateChangeEvent) {
+	if (!player || !ready) return
+	// the slope just changed; re-baseline or the tick spanning the change
+	// measures half at the old rate and half at the new one and looks like a jump
+	notePosition(player.getCurrentTime())
+	if (applyingRemote || props.session.live) return
+	if (Math.abs(event.data - props.session.rate) < 0.01) return
+	void watchSession.pushState(props.session.paused, player.getCurrentTime(), event.data)
+}
+
 // --- applying remote state ---------------------------------------------
 
 /**
@@ -291,15 +307,22 @@ function applyAnchor() {
 	const state = player.getPlayerState()
 	// position enforcement waits until live-ness is settled; seeking a live
 	// stream to the anchor strands the viewer at the start of the DVR window
+	// speed is applied before position: seeking first and then changing the
+	// slope would leave the freshly-sought position immediately stale
+	const needsRate = !session.live && Math.abs(player.getPlaybackRate() - session.rate) > 0.01
 	const canSeek = !session.live && liveKnown && state !== 0
 	const expected = watchSession.expectedPosition()
 	const needsSeek = canSeek && Math.abs(player.getCurrentTime() - expected) > DRIFT_TOLERANCE_SEC
 	const needsPause = session.paused && state === 1
 	const needsPlay = !session.paused && (state === 2 || state === 5 || state === -1)
-	if (!needsSeek && !needsPause && !needsPlay) return
+	if (!needsSeek && !needsPause && !needsPlay && !needsRate) return
 
 	applyRemote(() => {
 		if (!player) return
+		if (needsRate) {
+			player.setPlaybackRate(session.rate)
+			notePosition(player.getCurrentTime())
+		}
 		if (needsSeek) {
 			player.seekTo(expected, true)
 			notePosition(expected)
@@ -384,7 +407,12 @@ function correctDrift() {
 	//   advance ≫ elapsed  → jumped ahead  → SEEK
 	//   advance < 0        → jumped back   → SEEK
 	//   0 ≤ advance ≪ elapsed → stalled/ad → DRIFT: correct locally, say nothing
-	const jumpedAhead = advance > elapsed + DRIFT_TOLERANCE_SEC
+	// Scaled by the player's OWN rate, not the session's: `advance` was produced
+	// by this player, so the question is whether ITS playhead moved consistently
+	// with ITS speed. They differ only when the player refused the session rate,
+	// and using the session's would then read the mismatch as a scrub.
+	const localRate = player.getPlaybackRate() || 1
+	const jumpedAhead = advance > elapsed * localRate + DRIFT_TOLERANCE_SEC
 	const jumpedBack = advance < -DRIFT_TOLERANCE_SEC
 	if (jumpedAhead || jumpedBack) {
 		void watchSession.pushState(false, position)

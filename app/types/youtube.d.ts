@@ -27,6 +27,9 @@ declare global {
 			getPlayerState(): PlayerState
 			getVideoData(): VideoData | undefined
 			setVolume(volume: number): void
+			setPlaybackRate(rate: number): void
+			getPlaybackRate(): number
+			getAvailablePlaybackRates(): number[]
 			loadVideoById(options: { videoId: string; startSeconds?: number }): void
 			destroy(): void
 		}
@@ -36,6 +39,10 @@ declare global {
 		}
 		interface StateChangeEvent extends PlayerEvent {
 			data: PlayerState
+		}
+		interface PlaybackRateChangeEvent extends PlayerEvent {
+			// the newly selected rate; YouTube offers 0.25–2, varying per video
+			data: number
 		}
 		// 2 invalid id · 5 html5 error · 100 removed/private · 101,150 embedding disabled
 		interface ErrorEvent extends PlayerEvent {
@@ -48,6 +55,7 @@ declare global {
 			events?: {
 				onReady?: (event: PlayerEvent) => void
 				onStateChange?: (event: StateChangeEvent) => void
+				onPlaybackRateChange?: (event: PlaybackRateChangeEvent) => void
 				onError?: (event: ErrorEvent) => void
 			}
 		}

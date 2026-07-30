@@ -91,6 +91,14 @@ HTTP reason phrases must be ASCII. Russian text goes in `message` (clients read 
 
 LiveKit log: `lookup host.docker.internal … no such host`; voice roster never populates. Run the container with `--add-host=host.docker.internal:host-gateway`.
 
+### 14b. Empty voice roster ⇒ «Сначала подключитесь к голосовому каналу»
+
+Two symptoms, one cause. If `participant_joined` webhooks don't reach the app, `voiceRooms()` stays empty — so **nobody appears in the channel, not even yourself** — and because Watch Together authorizes on roster presence, every watch command 403s with «Сначала подключитесь к голосовому каналу» while the UI plainly shows you connected. Diagnose from the LiveKit side, not the app: `docker logs voicechat-livekit | grep webhook` shows the exact URL it is posting to and whether it succeeded.
+
+**`livekit.dev.yaml` is baked into the running container.** Editing (or `git checkout`-ing) the file changes nothing until you recreate it — `docker compose -f compose.dev.yaml up -d --force-recreate livekit`. Verify what is actually live with `docker exec voicechat-livekit sed -n '13,17p' /etc/livekit.yaml`, not by reading the repo file.
+
+The webhook URL also hardcodes **port 3000**, so a dev server started on any other port silently gets no webhooks. Beware that VSCodium's port-forward proxy can hold 3000 (gotcha #19's neighbour): `Get-NetTCPConnection -LocalPort 3000 -State Listen` can show _two_ owners, and the app you reach in the browser may not be the one LiveKit is posting to.
+
 ### 15. Vite blocks the webhook host (403)
 
 `vite.server.allowedHosts: ['host.docker.internal']` in `nuxt.config.ts` (already set), and run `nuxt dev --host`.

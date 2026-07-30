@@ -19,6 +19,9 @@ interface WatchSession {
 	// compares its own clock against a server timestamp (adr/0008).
 	positionSec: number
 	anchoredAt: number
+	// slope of the anchor: how many seconds of video pass per second of wall
+	// clock. Every position calculation below multiplies by it.
+	rate: number
 }
 
 const sessions = new Map<string, WatchSession>()
@@ -27,7 +30,7 @@ const sessions = new Map<string, WatchSession>()
 // stored position is already current; a live one has no meaningful timeline.
 function resolvedPosition(session: WatchSession): number {
 	if (session.paused || session.live) return session.positionSec
-	return session.positionSec + (Date.now() - session.anchoredAt) / 1000
+	return session.positionSec + ((Date.now() - session.anchoredAt) / 1000) * session.rate
 }
 
 function toDto(session: WatchSession): WatchDto {
@@ -38,6 +41,7 @@ function toDto(session: WatchSession): WatchDto {
 		live: session.live,
 		title: session.title,
 		actorId: session.actorId,
+		rate: session.rate,
 		// rounded to ms; sub-millisecond precision is noise against a 2s threshold
 		positionSec: Math.max(0, Math.round(resolvedPosition(session) * 1000) / 1000)
 	}
@@ -73,7 +77,9 @@ export function watchStart(
 		title: null,
 		actorId,
 		positionSec: source.startSec,
-		anchoredAt: Date.now()
+		anchoredAt: Date.now(),
+		// a fresh video always starts at normal speed
+		rate: 1
 	})
 	broadcastWatch()
 }
@@ -82,17 +88,46 @@ export function watchStop(channelId: string) {
 	if (sessions.delete(channelId)) broadcastWatch()
 }
 
-/** Play / pause / seek. Re-anchors against the server clock. */
+/** Play / pause / seek / speed. Re-anchors against the server clock. */
 export function watchSetState(
 	channelId: string,
 	actorId: string,
-	next: { paused: boolean; positionSec: number }
+	next: { paused: boolean; positionSec: number; rate?: number }
 ) {
 	const session = sessions.get(channelId)
 	if (!session) return false
+
+	// Drop pushes that change nothing.
+	//
+	// A client steering its player in response to a broadcast can re-emit the
+	// very event that caused it, once the local echo guard's window has expired
+	// — YouTube's onPlaybackRateChange in particular can lag. That echo carries
+	// no new state but does carry a new actor, and the resulting redundant
+	// broadcast *steals the attribution*: clients batch it with the original and
+	// see only the last one, whose actor is themselves, so everyone suppresses
+	// the caption as their own action and nobody is told who did it.
+	//
+	// Ignoring no-ops kills the whole class server-side, where it can't be
+	// defeated by one client's timing. A real seek moves the playhead far
+	// further than this tolerance; anything inside it was not worth telling the
+	// room about anyway.
+	const nextRate = next.rate ?? session.rate
+	const NOOP_POSITION_SEC = 1
+	if (
+		session.paused === next.paused &&
+		Math.abs(nextRate - session.rate) < 0.01 &&
+		Math.abs(resolvedPosition(session) - next.positionSec) < NOOP_POSITION_SEC
+	) {
+		return true
+	}
+
 	session.paused = next.paused
 	session.positionSec = Math.max(0, next.positionSec)
+	// Re-anchoring is what makes a rate change safe: the slope changes only from
+	// this instant, so the seconds already elapsed keep their old rate instead
+	// of being retroactively recomputed at the new one.
 	session.anchoredAt = Date.now()
+	if (next.rate !== undefined) session.rate = next.rate
 	session.actorId = actorId
 	broadcastWatch()
 	return true

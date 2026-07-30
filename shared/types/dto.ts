@@ -105,6 +105,12 @@ export interface WatchDto {
 	// re-anchors on its own performance.now() at arrival, so a wrong device clock
 	// cannot poison the drift correction (adr/0008).
 	positionSec: number
+	// Playback speed, shared like everything else — it is the SLOPE of the anchor,
+	// so every calculation that advances a position over elapsed time has to
+	// multiply by it. Left unsynced it isn't merely absent: a member watching at
+	// 2x advances ~6s per 3s tick, which the drift check reads as a seek and
+	// broadcasts, dragging the whole room forward with them.
+	rate: number
 	// a live broadcast has no meaningful shared timeline: every viewer rides the
 	// live edge. Set by whoever started it once their player reports it; until
 	// then it's false and the session syncs as a VOD. Live sessions ignore

@@ -211,6 +211,10 @@ cancel at dialog or browser picker leaves `sharing=false` with no spurious toast
 - Stop propagates to both clients with «Совместный просмотр остановлен»; player errors render the
   Russian failure state with a recovery button on both clients rather than a blank frame
 - Sidebar «смотрят вместе» icon visible to a member who has **left** the room while others watch
+- **Playback speed** syncs both ways (maks -> 2x pulled danil to 2x); at 2x both advance ~2s of
+  video per wall second and the delta CONVERGES (3.02 -> 1.51 -> 1.13s) rather than running away —
+  that is the rate-scaled drift test working, since unscaled every 3s tick at 2x fires a false
+  seek broadcast that drags the room; caption «Скорость 1.5× · maks» confirmed on the observer
 - **Mini player**: clicking through to #general kept the _same_ iframe element alive and playback
   continuous (37.5s -> 68.3s -> 75.0s, never restarting); docked 925x639 -> mini 320x180 pinned
   bottom-right; drag landed exactly on the expected pixel and persisted to `watchMiniPos`; a 2px

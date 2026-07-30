@@ -7,7 +7,10 @@ const bodySchema = z.object({
 		.number()
 		.finite()
 		.min(0)
-		.max(24 * 3600)
+		.max(24 * 3600),
+	// YouTube offers 0.25–2; the bound is a sanity guard, not a whitelist, since
+	// the set of available rates varies per video. Absent means "unchanged".
+	rate: z.number().finite().min(0.25).max(4).optional()
 })
 
 export default defineEventHandler(async (event) => {

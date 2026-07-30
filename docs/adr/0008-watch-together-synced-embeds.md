@@ -57,6 +57,20 @@ Consequences of that one choice, in the order they bite:
   clock, and a seek is a jump that doesn't. Only the jump is broadcast. Get this wrong in the
   obvious direction and one viewer's ad break drags everyone else backwards, which is the exact
   opposite of the guarantee above.
+- **Playback speed is part of the anchor, because it is its SLOPE.** Every calculation that
+  advances a position over elapsed time multiplies by `rate` — server resolve, client expected
+  position, and the seek-vs-drift test alike. Leaving speed unsynced is not neutral: a member at
+  2x advances ~6s per 3s tick, which the drift check reads as a seek and broadcasts, dragging the
+  whole room forward with them repeatedly. Unlike a seek this needs no heuristic — the embed
+  reports `onPlaybackRateChange` explicitly, so it is unambiguous intent. The jump test uses the
+  player's OWN rate rather than the session's, since `advance` was produced by that player; they
+  differ only when a player refused the session rate, and using the session's would read the
+  mismatch as a scrub.
+- **State pushes that change nothing are dropped server-side.** A client steering its player can
+  re-emit the event that caused it once the local echo window expires. That echo carries no new
+  state but a new actor, and the redundant broadcast would steal the attribution — clients batch
+  it with the original and see only the last one, whose actor is themselves. Ignoring no-ops kills
+  the class where one client's timing cannot defeat it.
 - **The anchor crosses the wire resolved, so client clock skew cannot poison it.** The server
   keeps `anchoredAt` internally on its own clock, but the DTO carries only the position as of
   send time; the client re-anchors on its own `performance.now()`. Comparing a server timestamp
