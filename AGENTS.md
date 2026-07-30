@@ -9,9 +9,13 @@ New here? Read this file, then [docs/PROGRESS.md](docs/PROGRESS.md) (status) and
 [CONTEXT.md](CONTEXT.md); the LiveKit decision in [docs/adr/0001](docs/adr/0001-self-hosted-livekit-sfu.md).
 
 **Always check [docs/PROGRESS.md](docs/PROGRESS.md) before starting and update it when you finish.**
-It is the single source of truth for what's built, verified, deployed, and still pending. When you
-ship a feature, verify something, or change deploy state, edit the relevant row/section in the same
-change — a stale PROGRESS.md is a bug.
+It is the index over the single source of truth for what's built, verified, deployed, and still
+pending — it holds the next steps and points at three detail files:
+[progress/decisions.md](docs/progress/decisions.md) (locked choices + deferred + milestones),
+[progress/features.md](docs/progress/features.md) (per-area build status), and
+[progress/verification.md](docs/progress/verification.md) (what was driven, what still isn't).
+When you ship a feature, verify something, or change deploy state, edit the relevant row/section in
+the same change — a stale progress doc is a bug.
 
 ## Run it
 
@@ -78,9 +82,11 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   (`@click="() => m.open()"`), or vue-tsc rejects the non-void return.
 - Quality gates: `bun run typecheck && bun run lint && bun run fmt`. All must stay green.
 - New UI strings: **Russian**. Dates via `ru-RU` locale (see [app/utils/format.ts](app/utils/format.ts)).
-- Keep [docs/PROGRESS.md](docs/PROGRESS.md) in sync with reality as part of the same change:
-  update the Feature status, Verification matrix, and Remaining work sections whenever you build,
-  verify, or deploy something.
+- Keep the progress docs in sync with reality as part of the same change: a build touches
+  [progress/features.md](docs/progress/features.md), a verification run adds to
+  [progress/verification.md](docs/progress/verification.md), a settled trade-off goes in
+  [progress/decisions.md](docs/progress/decisions.md), and finishing an item edits the next-steps
+  list in [docs/PROGRESS.md](docs/PROGRESS.md).
 - User-facing changes: bump `version` in [package.json](package.json) and prepend a Russian entry
   to [app/data/changelog.ts](app/data/changelog.ts) (newest first) in the same commit — it powers
   the "Что нового" badge/modal.
