@@ -100,6 +100,10 @@ M6 (rich link previews) stays deferred; URLs are clickable via M1 autolink.
   `boltun` reacts to that reply. Deleting `boltun` clears all four posts from maks's never-reloaded
   tab, flips the surviving reply's quote to «исходное сообщение удалено» and drops the 👍 chip —
   the last two are the cases local `authorId` filtering provably cannot reach
+- **v0.18.1 auth form validation**: tabbing through empty fields on `/login` and `/register` no longer
+  paints them red; submitting empty shows the Russian schema messages (was the zod default
+  «Invalid input: expected string, received undefined», because `UAuthForm` seeds state from
+  `field.defaultValue`, i.e. `undefined`); typing clears that field's error live after 300 ms
 - Settings modal: display name propagates live (old messages/SelfPanel), avatar
   upload→MinIO→presigned (5 render sites), wrong-password 400, mic level meter,
   localStorage prefs, Esc close

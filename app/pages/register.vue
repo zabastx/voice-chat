@@ -19,6 +19,7 @@
 				:schema="schema"
 				:submit="{ label: 'Создать аккаунт', block: true }"
 				:title="setup?.needsSetup ? 'Создание аккаунта админа' : 'Присоединяйтесь!'"
+				:validate-on="['input', 'change']"
 				icon="i-lucide-user-plus"
 				@submit="onSubmit"
 			>
@@ -53,11 +54,14 @@ const canRegister = computed(
 )
 
 const fields: AuthFormField[] = [
+	// defaultValue: '' — without it the field starts as `undefined` and zod reports its own
+	// "expected string, received undefined" instead of our Russian message.
 	{
 		name: 'username',
 		type: 'text',
 		label: 'Имя пользователя',
 		placeholder: 'Придумайте имя',
+		defaultValue: '',
 		required: true
 	},
 	{
@@ -65,6 +69,7 @@ const fields: AuthFormField[] = [
 		type: 'password',
 		label: 'Пароль',
 		placeholder: 'Минимум 8 символов',
+		defaultValue: '',
 		required: true
 	}
 ]

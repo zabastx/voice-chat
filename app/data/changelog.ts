@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.18.1',
+		date: '2026-07-30',
+		title: 'Формы входа и регистрации',
+		changes: [
+			'Пустые поля больше не подсвечиваются ошибкой, пока вы просто переходите между ними — проверка срабатывает при вводе и при отправке',
+			'Вместо английского «Invalid input: expected string, received undefined» показываются понятные подсказки на русском'
+		]
+	},
+	{
 		version: '0.18.0',
 		date: '2026-07-30',
 		title: 'Совместный просмотр YouTube',

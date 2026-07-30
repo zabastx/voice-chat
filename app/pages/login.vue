@@ -5,6 +5,7 @@
 				:fields="fields"
 				:schema="schema"
 				:submit="{ label: 'Войти', block: true }"
+				:validate-on="['input', 'change']"
 				description="Войдите в свой аккаунт."
 				icon="i-lucide-headphones"
 				title="С возвращением!"
@@ -26,11 +27,14 @@ import * as z from 'zod'
 definePageMeta({ layout: false })
 
 const fields: AuthFormField[] = [
+	// defaultValue: '' — without it the field starts as `undefined` and zod reports its own
+	// "expected string, received undefined" instead of our Russian message.
 	{
 		name: 'username',
 		type: 'text',
 		label: 'Имя пользователя',
 		placeholder: 'Ваше имя пользователя',
+		defaultValue: '',
 		required: true
 	},
 	{
@@ -38,6 +42,7 @@ const fields: AuthFormField[] = [
 		type: 'password',
 		label: 'Пароль',
 		placeholder: 'Ваш пароль',
+		defaultValue: '',
 		required: true
 	}
 ]
