@@ -92,10 +92,43 @@ export interface VoiceParticipant {
 
 export type VoiceRooms = Record<string, VoiceParticipant[]>
 
+// A Watch Session: shared playback intent for one Voice Channel (adr/0008).
+// Never media — every client renders its own embed and steers it to match.
+export interface WatchDto {
+	// only YouTube for now; the field exists so adding Twitch doesn't reshape the DTO
+	source: 'youtube'
+	// the YouTube video id
+	ref: string
+	paused: boolean
+	// PLAYBACK ANCHOR, resolved at send time — the position as of the moment this
+	// DTO was serialized, NOT a stored value plus a server timestamp. The client
+	// re-anchors on its own performance.now() at arrival, so a wrong device clock
+	// cannot poison the drift correction (adr/0008).
+	positionSec: number
+	// a live broadcast has no meaningful shared timeline: every viewer rides the
+	// live edge. Set by whoever started it once their player reports it; until
+	// then it's false and the session syncs as a VOD. Live sessions ignore
+	// positionSec entirely and sync only paused.
+	live: boolean
+	// display-only, for the sidebar and the stage header; filled in once any
+	// client's player reports it (the embed knows the title, we don't)
+	title: string | null
+	// member id of whoever last changed the state, for the «Данил перемотал» toast
+	actorId: string
+}
+
+// parallel to VoiceRooms, keyed by channel id. Deliberately NOT folded into
+// VoiceRooms: that's an array of participants with no room-level object, and a
+// Watch Session belongs to the room, not to any member (adr/0009).
+export type WatchRooms = Record<string, WatchDto>
+
 export type ServerEvent =
-	| { type: 'snapshot'; online: string[]; voice: VoiceRooms }
+	| { type: 'snapshot'; online: string[]; voice: VoiceRooms; watch: WatchRooms }
 	| { type: 'presence'; online: string[] }
 	| { type: 'voice.state'; voice: VoiceRooms }
+	// every connected client, not just the room's occupants — a Watch Session is
+	// an invitation, so it shows in the sidebar to people who haven't joined
+	| { type: 'watch.state'; watch: WatchRooms }
 	| { type: 'channel.created'; channel: ChannelDto }
 	| { type: 'channel.updated'; channel: ChannelDto }
 	| { type: 'channel.deleted'; channelId: string }

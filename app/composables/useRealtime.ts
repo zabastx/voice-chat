@@ -11,16 +11,29 @@ let started = false
 export function useRealtime() {
 	const online = useState<string[]>('rt-online', () => [])
 	const voice = useState<VoiceRooms>('rt-voice', () => ({}))
+	const watch = useState<WatchRooms>('rt-watch', () => ({}))
+	// performance.now() at the instant the current `watch` map ARRIVED. A watch
+	// DTO's position is only true as of its arrival — the server resolves it at
+	// send time — so anything counting forward from it must count from here, not
+	// from whenever a consumer happened to notice. Reading a stale map (e.g. on
+	// joining a channel long after the last broadcast) and treating it as fresh
+	// puts that client permanently behind everyone else.
+	const watchAt = useState<number>('rt-watch-at', () => 0)
 	const connected = useState<boolean>('rt-connected', () => false)
 
 	function dispatch(event: ServerEvent) {
 		if (event.type === 'snapshot') {
 			online.value = event.online
 			voice.value = event.voice
+			watch.value = event.watch
+			watchAt.value = performance.now()
 		} else if (event.type === 'presence') {
 			online.value = event.online
 		} else if (event.type === 'voice.state') {
 			voice.value = event.voice
+		} else if (event.type === 'watch.state') {
+			watch.value = event.watch
+			watchAt.value = performance.now()
 		}
 		for (const handler of handlers) handler(event)
 
@@ -111,5 +124,5 @@ export function useRealtime() {
 		}
 	}
 
-	return { online, voice, connected, start, stop, onEvent, send }
+	return { online, voice, watch, watchAt, connected, start, stop, onEvent, send }
 }

@@ -45,7 +45,12 @@ export default defineEventHandler(async (event) => {
 			}
 			break
 		case 'room_finished':
-			if (channelId) voiceRoomFinished(channelId)
+			if (channelId) {
+				voiceRoomFinished(channelId)
+				// the Audience emptied — freeze the Watch Session rather than
+				// ending it, so a network blip doesn't cost the film (adr/0009)
+				watchRoomFinished(channelId)
+			}
 			break
 	}
 	return { ok: true }

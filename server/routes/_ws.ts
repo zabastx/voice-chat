@@ -27,7 +27,10 @@ export default defineWebSocketHandler({
 				JSON.stringify({
 					type: 'snapshot',
 					online: wsOnline(),
-					voice: voiceRooms()
+					voice: voiceRooms(),
+					// late joiners get the current Playback Anchor for free — it
+					// rides the snapshot every client already receives (adr/0009)
+					watch: watchRooms()
 				} satisfies ServerEvent)
 			)
 			return
