@@ -59,13 +59,23 @@
 			</div>
 			<div class="flex flex-col gap-0.5">
 				<div v-for="channel in store.voiceChannels.value" :key="channel.id" class="group relative">
+					<!--
+						pe-9 keeps a lane clear on the right for the moderator menu, which is
+						absolutely positioned over this row and appears on hover (28px for the
+						button, 8px of gap to match the row's own gap-2). Reserving
+						the space rather than hiding what's underneath (the pattern the
+						unread dot on text channels uses) keeps the watch icon hoverable —
+						its tooltip carries the video title, so hiding it on hover would
+						make that title unreachable.
+					-->
 					<button
-						class="hover:bg-elevated flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm"
-						:class="
+						class="hover:bg-elevated flex w-full items-center gap-2 rounded-md py-1.5 text-sm"
+						:class="[
+							canModerate ? 'ps-2 pe-9' : 'px-2',
 							store.activeChannelId.value === channel.id
 								? 'bg-elevated text-highlighted'
 								: 'text-muted'
-						"
+						]"
 						type="button"
 						@click="openVoice(channel.id)"
 					>
