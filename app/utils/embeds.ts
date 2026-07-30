@@ -6,9 +6,10 @@
 // the raw string would have to re-implement that exclusion and would get it
 // subtly wrong.
 //
-// YouTube only, and deliberately so — this is not link unfurling (M6). The host
-// is fixed and the id is validated by the same parser Watch Together uses, so
-// there is no fetch, no cache table and no SSRF surface here.
+// YouTube only, and deliberately so — this is not general link unfurling, which
+// is dropped for good (see docs/progress/decisions.md). The host is fixed and the
+// id is validated by the same parser Watch Together uses, so there is no fetch,
+// no cache table and no SSRF surface here.
 
 export interface MessageEmbed {
 	videoId: string

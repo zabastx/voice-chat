@@ -22,8 +22,10 @@ plan. Part of [PROGRESS.md](../PROGRESS.md).
 | Watch Together | **Synced local embeds**, not relayed video — the SFU never carries the film ([ADR 0008](../adr/0008-watch-together-synced-embeds.md)); ephemeral room state, anyone in the roster controls, no host ([ADR 0009](../adr/0009-watch-session-in-memory-anyone-controls.md)). YouTube (video/Shorts/live) in v0.18.0; Twitch deferred |
 
 **Deferred to v2+:** browser/Web Push, desktop wrapper / global PTT, multiple spaces, a real roles
-engine, rich link previews (M6 — SSRF/privacy). Already un-deferred: Postgres (v0.12.0), 1:1 DMs
+engine. Already un-deferred: Postgres (v0.12.0), 1:1 DMs
 (v0.13.0, [ADR 0005](../adr/0005-direct-messages-as-channel-rows.md)).
+
+**Dropped, not deferred:** general link unfurling (the old M6). See below — don't re-propose it.
 
 ## v2 — Chat/messaging (M1–M5 shipped as v0.3.0–v0.7.0)
 
@@ -36,6 +38,11 @@ engine, rich link previews (M6 — SSRF/privacy). Already un-deferred: Postgres 
 | M4 — Reactions                  | `reactions` table, toggle endpoint, emoji-picker-element, chips        |
 | M5 — Message search (full-text) | `/api/search`, SearchModal + jump; FTS5 → Postgres tsvector in v0.12.0 |
 
-M6 (rich link previews) stays deferred; URLs are clickable via M1 autolink. v0.19.0 carves out the
-one case that needs none of M6's machinery — YouTube links get an inline player card (see
-[features.md](features.md)). General unfurling still waits on the SSRF/privacy work.
+M6 (general rich link previews) is **dropped** — it is no longer on the plan, deferred or otherwise.
+It would have meant a server-side fetch of arbitrary user-posted URLs, i.e. an SSRF-hardened
+fetcher, an image cache table and a privacy story about which host the server touches on whose
+behalf — a large, permanently load-bearing surface for a five-person space. The two things it was
+actually wanted for are already covered without any of that machinery: URLs are clickable via M1
+autolink, and YouTube links get an inline player card in v0.19.0 (client-only, fixed host, no fetch
+— see [features.md](features.md)). If a future case genuinely needs a preview, do what v0.19.0 did
+and carve out that one host rather than reviving general unfurling.
