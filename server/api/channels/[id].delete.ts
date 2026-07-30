@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
 	await deleteAttachmentObjects(
 		orphans.flatMap((a) => (a.previewKey ? [a.objectKey, a.previewKey] : [a.objectKey]))
 	)
+	// in-memory room state has no FK to cascade through; a deleted voice channel
+	// would otherwise leave its Watch Session stranded in the map forever
+	watchChannelDeleted(id)
 	wsBroadcast({ type: 'channel.deleted', channelId: id })
 	return { ok: true }
 })

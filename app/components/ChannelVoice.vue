@@ -20,9 +20,33 @@
 
 		<template #body>
 			<div class="bg-elevated/30 flex min-h-0 flex-1 flex-col">
+				<!--
+					Watch Together takes over the whole stage and demotes the tiles to a
+					filmstrip. WatchStage is rendered HERE AND NOWHERE ELSE in this
+					template: the focus/grid split below re-creates its elements, and an
+					iframe that gets re-created or reparented loses its browsing context
+					and restarts the video (adr/0008). Tile focus is therefore disabled
+					while a watch is on — that is what keeps the mount point stable.
+				-->
+				<div v-if="watchActive" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+					<WatchStage :session="watchSession.session.value!" />
+					<div v-if="tiles.length" class="flex shrink-0 gap-2 overflow-x-auto pb-1">
+						<VoiceUserMenu
+							v-for="tile in tiles"
+							:key="tile.key"
+							:disabled="!canAdjust(tile)"
+							:identity="tile.memberId ?? ''"
+						>
+							<div class="h-24 w-42 shrink-0">
+								<VoiceTile v-bind="tile.props" />
+							</div>
+						</VoiceUserMenu>
+					</div>
+				</div>
+
 				<!-- focus mode: one enlarged tile (optionally fullscreen) -->
 				<div
-					v-if="focused && focusedTile"
+					v-else-if="focused && focusedTile"
 					ref="focusedEl"
 					class="bg-elevated/30 relative flex min-h-0 flex-1 cursor-pointer flex-col"
 					:class="isFullscreen ? 'p-0' : 'p-3'"
@@ -97,6 +121,36 @@
 								@click="voice.toggleScreenShare"
 							/>
 						</UTooltip>
+						<UTooltip :text="watchActive ? 'Остановить совместный просмотр' : 'Смотреть вместе'">
+							<UButton
+								:color="watchActive ? 'primary' : 'neutral'"
+								icon="i-lucide-tv"
+								size="lg"
+								variant="soft"
+								@click="toggleWatch"
+							/>
+						</UTooltip>
+						<!--
+							Watch Volume, per-device. Separate from the per-speaker Local
+							Volume in VoiceUserMenu: that sets how loud a *person* is, and a
+							Watch Session is nobody's voice.
+						-->
+						<UPopover v-if="watchActive">
+							<UTooltip text="Громкость видео">
+								<UButton
+									color="neutral"
+									:icon="prefs.watchVolume === 0 ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
+									size="lg"
+									variant="soft"
+								/>
+							</UTooltip>
+							<template #content>
+								<div class="w-48 p-3">
+									<p class="text-muted mb-2 text-xs">Громкость видео — {{ prefs.watchVolume }}%</p>
+									<USlider v-model="prefs.watchVolume" :max="100" :min="0" :step="5" />
+								</div>
+							</template>
+						</UPopover>
 						<UTooltip text="Отключиться">
 							<UButton
 								color="error"
@@ -123,12 +177,24 @@
 </template>
 
 <script lang="ts" setup>
+import WatchUrlModal from './WatchUrlModal.vue'
+
 const route = useRoute()
 const voice = useVoice()
+// not `watch` — that would shadow Vue's auto-imported watch() used below
+const watchSession = useWatch()
 const { voice: rooms } = useRealtime()
 const membersStore = useMembersStore()
 const store = useChannelsStore()
+const prefs = usePreferences()
+const toast = useToast()
 const { user } = useUserSession()
+
+const overlay = useOverlay()
+const watchModal = overlay.create(WatchUrlModal)
+// guards re-entrant clicks: reopening would overwrite the first open()'s
+// resolvePromise and orphan its awaiting caller (same trap as the share dialog)
+let watchDialogOpen = false
 
 const focused = ref<string | null>(null)
 const focusedEl = ref<HTMLElement>()
@@ -138,6 +204,32 @@ const channelId = computed(() => route.params.id as string)
 const channel = computed(() => store.channels.value.find((c) => c.id === channelId.value))
 const connectedHere = computed(() => voice.currentChannelId.value === channelId.value)
 const roster = computed(() => rooms.value[channelId.value] ?? [])
+// the Audience is the roster: you see the watch by being in the room (adr/0009)
+const watchActive = computed(() => connectedHere.value && !!watchSession.session.value)
+
+async function toggleWatch() {
+	if (watchActive.value) {
+		await watchSession.stop()
+		return
+	}
+	if (watchDialogOpen) return
+	watchDialogOpen = true
+	try {
+		const instance = watchModal.open()
+		const url = (await instance.result) as string | undefined
+		if (!url) return
+		await watchSession.start(url)
+	} catch (e) {
+		// server errors are Russian and travel in `message` (gotcha #13)
+		toast.add({
+			title: 'Не удалось включить видео',
+			description: (e as { data?: { message?: string } })?.data?.message,
+			color: 'error'
+		})
+	} finally {
+		watchDialogOpen = false
+	}
+}
 
 function isSpeaking(p: VoiceParticipant) {
 	return p.speaking || (connectedHere.value && voice.speakingIds.value.includes(p.memberId))
@@ -201,6 +293,12 @@ function canAdjust(tile: (typeof tiles.value)[number]) {
 // removing the element from the DOM also exits fullscreen automatically
 watch(focusedTile, (tile) => {
 	if (!tile) focused.value = null
+})
+
+// focus mode is unreachable while the stage is up; clear it so stopping the
+// watch returns to the tile grid rather than to a stale focused tile
+watch(watchActive, (active) => {
+	if (active) focused.value = null
 })
 
 async function toggleFullscreen() {

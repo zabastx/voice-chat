@@ -28,6 +28,10 @@ export interface Preferences {
 	// last-used screen-share quality preset, applied at share start; persisted so the
 	// pre-share dialog pre-fills from it and the next share opens on the prior choice
 	screenSharePreset: ScreenSharePresetId
+	// Watch Volume: playback level (0–100) for a Watch Session's own audio.
+	// Deliberately NOT part of `localVolumes` — that map is keyed by a speaker's
+	// member id and sets how loud a *person* is; a Watch Session is nobody's voice.
+	watchVolume: number
 }
 
 const STORAGE_KEY = 'voice-chat:prefs'
@@ -42,7 +46,8 @@ function defaults(): Preferences {
 		showOfflineMembers: false,
 		localVolumes: {},
 		lastSeenVersion: null,
-		screenSharePreset: 'h1080fps15'
+		screenSharePreset: 'h1080fps15',
+		watchVolume: 100
 	}
 }
 

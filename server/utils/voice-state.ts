@@ -16,7 +16,29 @@ function broadcastVoice() {
 	wsBroadcast({ type: 'voice.state', voice: voiceRooms() })
 }
 
+/**
+ * Which Voice Channel a member is currently connected to, if any. Lets an
+ * endpoint act on the room the caller is actually in rather than on a
+ * client-supplied channel id — the same authorization-by-construction that
+ * `voiceSetMutedByMember` gets by taking no channel id at all (adr/0009).
+ */
+export function voiceChannelOf(memberId: string): string | undefined {
+	for (const [channelId, participants] of rooms) {
+		if (participants.has(memberId)) return channelId
+	}
+	return undefined
+}
+
 export function voiceParticipantJoined(channelId: string, memberId: string, username: string) {
+	// Switching channels emits participant_left(old) and participant_joined(new)
+	// as two independent webhooks with no ordering guarantee. If the join lands
+	// first the member would sit in two rooms at once, and voiceChannelOf would
+	// return whichever the map iterated first — so drop any stale membership.
+	for (const [otherId, participants] of rooms) {
+		if (otherId !== channelId && participants.delete(memberId) && participants.size === 0) {
+			rooms.delete(otherId)
+		}
+	}
 	let participants = rooms.get(channelId)
 	if (!participants) {
 		participants = new Map()
@@ -36,7 +58,14 @@ export function voiceParticipantJoined(channelId: string, memberId: string, user
 export function voiceParticipantLeft(channelId: string, memberId: string) {
 	const participants = rooms.get(channelId)
 	if (!participants?.delete(memberId)) return
-	if (participants.size === 0) rooms.delete(channelId)
+	if (participants.size === 0) {
+		rooms.delete(channelId)
+		// The Audience just emptied — freeze the Watch Session now (adr/0009).
+		// LiveKit's room_finished also calls this, but only after empty_timeout
+		// (300s by default), by which point the anchor has run five minutes past
+		// where everyone actually stopped watching.
+		watchRoomFinished(channelId)
+	}
 	broadcastVoice()
 }
 

@@ -108,6 +108,46 @@ Firefox connects to signaling then drops with `ICE failed, your TURN server appe
 **Traps:** LiveKit v1.x has no `turn_servers` config key (`field turn_servers not found`) — use the built-in `turn:` section in [livekit.dev.yaml](../livekit.dev.yaml); `--node-ip` must be an IP, not a hostname (see #16).
 **Manual fallback:** Firefox `about:config` → `media.peerconnection.ice.obfuscate_host_addresses = false`.
 
+## Watch Together (YouTube embed)
+
+### 18b. An iframe cannot be moved, and Vue must not own the one YouTube replaces
+
+Two separate traps in [WatchStage.vue](../app/components/WatchStage.vue), both presenting as "the video restarts by itself" or a crash on unmount:
+
+- **Reparenting restarts playback.** Moving an `<iframe>` in the DOM discards its browsing context, so the player reloads from zero. `ChannelVoice.vue` renders tiles in a `v-if` focus branch and a `v-else-if` grid branch — fine for `<video>`, fatal here. `WatchStage` is therefore rendered in exactly **one** place and tile focus is disabled while a watch is on. Don't "improve" this by making the stage focusable.
+- **`YT.Player` replaces the element you hand it.** If that element is one Vue rendered, unmount calls `removeChild` on a node whose `parentNode` the API already cleared. The mount node is created with `document.createElement` inside a Vue-owned host, so Vue never owns what the API destroys.
+
+### 18d. You cannot grant autoplay by setting `allow` after the frame has loaded
+
+A cross-origin iframe does **not** inherit the parent's user activation, so autoplay needs `allow="autoplay"` on the frame — but permissions policy is evaluated **when the frame navigates**. Setting the attribute at `onReady` is far too late to grant anything, and worse, it _replaces_ the `allow` list the IFrame API already put on its own frame (which includes `autoplay`), so the "fix" is a silent downgrade. Let the API's own attribute stand; treat the «Нажмите, чтобы смотреть» fallback in `WatchStage.vue` as load-bearing rather than exceptional. Unrelated but adjacent: without `playsinline=1` iOS Safari forces the video fullscreen.
+
+### 18e. YouTube's "not live" is indistinguishable from "don't know yet"
+
+`getVideoData()` is usually empty at `onReady`, so `isLive` is `undefined` long before it is `false`. Reporting that as a fact makes every joining client flip a live session back to VOD, which unfreezes an anchor that has been standing still and scatters the whole room. Clients report **positives only** and the server latches `live` on (`watch-state.ts`); within one video id it never legitimately becomes false. Same reasoning for the title — absence is not emptiness.
+
+### 18g. A detached watcher must not watch a composable's `computed`
+
+`useWatch` keeps one anchoring watcher in a detached `effectScope`. If that watcher's source is a `computed()` created inside `useWatch()`, the computed belongs to the scope of whichever component called the composable **first** — when that component unmounts, its effect stops and the watcher goes deaf permanently. Watch the global `useState` refs and derive inside the callback instead. `usePreferences` only gets away with the same pattern because it watches a `useState` ref directly.
+
+Symptom is narrow enough to miss: leaving a voice channel and rejoining **without a page reload** leaves the anchor `null` and no player mounted, while a fresh page load works perfectly.
+
+### 18h. `new YT.Player()` returns an object with no API methods
+
+The constructor returns synchronously, but `getPlayerState`, `getCurrentTime` etc. do not exist until `onReady` fires. Touching the player before then throws — and because watch broadcasts can land during init, the throw repeats inside a Vue watcher (`Unhandled error during execution of component update`) and the stage sits mounted with **no iframe at all**. Guard every player access with a `ready` flag set in `onReady`, not merely a null check on the instance.
+
+### 18f. With native player controls, a user's seek and a viewer's drift look identical
+
+Both present as "my position disagrees with the anchor", so no threshold can separate them — and treating drift as intent means one viewer's ad break or buffer stall **rewinds everyone else**. `correctDrift` compares how far the playhead moved against how much wall time passed: ordinary playback advances by roughly the elapsed time, a seek is a jump that doesn't. Only the jump is broadcast; a plain disagreement is corrected locally and silently. Don't reintroduce a position push from the state-change handler.
+
+Two refinements that were both got wrong first and caught only by driving it in a real browser:
+
+- **The test must be asymmetric.** `|advance - elapsed| > tol` looks right and reintroduces the bug: a buffering stall or an ad freezes the playhead across a 3s tick, which that form reads as a seek and rebroadcasts. Only `advance > elapsed + tol` (jumped ahead) or `advance < -tol` (jumped back) is a seek; `0 ≤ advance ≪ elapsed` is a stall.
+- **`onStateChange` must not refresh the position baseline.** A seek fires a state change, so calling `notePosition()` there erases the jump before the drift tick can see it — the seek then looks like ordinary playback and gets "corrected" back to the anchor instead of propagating to everyone.
+
+### 18c. `getVideoData().isLive` is undocumented
+
+The only client-side signal for "this is a live broadcast" (which disables timeline sync — see [ADR 0008](adr/0008-watch-together-synced-embeds.md)). It is absent from `@types/youtube`, hence the hand-written [app/types/youtube.d.ts](../app/types/youtube.d.ts). If YouTube drops it, live sessions silently degrade to being treated as VODs — viewers fight the DVR window instead of failing loudly.
+
 ## Client / PWA
 
 ### 19. Leftover service worker from a previous app hijacks the origin

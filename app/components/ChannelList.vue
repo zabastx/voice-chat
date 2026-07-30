@@ -71,6 +71,13 @@
 					>
 						<UIcon class="size-4 shrink-0" name="i-lucide-volume-2" />
 						<span class="flex-1 truncate text-left">{{ channel.name }}</span>
+						<!--
+							A Watch Session is an invitation, so it shows to members who have
+							not joined the room (adr/0009).
+						-->
+						<UTooltip v-if="watchIn(channel.id)" :text="watchTooltip(channel.id)">
+							<UIcon class="text-primary size-3.5 shrink-0" name="i-lucide-tv" />
+						</UTooltip>
 					</button>
 					<UDropdownMenu v-if="canModerate" :items="channelMenu(channel)">
 						<UButton
@@ -202,7 +209,21 @@ const channelModal = overlay.create(ChannelFormModal)
 const confirmModal = overlay.create(ConfirmModal)
 const dmModal = overlay.create(DmCreateModal)
 
+const watchSession = useWatch()
+
 const onlineSet = computed(() => new Set(online.value))
+
+// A Watch Session outlives an empty room on purpose (adr/0009), so the session
+// alone doesn't mean anyone is there. Requiring an occupant keeps the icon an
+// invitation rather than a claim about a room abandoned days ago.
+const watchIn = (channelId: string) =>
+	!!watchSession.sessionFor(channelId) && (rooms.value[channelId]?.length ?? 0) > 0
+
+// the title is only known once someone's player has reported it
+function watchTooltip(channelId: string) {
+	const title = watchSession.sessionFor(channelId)?.title
+	return title ? `Смотрят вместе: ${title}` : 'Смотрят вместе'
+}
 const dmName = (convo: DmConversationDto) => convo.member.displayName ?? convo.member.username
 
 function openCreate(kind: 'text' | 'voice') {
