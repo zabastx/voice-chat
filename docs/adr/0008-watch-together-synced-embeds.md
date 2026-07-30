@@ -98,6 +98,32 @@ Two consequences worth knowing before debugging this:
   live viewer to the start of the DVR buffer — and since drift correction switches off the moment
   the flag lands, they would be stranded there for good.
 
+## The player outlives the page it appears on
+
+Because the iframe cannot be moved or unmounted without restarting the video, the player is **not**
+owned by the voice channel page. It is mounted once in the layout, outside `<NuxtPage>`
+([WatchPlayerHost.vue](../../app/components/WatchPlayerHost.vue)), and only its CSS position and
+size change: docked over a placeholder that `ChannelVoice` registers, or a floating mini player
+anywhere else. Opening a text channel therefore leaves playback untouched, which is the whole
+point — a member who steps into chat for ten seconds should not drop out of the film and have to be
+re-synced.
+
+This is the inverse of how it looks like it should work. The intuitive implementation — render the
+stage in the page, and move it into a corner widget when you navigate away — is precisely the one
+that cannot work, and neither can `<KeepAlive>`, which detaches the subtree from the document and
+destroys the browsing context just as thoroughly.
+
+Consequences worth knowing:
+
+- The mini player has **no close button**. The Audience is the Voice Channel roster, so "stop
+  watching, just for me" is not representable: a member who dismissed it would still be in the
+  Audience. It appears while a session is running and you are elsewhere, and disappears when the
+  watch stops or you leave voice. Clicking it navigates back to the channel.
+- Its transparent overlay deliberately swallows clicks on YouTube's own controls. A 320px player
+  is too small to aim at them, and the room's controls live in the call view the click returns to.
+- Tracking the docked box needs an rAF loop, not a `ResizeObserver`: collapsing the sidebar moves
+  the stage without resizing it.
+
 ## Related
 
 Companion decision in [ADR 0009](0009-watch-session-in-memory-anyone-controls.md): where the

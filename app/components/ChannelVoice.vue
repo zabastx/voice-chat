@@ -22,14 +22,15 @@
 			<div class="bg-elevated/30 flex min-h-0 flex-1 flex-col">
 				<!--
 					Watch Together takes over the whole stage and demotes the tiles to a
-					filmstrip. WatchStage is rendered HERE AND NOWHERE ELSE in this
-					template: the focus/grid split below re-creates its elements, and an
-					iframe that gets re-created or reparented loses its browsing context
-					and restarts the video (adr/0008). Tile focus is therefore disabled
-					while a watch is on — that is what keeps the mount point stable.
+					filmstrip. The player itself is NOT here: it lives in the layout
+					(WatchPlayerHost), outside <NuxtPage>, so that opening a text channel
+					doesn't unmount the iframe and stop the video for that member. This is
+					only an empty placeholder whose box the host tracks and draws itself
+					over — nothing is ever reparented (adr/0008). Tile focus stays disabled
+					while a watch is on so the placeholder's box is stable.
 				-->
 				<div v-if="watchActive" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
-					<WatchStage :session="watchSession.session.value!" />
+					<div ref="stageSlot" class="min-h-0 flex-1" />
 					<div v-if="tiles.length" class="flex shrink-0 gap-2 overflow-x-auto pb-1">
 						<VoiceUserMenu
 							v-for="tile in tiles"
@@ -199,6 +200,14 @@ let watchDialogOpen = false
 const focused = ref<string | null>(null)
 const focusedEl = ref<HTMLElement>()
 const isFullscreen = ref(false)
+
+// The player is drawn by WatchPlayerHost in the layout; this only tells it
+// where. Registering null on unmount is what flips it to the mini player when
+// the member opens a text channel.
+const stage = useWatchStage()
+const stageSlot = useTemplateRef<HTMLElement>('stageSlot')
+watch(stageSlot, (el) => stage.setSlot(el ?? null), { immediate: true })
+onUnmounted(() => stage.setSlot(null))
 
 const channelId = computed(() => route.params.id as string)
 const channel = computed(() => store.channels.value.find((c) => c.id === channelId.value))

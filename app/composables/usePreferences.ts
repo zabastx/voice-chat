@@ -28,6 +28,9 @@ export interface Preferences {
 	// last-used screen-share quality preset, applied at share start; persisted so the
 	// pre-share dialog pre-fills from it and the next share opens on the prior choice
 	screenSharePreset: ScreenSharePresetId
+	// where the floating mini player was last dragged to, in viewport px;
+	// null until the member moves it, which means "bottom-right by default"
+	watchMiniPos: { x: number; y: number } | null
 	// Watch Volume: playback level (0–100) for a Watch Session's own audio.
 	// Deliberately NOT part of `localVolumes` — that map is keyed by a speaker's
 	// member id and sets how loud a *person* is; a Watch Session is nobody's voice.
@@ -47,6 +50,7 @@ function defaults(): Preferences {
 		localVolumes: {},
 		lastSeenVersion: null,
 		screenSharePreset: 'h1080fps15',
+		watchMiniPos: null,
 		watchVolume: 100
 	}
 }

@@ -56,6 +56,14 @@
 		<slot />
 
 		<MembersPanel />
+
+		<!--
+			Mounted here, outside <NuxtPage>, so it survives navigation: the Watch
+			Together iframe must never be unmounted or reparented or the video
+			restarts (adr/0008). It draws itself over ChannelVoice's placeholder
+			when that page is open, and as a floating mini player everywhere else.
+		-->
+		<WatchPlayerHost />
 	</UDashboardGroup>
 </template>
 
