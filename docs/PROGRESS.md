@@ -22,11 +22,12 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
 
 1. **Postgres cutover on the VPS** — follow DEPLOY.md; back up the SQLite file first; afterwards
    remove the legacy `app-data` volume in a follow-up change.
-2. **Tune the noise gate at a real microphone** (v0.20.0) — the DSP is verified numerically, but
-   nobody has yet spoken into it. Confirm the 45 / 300 ms defaults against real room noise, check
-   it doesn't chop word endings, and check AGC doesn't drift the floor into the threshold over a
-   long call. Then the undriven paths in
-   [progress/verification.md](progress/verification.md): mid-call mic switch, hidden tab, iOS Safari.
+2. **Tune the noise gate at a real microphone** (v0.20.0) — the DSP is verified numerically and the
+   gating is now verified end-to-end at a second browser (silence vs. bursts, mid-call device switch,
+   hidden tab, and the mic-less-join re-attach; see [progress/verification.md](progress/verification.md)),
+   but nobody has yet **spoken** into it. Confirm the 45 / 300 ms defaults against real room noise,
+   check it doesn't chop word endings, and check AGC doesn't drift the floor into the threshold over
+   a long call. iOS Safari is still undriven.
 3. **Check the new device picker against real hardware** (v0.21.0) — the popover, the meter, the permission paths and the stale-id prune were all driven in Playwright, but swapping between two physical microphones/cameras, the unplug toast, and `setSinkId` output switching need a human with the devices in hand (see [progress/verification.md](progress/verification.md)).
 4. **Test real NAT traversal** — voice from two different networks.
 5. **Test on mobile browsers**, especially iOS Safari voice.

@@ -259,6 +259,46 @@ above were driven on a second dev server rather than on the poisoned one.
 ran. Checking either one reads as "the gate never attached". Patch `AudioWorklet.prototype.addModule`
 in-page to observe it.
 
+### Second pass: two browsers, measured at the listener
+
+Everything above measures the gate at the **sender** — the offline DSP, the meter, the envelope.
+Nothing had ever checked what the other member actually receives, which is the only thing the
+feature is for. Driven with two fake-device Chromium sessions (`danil` speaking, `maks` listening)
+in `lounge`, reading RMS off the listener's remote `<audio>` element's `srcObject`. Chromium's fake
+microphone is a periodic beep, so a working gate should show bursts, a broken-open one a continuous
+signal, and a broken-shut one nothing.
+
+- **The gate is audible at the far end.** Threshold 100 (can never open): the listener receives peak
+  RMS `0.000007` — digital silence against a source of `0.39`, about 91 dB of attenuation. Threshold
+  45: peak `0.256281`, with 8 of 40 samples above the noise floor. That is the first end-to-end
+  evidence that the gate does anything to what anyone else hears.
+- **Live threshold, live hold.** Dragging 100 → 45 with the keyboard (55 × ArrowLeft on the slider)
+  took effect without a reconnect, persisted to `voice-chat:prefs`, and the readout then alternated
+  «микрофон открыт» / «микрофон закрыт» in step with the beep — the hold opening and closing per
+  burst, visible rather than inferred.
+- **Mid-call device switch with a gate attached** (was undriven; [gotcha 18i](../GOTCHAS.md)): switched
+  the microphone from the new control-bar picker while connected and gated. No error toast, zero
+  console errors, the readout kept cycling and the level meter kept peaking at 91 — and the listener
+  kept receiving gated audio. LiveKit's `restart()` without an `audioContext` is handled.
+- **Hidden tab** (was undriven): backgrounded the speaker's page with a second tab and measured the
+  listener for 6 s — peak `0.245`, still bursty. The published track _is_ the worklet's output, so
+  audio arriving at all means `process()` is still running on the audio thread, which is exactly the
+  reason ADR 0010 rejected a rAF loop. Caveat: this does not _separately_ prove the threshold
+  comparison still closes while hidden — but the same `process()` call does the comparison and the
+  gain ramp, so a running one implies both. (An attempt to separate them by duty cycle failed: the
+  fake source is itself bursty at ~15 %, indistinguishable from the gated 20 %.)
+- **The wide-open-mic bug is really fixed** ([gotcha 18k](../GOTCHAS.md)). This was the worst of the
+  four adversarial-review findings and had only ever been reasoned about, not driven. Joined with the
+  microphone **denied** (control bar came up `mic-off`), granted permission mid-session, then clicked
+  unmute — the path where LiveKit publishes a **brand-new, unprocessed** track. With the threshold at
+  100 the listener received peak RMS `0.000008` and **zero** loud samples: the gate was re-attached.
+  Without the fix the listener would have received the full `~0.37` beep while the sender's UI said
+  «Шумовой порог». Dropping the threshold to 45 then produced `0.075` bursts, confirming the
+  re-attached processor is a working gate and not a dead track.
+
+**Still undriven:** real speech through a real microphone (including whether AGC walks the room floor
+into the threshold over a long call), and Safari/iOS.
+
 ## v0.21.0 device picker on the voice screen
 
 Driven headed against the local stack (Postgres/LiveKit/MinIO from `compose.dev.yaml`, dev server on
