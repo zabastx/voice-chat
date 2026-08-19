@@ -22,13 +22,19 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
 
 1. **Postgres cutover on the VPS** — follow DEPLOY.md; back up the SQLite file first; afterwards
    remove the legacy `app-data` volume in a follow-up change.
-2. **Test real NAT traversal** — voice from two different networks.
-3. **Test on mobile browsers**, especially iOS Safari voice.
-4. **Finish Watch Together verification** — a live broadcast, a Shorts URL, a genuinely
+2. **Tune the noise gate at a real microphone** (v0.20.0) — the DSP is verified numerically, but
+   nobody has yet spoken into it. Confirm the 45 / 300 ms defaults against real room noise, check
+   it doesn't chop word endings, and check AGC doesn't drift the floor into the threshold over a
+   long call. Then the undriven paths in
+   [progress/verification.md](progress/verification.md): mid-call mic switch, hidden tab, iOS Safari.
+3. **Check the new device picker against real hardware** (v0.21.0) — the popover, the meter, the permission paths and the stale-id prune were all driven in Playwright, but swapping between two physical microphones/cameras, the unplug toast, and `setSinkId` output switching need a human with the devices in hand (see [progress/verification.md](progress/verification.md)).
+4. **Test real NAT traversal** — voice from two different networks.
+5. **Test on mobile browsers**, especially iOS Safari voice.
+6. **Finish Watch Together verification** — a live broadcast, a Shorts URL, a genuinely
    embedding-disabled video, and a real buffering stall are still undriven (see the v0.18.0 section
    in [progress/verification.md](progress/verification.md)). Optionally close the two known gaps: no
    «Смотреть вместе» in the sidebar `VoicePanel`, and no direct replace without stopping first.
-5. **Twitch for Watch Together**, if wanted — the sync layer is source-agnostic and `WatchDto`
+7. **Twitch for Watch Together**, if wanted — the sync layer is source-agnostic and `WatchDto`
    already carries `source`, so this is a URL-parser case plus a second embed wrapper. Twitch
    embeds need `parent=<window.location.hostname>` and break on any unexpected host; live needs
    no timeline sync, but Twitch VODs would need their own seek handling.

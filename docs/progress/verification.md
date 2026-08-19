@@ -178,8 +178,166 @@ share is wired into both bars, this isn't), and there is no direct **replace** �
 button stops an active session, so changing video means stop-then-start even though the server
 supports overwrite.
 
+## v0.20.0 microphone noise gate
+
+Driven headed as `danil` against the dev stack. The DSP was verified **deterministically** in an
+`OfflineAudioContext` rather than through a fake microphone — it renders faster than real time and
+lets the input amplitude be set exactly, so the assertions are on numbers rather than on "it
+sounded right":
+
+- **Gating**: a -80 dBFS "noise floor" renders to exactly `0.000000` RMS; a -17 dBFS "speech"
+  burst renders to `0.141421` — precisely `0.2 / √2`, i.e. passed at unity gain, undistorted.
+- **Hold**: 20 ms after the loud burst stops, output RMS is `0.000071` = `0.0001 / √2` — the gate
+  is still open and still passing the now-quiet signal. 450 ms after (past the 300 ms hold) it is
+  `0.000000`. That is the hangover working, measured rather than inferred.
+- **Attack**: reaches 99 % of input 7.9 ms after the threshold is crossed — no clipped consonant.
+- **No click**: driven with a constant-amplitude source so the output _is_ the gain envelope, the
+  largest sample-to-sample step is `4.17e-4`, exactly the theoretical per-sample ramp increment.
+  The envelope is continuous.
+- **Bypass paths**: `enabled: false` and `thresholdRms: 0` both pass a -80 dBFS signal through at
+  exactly `1.00e-4` (unity), confirming an un-opted-in member's audio is untouched.
+
+Then end-to-end in the running app, with `getUserMedia` overridden to hand LiveKit a real
+`MediaStreamTrack` synthesised from Web Audio (so the publish/attach path is genuinely exercised):
+
+- Joining `lounge` with `micMode: 'gate'` calls `addModule('/mic-gate-worklet.js')` exactly once and
+  constructs one `AudioWorkletNode`, with **zero console errors** and no unhandled rejections.
+- The settings meter reads **77** for a tone whose theoretical level is 75.7 — the whole chain
+  (worklet RMS → `postMessage` → `rmsToLevel` → UI) is calibrated, not just plausible.
+- Threshold marker renders at `45%`, readout says «микрофон открыт».
+- Dragging the threshold to 100 flips the readout to «микрофон закрыт» **without a reconnect** — the
+  live `port.postMessage` update path works. The meter keeps reading 77 while shut, which is correct:
+  it shows the input level so you can still see where your voice sits relative to the marker.
+- Mode + both sliders persist to `voice-chat:prefs`; switching to «Шумовой порог» reveals both
+  sliders at their defaults (45 / 300 мс).
+
+One UI gap was found and fixed during the run: switching to gate mode while _not_ in a call left
+the meter and its "join a channel to tune this" hint hidden, which is exactly when that hint is
+needed — the bar and marker now render whenever the mode is on.
+
+**Adversarial review afterwards found 14 issues, all fixed in the same change** — the headed run
+above passes on the happy path, which is exactly why it missed them. The four that mattered:
+`toggleMute` republishing an unprocessed track after a mic-less join (wide-open mic while the UI
+says «Шумовой порог»); an unguarded `stopProcessor` able to leave the RTP sender on a stopped
+track (inaudible to everyone, invisible to its owner); the out-of-call meter's 8-bit
+quantization floor landing at ~level 25, under the default threshold of 45, on the very meter
+used to place it; and a memoised `addModule` **rejection** disabling the gate until the member
+rejoined. Also fixed: stale-gate handle clobbering, a leaked mic-test stream, orphaned
+`MediaStreamTrack`s and worklet processors on every `restart`, a stereo up-mix that would have
+disabled DTX/RED on reconnect, an ungated window while the module fetched at join, a dead meter
+after a failed attach, NaN output on zero-length input blocks, a stale first peak on reopening
+the panel, and a duplicated prefs watcher under HMR.
+
+The four that could make someone unheard or unfiltered **were then driven headed** on a clean
+server, and the DSP re-rendered identically afterwards (same four RMS figures, no `NaN`):
+
+- **Mic denied at join, then granted and unmuted** — the exact republish path. Before: zero
+  `addModule` calls, zero nodes, wide-open mic. After: the module loads and a node is
+  constructed on the unmute, and the settings meter comes up live at 76 with the gate open.
+- **Simulated 502 on the worklet module** — the attach fails, and the mic-test button is
+  **visible again** (it used to be hidden whenever the mode said «Шумовой порог», leaving no
+  way to check the microphone at all in the one state where it was broken).
+- **Retry after that failure** — a second `addModule` call actually goes out (2 attempts, not
+  1. and the gate attaches, proving the rejected module promise is no longer memoised onto the
+     Room's `AudioContext` for the rest of the call.
+- **`{stop: true}` on a retired node** — level posts drop from 5 per 300 ms to 0, so the audio
+  thread really does release the processor instead of stranding one per `restart`.
+- **Mono destination** — `getSettings().channelCount` is 1 against the default 2, so the
+  stereo up-mix that would have disabled DTX/RED on reconnect is gone.
+- **Joining with `micMode: 'open'`** makes **zero** `addModule` calls, confirming the
+  un-opted-in path is untouched.
+
+Still reasoned from livekit-client's source rather than driven: the guarded `stopProcessor`
+failure path (needs a device that dies mid-detach) and the stale-attach handle guard.
+
+Adding `prefetchMicGateWorklet` to an existing `app/utils/` file mid-run triggered
+[gotcha #3](../GOTCHAS.md) again (`useToast is not defined` on an unrelated route), so the fixes
+above were driven on a second dev server rather than on the poisoned one.
+
+**Gotcha for future runs:** an `audioWorklet.addModule()` fetch shows up in neither
+`performance.getEntriesByType('resource')` nor Playwright's network log, even when it definitely
+ran. Checking either one reads as "the gate never attached". Patch `AudioWorklet.prototype.addModule`
+in-page to observe it.
+
+## v0.21.0 device picker on the voice screen
+
+Driven headed against the local stack (Postgres/LiveKit/MinIO from `compose.dev.yaml`, dev server on
+:3001). Three Chromium sessions, because the interesting states differ only by what the browser will
+hand over: **real hardware** (permissions granted, actual mics), **fake device**
+(`--use-fake-device-for-media-stream`, so the meter has a signal to show), and **denied** (Playwright's
+default — no grant at all).
+
+- **Picker renders and is reachable before joining** — «Устройства» sits next to «Подключиться» while
+  disconnected, and between the camera and share buttons while connected (icon order confirmed as
+  `mic, video, settings-2, monitor-up, tv, phone-off`). Popover shows Микрофон / Динамики / Камера +
+  «Все настройки звука».
+- **The meter is live, not decorative** — with the fake device the bar moved across 7–8 distinct values
+  peaking at 84–91 over 3 s; with real hardware in a silent room it sat at 0, which is the honest
+  answer. Closing the popover removes it; reopening brings it back moving, so the capture start/stop
+  cycle is clean.
+- **Settings deep link lands on «Голос и видео»** — the opened modal's fields are Микрофон / Режим
+  микрофона / Динамики / Камера, not the profile panel.
+- **Device switch mid-call** — picked «Fake Audio Input 2» while connected: preference persisted, the
+  select kept the new value, no error toast, no revert (i.e. `switchActiveDevice` resolved).
+- **Camera switch mid-call** — the standing bug: picked the camera while it was live, preference stored,
+  camera stayed on, no toast. Before this change the same write reached nothing until a rejoin.
+- **No-permission path** — with the microphone denied, the popover shows the hint + «Разрешить доступ»
+  and **no** meter, so opening it never fires a prompt. Clicking grant against a hard denial surfaces
+  «Нет доступа к устройствам» rather than hanging.
+- **Stale id pruning** — planted `micDeviceId: 'bogus-device-id-that-cannot-resolve'`, reloaded: cleared
+  to `null`, select back to «По умолчанию», **no toast** (silent at startup, as designed).
+- **Settings panel after the refactor** — «Проверить микрофон» still starts a meter (7 distinct values,
+  max 72) and still offers «Остановить проверку», so moving it onto `useMicLevel` cost it nothing.
+
+Two bugs were found _by_ this run and fixed in the same change: the popover checked `needsPermission`
+before the un-awaited first enumeration resolved (so the meter never started on first open), and
+`needsPermission` tested «has an id but no label» — which never matches, because a pre-grant placeholder
+has an **empty `deviceId`** as well as an empty label, so the grant button could not appear in the one
+state it exists for.
+
+**Gotcha for future runs:** editing a _newly added_ composable mid-session made the dev server SSR-fail
+with `usePreferences is not defined` (an auto-import artifact, not a code defect) — it renders clean
+after a dev-server restart. Don't chase it as a bug.
+
+### Second pass, after a two-axis code review
+
+The review found three behavioural defects; all were fixed and the fixes driven:
+
+- **Spurious «Микрофон отключён» after granting permission.** The "have we looked before?" flag
+  flipped on the first _enumeration_, but pruning is skipped for any list that cannot be trusted (no
+  labels = no grant). So the first **trustworthy** look — the one right after the member clicks
+  «Разрешить доступ» — counted as "later" and toasted about a device that was already gone before
+  the app started. Now tracked per list, on the first trustworthy enumeration. Driven both ways:
+  planted a stale id with the microphone denied → granted mid-session → id cleared, select back to
+  «По умолчанию», **no toast**. Then planted a _real_ device id and simulated an unplug (patched
+  `enumerateDevices` to omit it + dispatched `devicechange`) → cleared **with** the toast. Both
+  branches of the Q12/Q17 split now demonstrably work.
+- **A dead stop button.** The settings panel's «Остановить проверку» keyed off the _global_ "a stream is
+  open" flag rather than "this panel opened it", so with the picker holding the capture the panel
+  would offer a stop button whose click did nothing. The meter composable now exposes a per-consumer
+  `ownsTest`. Round-trip re-driven: start → meter + «Остановить», stop → meter gone.
+- Plus the cleanups: the `'default'`↔`null` translation and the sentinel now live once in
+  `useMediaDevices.deviceModel` (they were copy-pasted into both surfaces — the exact drift the
+  shared composables exist to prevent, and the subject of gotcha 6); the three device watchers in
+  `useVoice` collapsed into one loop over `DEVICE_PREFS`; `revertingDevice` moved to module scope;
+  `live` renamed `liveLevelAvailable`; boolean-flag call sites replaced with
+  `startListening`/`stopListening`, `startMonitoring`/`stopMonitoring` and
+  `refresh({ requestPermissions })`; the unused `size` prop dropped.
+
+Re-driven after those changes: popover renders all three rows, meter still moves on the fake device
+(7 distinct values, max 72), mid-call **microphone** switch and mid-call **camera** switch both still
+persist with no toast and no revert — i.e. the collapsed loop watcher behaves as the three separate
+ones did.
+
+**Still not verified here:** switching between two _real_ microphones/cameras and hearing the change,
+a real hardware unplug (both prune branches were driven, but the disappearance was simulated with a
+patched `enumerateDevices`), `setSinkId` output switching actually moving the audio, and Firefox
+(where the Динамики row is expected to be disabled). These need real hardware — see the standing
+list below.
+
 ## Not yet verified (needs a human / real environment)
 
+- **Device picker with real hardware (v0.21.0)** — switch between two physical microphones and two cameras mid-call and confirm the other member hears/sees the change; unplug a device mid-call and check the «Микрофон отключён» toast fires against real hardware (both prune branches were driven, but the disappearance was simulated with a patched `enumerateDevices`); confirm Динамики actually moves playback to the chosen output, and that the row is disabled in Firefox
 - **DMs end-to-end (v0.13.0)** — two clients: get-or-create idempotency from all four entry points,
   live targeted delivery + ping/desktop notification, non-participant 404 on messages + no WS leak,
   attachments/reactions/replies/edit/delete inside a DM, search excludes DMs, non-participant can't
@@ -198,6 +356,14 @@ supports overwrite.
   YouTube **live broadcast** (live-ness detection, no DVR seek-fighting), a **Shorts** URL
   end-to-end, an genuinely **embedding-disabled** video (the bogus-id path was driven instead), a
   real **buffering stall** not being rebroadcast, and mobile/iOS Safari.
+- **Noise gate (v0.20.0)** — mostly ✅ verified, see the section above. Still not driven, and each
+  needs a human at a real microphone: **real speech** against real room noise (does 45/300 ms
+  actually feel right, does it chop word endings, does AGC drift the floor into the threshold over
+  a long call); a **mid-call microphone switch**, which relies on LiveKit calling the processor's
+  `restart` and reusing the cached `AudioContext` — confirmed by reading livekit-client's
+  `restartTrack`, never driven; the **hidden-tab** case, which is the entire reason the gate is an
+  AudioWorklet and cannot be shown to work by a foreground browser test; and **Safari/iOS**, where
+  `createMediaStreamSource` has history and the `AudioContext` needs a user gesture
 - Real NAT traversal — voice from two different networks (phone hotspot vs home Wi-Fi)
 - Mobile browsers (esp. iOS Safari voice) — for Watch Together specifically, that `playsinline`
   actually keeps the video in the filmstrip layout instead of forcing fullscreen

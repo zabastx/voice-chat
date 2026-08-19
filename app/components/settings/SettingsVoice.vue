@@ -18,16 +18,54 @@
 
 			<div class="space-y-2">
 				<UButton
-					:icon="testing ? 'i-lucide-square' : 'i-lucide-mic'"
-					:label="testing ? 'Остановить проверку' : 'Проверить микрофон'"
+					v-if="!liveLevelAvailable || ownsTest"
+					:icon="ownsTest ? 'i-lucide-square' : 'i-lucide-mic'"
+					:label="ownsTest ? 'Остановить проверку' : 'Проверить микрофон'"
 					color="neutral"
 					variant="soft"
 					@click="toggleMicTest"
 				/>
-				<UProgress v-if="testing" :model-value="level" :max="100" color="success" size="lg" />
-				<p v-if="testing" class="text-muted text-xs">
-					Скажите что-нибудь — индикатор должен реагировать на голос.
-				</p>
+
+				<template v-if="meterVisible">
+					<div class="flex items-center justify-between">
+						<span class="text-muted text-xs">Уровень сигнала</span>
+						<span
+							v-if="liveLevelAvailable"
+							class="text-xs"
+							:class="gateOpen ? 'text-success' : 'text-muted'"
+						>
+							{{ gateOpen ? 'микрофон открыт' : 'микрофон закрыт' }}
+						</span>
+					</div>
+					<!-- the threshold marker sits on the same bar as the level, and both are the
+					     same 0–100 scale from audio-level.ts — the gate compares the very same numbers -->
+					<div class="relative">
+						<UProgress :model-value="meterLevel" :max="100" :color="meterColor" size="lg" />
+						<div
+							v-if="micMode === 'gate'"
+							class="bg-inverted absolute inset-y-0 w-0.5 rounded-full"
+							:style="{ left: `${gateThreshold}%` }"
+						/>
+					</div>
+					<p class="text-muted text-xs">
+						{{ meterHint }}
+					</p>
+				</template>
+			</div>
+		</section>
+
+		<section class="space-y-4">
+			<UFormField label="Режим микрофона" name="micMode">
+				<URadioGroup v-model="micMode" :items="micModeItems" variant="card" />
+			</UFormField>
+
+			<div v-if="micMode === 'gate'" class="max-w-xs space-y-4">
+				<UFormField :label="`Порог: ${gateThreshold}`" name="gateThreshold">
+					<USlider v-model="gateThreshold" :max="100" :min="0" />
+				</UFormField>
+				<UFormField :label="`Задержка закрытия: ${gateHold} мс`" name="gateHold">
+					<USlider v-model="gateHold" :max="1000" :min="50" :step="50" />
+				</UFormField>
 			</div>
 		</section>
 
@@ -70,137 +108,106 @@
 </template>
 
 <script lang="ts" setup>
+import type { MicMode, Preferences } from '~/composables/usePreferences'
+
 const toast = useToast()
 const prefs = usePreferences()
 const voice = useVoice()
+// device enumeration and the level meter are shared with the voice control bar's picker, so
+// the two surfaces cannot drift apart on what a device list is or where a level comes from
+const devices = useMediaDevices()
+const mic = useMicLevel()
 
-const permissionError = ref(false)
-const mics = ref<MediaDeviceInfo[]>([])
-const speakers = ref<MediaDeviceInfo[]>([])
-const cameras = ref<MediaDeviceInfo[]>([])
+const permissionError = devices.denied
+const micItems = devices.micItems
+const speakerItems = devices.speakerItems
+const cameraItems = devices.cameraItems
+const speakerSupported = devices.speakerSupported
+// whether *this* panel started the test, not merely whether a stream is open: the picker may
+// be holding one, and offering «Остановить проверку» for somebody else's capture would give
+// this panel a button whose click does nothing
+const ownsTest = mic.ownsTest
 
-const speakerSupported = import.meta.client && 'setSinkId' in HTMLMediaElement.prototype
+// the watcher in useVoice applies these to the live room; this panel only records the choice,
+// exactly like the control-bar picker does, and through the same sentinel translation
+const micId = devices.deviceModel('micDeviceId')
+const speakerId = devices.deviceModel('speakerDeviceId')
+const cameraId = devices.deviceModel('cameraDeviceId')
 
-// 'default' doubles as the sentinel for «системное по умолчанию»: Chrome's own
-// 'default' pseudo-device is filtered out, and Reka Select forbids '' values
-function deviceItems(devices: MediaDeviceInfo[]) {
-	return [
-		{ label: 'По умолчанию', value: 'default' },
-		...devices
-			.filter((d) => d.deviceId && d.deviceId !== 'default')
-			.map((d) => ({ label: d.label || 'Устройство', value: d.deviceId }))
-	]
-}
-
-const micItems = computed(() => deviceItems(mics.value))
-const speakerItems = computed(() => deviceItems(speakers.value))
-const cameraItems = computed(() => deviceItems(cameras.value))
-
-function prefModel(key: 'micDeviceId' | 'speakerDeviceId' | 'cameraDeviceId') {
+// mic transmission mode + gate tuning
+function prefRef<K extends keyof Preferences>(key: K) {
 	return computed({
-		get: () => prefs.value[key] ?? 'default',
-		set: (value: string) => {
-			prefs.value[key] = value === 'default' ? null : value
+		get: () => prefs.value[key],
+		set: (value: Preferences[K]) => {
+			prefs.value[key] = value
 		}
 	})
 }
 
-const micId = prefModel('micDeviceId')
-const speakerId = prefModel('speakerDeviceId')
-const cameraId = prefModel('cameraDeviceId')
+const micMode = prefRef('micMode')
+const gateThreshold = prefRef('gateThreshold')
+const gateHold = prefRef('gateHold')
 
-async function refreshDevices() {
-	const { Room } = await import('livekit-client')
-	try {
-		mics.value = await Room.getLocalDevices('audioinput', true)
-		speakers.value = await Room.getLocalDevices('audiooutput', false)
-	} catch {
-		permissionError.value = true
+const micModeItems: { value: MicMode; label: string; description: string }[] = [
+	{
+		value: 'open',
+		label: 'Открытый микрофон',
+		description: 'Вас слышно всегда, пока микрофон не выключен'
+	},
+	{
+		value: 'gate',
+		label: 'Шумовой порог',
+		description:
+			'Микрофон открывается только когда вы говорите — клавиатура и вентилятор не проходят'
 	}
-	try {
-		cameras.value = await Room.getLocalDevices('videoinput', true)
-	} catch {
-		// камеры может не быть — селект просто останется с «По умолчанию»
-	}
-}
+]
 
-function onDeviceChange() {
-	void refreshDevices()
-}
+// While a gate is attached the meter shows the real signal running through it; otherwise it
+// falls back to the separate test stream. `useMicLevel` picks between the two and hands the
+// test off when a gate appears, so this panel only has to say what to draw.
+const liveLevelAvailable = mic.liveLevelAvailable
+const gateOpen = computed(() => voice.micGateOpen.value)
+// in gate mode the bar is shown even with nothing to measure: the marker is the thing being
+// dragged, and the hint below it is what explains where to go to tune against a real signal
+const meterVisible = computed(() => mic.hasSignal.value || micMode.value === 'gate')
+const meterLevel = mic.level
+const meterColor = computed(() =>
+	micMode.value === 'gate' && meterLevel.value < gateThreshold.value ? 'neutral' : 'success'
+)
+const meterHint = computed(() => {
+	if (micMode.value !== 'gate') return 'Скажите что-нибудь — индикатор должен реагировать на голос.'
+	return liveLevelAvailable.value
+		? 'Порог — вертикальная черта. Голос должен уверенно её перешагивать, а шум — нет.'
+		: 'Порог — вертикальная черта. Зайдите в голосовой канал, чтобы настроить его по живому сигналу.'
+})
 
 onMounted(() => {
-	void refreshDevices()
-	navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange)
+	// this panel asks for permission up front: it exists to configure devices, so an unlabelled
+	// list would make it useless. The control-bar picker deliberately does not.
+	void devices.refresh({ requestPermissions: true })
+	devices.startListening()
+	mic.startMonitoring()
 })
-
-// apply changes to an active call, restart running tests on the new device
-watch(micId, (id) => {
-	void voice.setDevice('audioinput', id === 'default' ? null : id)
-	if (testing.value) void restartMicTest()
-})
-watch(speakerId, (id) => {
-	void voice.setDevice('audiooutput', id === 'default' ? null : id)
-})
-watch(cameraId, () => {
-	if (previewing.value) void restartPreview()
-})
-
-// mic test — level meter via AnalyserNode
-const testing = ref(false)
-const level = ref(0)
-let testStream: MediaStream | null = null
-let audioContext: AudioContext | null = null
-let rafId = 0
+// both composables release what this component took in their own onScopeDispose
 
 async function toggleMicTest() {
-	if (testing.value) {
-		stopMicTest()
+	if (ownsTest.value) {
+		mic.stopTest()
 		return
 	}
-	try {
-		testStream = await navigator.mediaDevices.getUserMedia({
-			audio: prefs.value.micDeviceId ? { deviceId: { exact: prefs.value.micDeviceId } } : true
-		})
-		audioContext = new AudioContext()
-		const analyser = audioContext.createAnalyser()
-		analyser.fftSize = 512
-		audioContext.createMediaStreamSource(testStream).connect(analyser)
-		const buffer = new Uint8Array(analyser.fftSize)
-		testing.value = true
-		const tick = () => {
-			analyser.getByteTimeDomainData(buffer)
-			let sum = 0
-			for (const value of buffer) sum += (value - 128) ** 2
-			const rms = Math.sqrt(sum / buffer.length) / 128
-			level.value = Math.min(100, Math.round(rms * 300))
-			rafId = requestAnimationFrame(tick)
-		}
-		tick()
-	} catch {
-		stopMicTest()
+	if (!(await mic.startTest())) {
 		toast.add({ title: 'Не удалось получить доступ к микрофону', color: 'error' })
 	}
-}
-
-function stopMicTest() {
-	cancelAnimationFrame(rafId)
-	testStream?.getTracks().forEach((track) => track.stop())
-	testStream = null
-	void audioContext?.close()
-	audioContext = null
-	testing.value = false
-	level.value = 0
-}
-
-async function restartMicTest() {
-	stopMicTest()
-	await toggleMicTest()
 }
 
 // camera preview
 const previewing = ref(false)
 const videoEl = ref<HTMLVideoElement>()
 let previewStream: MediaStream | null = null
+
+watch(cameraId, () => {
+	if (previewing.value) void restartPreview()
+})
 
 async function togglePreview() {
 	if (previewing.value) {
@@ -233,8 +240,6 @@ async function restartPreview() {
 }
 
 onUnmounted(() => {
-	stopMicTest()
 	stopPreview()
-	navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange)
 })
 </script>

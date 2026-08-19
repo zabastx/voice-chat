@@ -92,8 +92,11 @@
 					<p class="text-muted text-sm">В канале пока никого нет.</p>
 				</div>
 
-				<!-- control bar -->
-				<div class="border-default flex shrink-0 items-center justify-center gap-2 border-t p-3">
+				<!-- control bar; wraps rather than overflowing once a watch session adds its
+				     own buttons to the row -->
+				<div
+					class="border-default flex shrink-0 flex-wrap items-center justify-center gap-2 border-t p-3"
+				>
 					<template v-if="connectedHere">
 						<UTooltip :text="voice.muted.value ? 'Включить микрофон' : 'Выключить микрофон'">
 							<UButton
@@ -113,6 +116,7 @@
 								@click="voice.toggleCamera"
 							/>
 						</UTooltip>
+						<VoiceDevicePicker />
 						<UTooltip :text="voice.sharing.value ? 'Остановить показ' : 'Демонстрация экрана'">
 							<UButton
 								:color="voice.sharing.value ? 'primary' : 'neutral'"
@@ -162,15 +166,19 @@
 							/>
 						</UTooltip>
 					</template>
-					<UButton
-						v-else
-						:loading="voice.connecting.value"
-						color="success"
-						icon="i-lucide-phone"
-						label="Подключиться"
-						size="lg"
-						@click="() => voice.join(channelId)"
-					/>
+					<!-- the picker stays available before joining: choosing the right microphone
+					     first is what keeps the wrong one from going live for the first second -->
+					<template v-else>
+						<UButton
+							:loading="voice.connecting.value"
+							color="success"
+							icon="i-lucide-phone"
+							label="Подключиться"
+							size="lg"
+							@click="() => voice.join(channelId)"
+						/>
+						<VoiceDevicePicker />
+					</template>
 				</div>
 			</div>
 		</template>

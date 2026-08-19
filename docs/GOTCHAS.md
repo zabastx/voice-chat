@@ -20,7 +20,9 @@ Running dev under Bun (`bun --bun nuxt dev`) routes WS upgrades through Nuxt's d
 
 SSR 500 after heavy HMR churn; not a real code error. Stop the server, delete `.nuxt`, `bun run postinstall`, restart.
 
-Presents as any auto-import being "not defined" (`useRealtime is not defined`, `useToast is not defined`) with hydration-mismatch warnings alongside. **Adding a new auto-imported composable while the dev server is running is a reliable trigger** — hit twice while building Watch Together (`useWatch.ts`, `useWatchStage.ts`). Restart after creating one rather than debugging the phantom error.
+Presents as any auto-import being "not defined" (`useRealtime is not defined`, `useToast is not defined`) with hydration-mismatch warnings alongside. **Adding a new auto-imported composable while the dev server is running is a reliable trigger** — hit twice while building Watch Together (`useWatch.ts`, `useWatchStage.ts`), and again adding a new _export_ to an existing `app/utils/` file (`prefetchMicGateWorklet`), so a new file isn't required. Restart after creating one rather than debugging the phantom error.
+
+Two tells that it is this and not your code: a plain `fetch()` of the same path from the console renders clean HTML while navigating to it 500s, and it survives reloads plus cache-busting. If you need a second server rather than restarting someone else's, `nuxt dev` holds a per-directory lock — `NUXT_IGNORE_LOCK=1` with its own `PORT`.
 
 ### 4. vue-tsc "Excessive stack depth" on `$fetch('/api/...')`
 
@@ -36,7 +38,7 @@ TS2321 — Nuxt's typed-route inference chokes without an explicit return type. 
 
 ### 6. Reka `USelect` items cannot use `''` as a value
 
-Empty string is reserved for "cleared" — console error + broken select. Use a non-empty sentinel: device pickers use `'default'` (Chrome's own `'default'` pseudo-device filtered out of the list first). See [SettingsVoice.vue](../app/components/settings/SettingsVoice.vue).
+Empty string is reserved for "cleared" — console error + broken select. Use a non-empty sentinel: device pickers use `'default'` (Chrome's own `'default'` pseudo-device filtered out of the list first). Both the sentinel and the `'default'`↔`null` translation live once, in [useMediaDevices.ts](../app/composables/useMediaDevices.ts) (`toOptions` / `deviceModel`) — bind every device `USelect` through it rather than re-deriving the sentinel per surface.
 
 ### 7. `UDashboardGroup` storage prop value
 
@@ -117,6 +119,26 @@ Firefox connects to signaling then drops with `ICE failed, your TURN server appe
 **Fix:** set `LIVEKIT_NODE_IP` to your machine's LAN IP in `.env` (`ipconfig` / `ip addr`) — [compose.dev.yaml](../compose.dev.yaml) passes it as `--node-ip`, so TURN gets a non-loopback address. Chrome works either way.
 **Traps:** LiveKit v1.x has no `turn_servers` config key (`field turn_servers not found`) — use the built-in `turn:` section in [livekit.dev.yaml](../livekit.dev.yaml); `--node-ip` must be an IP, not a hostname (see #16).
 **Manual fallback:** Firefox `about:config` → `media.peerconnection.ice.obfuscate_host_addresses = false`.
+
+### 18i. `processor.restart()` is called without an `audioContext`
+
+`LocalAudioTrack.setProcessor` passes the track's `audioContext` in `AudioProcessorOptions`, but `restartTrack` (device switch, wake-from-sleep, reconnect republish) calls `processor.restart({track, kind, element, localTrack})` with **no `audioContext` at all** (`esm.mjs:19383`). An audio processor must therefore cache the context it was given at `init` and reuse it, which is why [mic-gate.ts](../app/utils/mic-gate.ts) keeps `context` across inits and only clears it in `destroy`.
+
+Do **not** conclude from `webAudioMix` defaulting to `false` that the context is absent on the first call — it isn't. `Room.acquireAudioContext()` (`esm.mjs:31593-31602`) creates one unconditionally; `webAudioMix` only selects a _custom_ context and only gates pushing it onto **remote** participants, while `localParticipant.setAudioContext(...)` runs either way. `LocalAudioTrack.setProcessor` (`esm.mjs:20016`) throws `'Audio context needs to be set on LocalAudioTrack…'` without one, so if it were really missing the processor could never attach. (An earlier version of this file claimed the opposite, from reading the generic `LocalTrack.setProcessor` at `esm.mjs:19711` instead of the `LocalAudioTrack` override.)
+
+### 18k. Enabling a track with nothing published creates a **new** track, processor and all
+
+`setMicrophoneEnabled(true)` only unmutes when a publication already exists; otherwise it takes the `createTracks()` + `publishTrack()` branch (`esm.mjs:27868-27871`) and the fresh `LocalAudioTrack` carries **no processor**. So a member who joins without microphone access, grants it, and clicks unmute gets a wide-open mic no matter what the noise gate says. Anything attached via `setProcessor` has to be re-applied on every path that can publish — and checked with `track.getProcessor()` rather than a local handle, since the handle still points at the processor of the track that was replaced.
+
+Related: `stopProcessor()` stops the processed track _before_ restoring the raw one and then `applyConstraints` (`esm.mjs:19802-19820`), so a throw partway leaves the RTP sender on a stopped track — inaudible to everyone, with nothing in the UI to show it. Guard both directions, not just the attach.
+
+### 18j. An `audioWorklet.addModule()` fetch is invisible to the network log
+
+It appears in neither `performance.getEntriesByType('resource')` nor Playwright's request log, even when it definitely ran and the processor is live. Checking either one reads as "the worklet never loaded" and sends you debugging a feature that works. Observe it by patching `AudioWorklet.prototype.addModule` in-page. (Related: the voice control bar is icon-only `UButton`s with tooltips rather than aria-labels, so scanning `button` text/aria for «Отключиться» finds nothing and looks like "not in a call" — match on the `span.iconify` class instead, e.g. `i-lucide:phone-off`.)
+
+### 18l. Choosing an output device does not move a Watch Session's audio
+
+Output selection works by `setSinkId` on the media elements this app creates — the LiveKit audio tracks in [useVoice.ts](../app/composables/useVoice.ts). A Watch Session plays inside the YouTube/Twitch **iframe**, which is cross-origin and holds its own audio elements, so no sink can be pushed onto it. Picking headphones therefore moves the Members' voices there and leaves the video on the system default. This is a browser limit, not a missing call: there is nothing to fix in `switchActiveDevice`. Surfaced in the glossary under **Playback Device** so it reads as a known limit rather than a bug report.
 
 ## Watch Together (YouTube embed)
 

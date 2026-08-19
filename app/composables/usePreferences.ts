@@ -14,6 +14,13 @@ export interface LocalVolume {
 //   - 'original'   «Без сжатия»             (native capture, no downscale)
 export type ScreenSharePresetId = 'h1080fps15' | 'h1080fps30' | 'original'
 
+// How the microphone is transmitted while connected to a Voice Channel:
+//   - 'open' — nothing between the mic and the SFU (the v1 behaviour, still the default)
+//   - 'gate' — a noise gate opens only above `gateThreshold` (see docs/adr/0010)
+// Push-to-talk is the intended third mode; it needs the app window focused to see the key,
+// so it is deliberately not shipped alongside the gate.
+export type MicMode = 'open' | 'gate'
+
 export interface Preferences {
 	micDeviceId: string | null
 	speakerDeviceId: string | null
@@ -31,6 +38,15 @@ export interface Preferences {
 	// where the floating mini player was last dragged to, in viewport px;
 	// null until the member moves it, which means "bottom-right by default"
 	watchMiniPos: { x: number; y: number } | null
+	// Microphone transmission mode + its noise-gate tuning. Per-device like every other
+	// capture preference: the right threshold is a property of this room and this mic.
+	micMode: MicMode
+	// gate opens at or above this point on the shared 0–100 level scale (app/utils/audio-level.ts);
+	// 0 means "never gate", which is `micMode: 'open'` by another name
+	gateThreshold: number
+	// how long the gate stays open after the last loud block, so pauses between words
+	// don't chop the tail off a sentence
+	gateHold: number
 	// Watch Volume: playback level (0–100) for a Watch Session's own audio.
 	// Deliberately NOT part of `localVolumes` — that map is keyed by a speaker's
 	// member id and sets how loud a *person* is; a Watch Session is nobody's voice.
@@ -51,7 +67,12 @@ function defaults(): Preferences {
 		lastSeenVersion: null,
 		screenSharePreset: 'h1080fps15',
 		watchMiniPos: null,
-		watchVolume: 100
+		watchVolume: 100,
+		micMode: 'open',
+		// ≈ -38 dBFS: above a noise-suppressed room floor, below conversational speech.
+		// A starting point to tune from, not a claim about anyone's microphone.
+		gateThreshold: 45,
+		gateHold: 300
 	}
 }
 

@@ -106,9 +106,14 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]['id']
 
-const active = ref<TabId>('profile')
+// `tab` deep-links a category, for callers that already know what the member came for (the
+// voice control bar's device picker opens straight onto «Голос и видео»). A link that lands
+// on the wrong page is worse than no link — hence also skipping the mobile category list.
+const props = defineProps<{ tab?: TabId }>()
+
+const active = ref<TabId>(props.tab ?? 'profile')
 // mobile only: false = category list, true = the selected category's settings
-const mobileDetail = ref(false)
+const mobileDetail = ref(props.tab !== undefined)
 
 const activeTab = computed(() => tabs.find((t) => t.id === active.value)!)
 
