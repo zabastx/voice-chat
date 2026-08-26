@@ -214,7 +214,7 @@ VK's Bots Long Poll hands the _same_ updates to every client polling with the sa
 
 ### 23. VK turns a bare `@name` in a message into a mention of a stranger
 
-Sending the plain text `@danil` made VK render `[id7074907|@danil]` — a link to whichever VK account owns that screen name, who also gets notified. Our mentions name app members and mean nothing on VK. Every `messages.send` passes `disable_mentions: 1`. Telegram has no equivalent behaviour, so this is easy to miss when porting a notification body from one to the other.
+Sending the plain text `@danil` made VK render `[id7074907|@danil]` — a link to whichever VK account owns that screen name, who also gets notified. Our mentions name app members and mean nothing on VK, so every `messages.send` passes `disable_mentions: 1`. **That only stops the notification.** Measured 2026-08-26: the body still renders as a link to that stranger's profile, because VK linkifies any `@word` and documents no escape. Removing it entirely means not emitting a bare `@` for VK at all. Telegram has no equivalent behaviour, so this is easy to miss when porting a notification body between the two.
 
 ## Deploy notes worth remembering
 
