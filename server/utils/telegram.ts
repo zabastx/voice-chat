@@ -43,17 +43,7 @@ export async function tgSendMessage(
 // (403) so a member who blocked the bot doesn't re-link with notifications still
 // firing into the void; the manual unlink endpoint leaves the flag untouched.
 export async function clearTelegramLink(memberId: string, disableNotifications = false) {
-	const [member] = await useDb()
-		.update(schema.members)
-		.set({
-			telegramChatId: null,
-			telegramLinkToken: null,
-			telegramLinkTokenExpiresAt: null,
-			...(disableNotifications ? { telegramNotificationsEnabled: false } : {})
-		})
-		.where(eq(schema.members.id, memberId))
-		.returning()
-	if (member) wsBroadcast({ type: 'member.updated', member: memberDto(member) })
+	await clearLink(memberId, 'telegram', disableNotifications)
 }
 
 // Telegram caps a media caption at 1024 chars (vs 4096 for sendMessage); text
@@ -86,11 +76,12 @@ async function recordNotification(opts: {
 	telegramMessageId: number
 	channelId: string
 }) {
-	await useDb().insert(schema.telegramNotifications).values({
+	await useDb().insert(schema.notificationMappings).values({
 		id: newId(),
+		transport: 'telegram',
 		memberId: opts.memberId,
-		chatId: opts.chatId,
-		telegramMessageId: opts.telegramMessageId,
+		externalChatId: opts.chatId,
+		externalMessageId: opts.telegramMessageId,
 		channelId: opts.channelId
 	})
 }
@@ -172,15 +163,8 @@ export async function notifyOffline(
 	if (offlineIds.length === 0) return
 
 	const db = useDb()
-	const rows = await db
-		.select({
-			id: schema.members.id,
-			chatId: schema.members.telegramChatId,
-			enabled: schema.members.telegramNotificationsEnabled
-		})
-		.from(schema.members)
-		.where(inArray(schema.members.id, offlineIds))
-	const targets = rows.filter((r) => r.chatId && r.enabled)
+	// linked AND notifications still on
+	const targets = await reachableLinks('telegram', offlineIds)
 	if (targets.length === 0) return
 
 	// resolve mentioned members' usernames so <@id> tokens decode to @name in
@@ -233,8 +217,8 @@ export async function notifyOffline(
 	for (const target of targets) {
 		const record = (messageId: number) =>
 			recordNotification({
-				memberId: target.id,
-				chatId: target.chatId!,
+				memberId: target.memberId,
+				chatId: target.externalId,
 				telegramMessageId: messageId,
 				channelId: channel.id
 			})
@@ -245,9 +229,9 @@ export async function notifyOffline(
 		// 1. send text as its own message when there are no attachments to
 		//    caption it on, or when it exceeds the caption limit
 		if (text.length > 0 && (mediaItems.length === 0 || !textFitsCaption)) {
-			const r = await tgSendMessage(target.chatId!, text)
+			const r = await tgSendMessage(target.externalId, text)
 			if (r.blocked) {
-				await clearTelegramLink(target.id, true)
+				await clearTelegramLink(target.memberId, true)
 				continue
 			}
 			if (r.messageId != null) {
@@ -261,7 +245,7 @@ export async function notifyOffline(
 		//    sent as its own message)
 		for (const m of mediaItems) {
 			const useCaption = !textDelivered && textFitsCaption
-			const r = await tgSendMedia(target.chatId!, {
+			const r = await tgSendMedia(target.externalId, {
 				type: m.type,
 				caption: useCaption ? text : undefined,
 				filename: m.filename,
@@ -269,7 +253,7 @@ export async function notifyOffline(
 				mime: m.mime
 			})
 			if (r.blocked) {
-				await clearTelegramLink(target.id, true)
+				await clearTelegramLink(target.memberId, true)
 				blocked = true
 				break
 			}
@@ -289,9 +273,9 @@ export async function notifyOffline(
 		if (body.length > 0 && !textDelivered) {
 			const note =
 				mediaItems.length > 0 && !mediaDelivered ? '\n(вложение не удалось переслать)' : ''
-			const r = await tgSendMessage(target.chatId!, text + note)
+			const r = await tgSendMessage(target.externalId, text + note)
 			if (r.blocked) {
-				await clearTelegramLink(target.id, true)
+				await clearTelegramLink(target.memberId, true)
 				continue
 			}
 			if (r.messageId != null) {
@@ -308,7 +292,7 @@ export async function notifyOffline(
 		//    empty body would fire this after step 1 already sent the header.
 		//    No mapping row: a reply to this hint should not route into a channel.
 		if (body.length === 0 && mediaItems.length > 0 && !mediaDelivered) {
-			await tgSendMessage(target.chatId!, `${text}\n(не удалось переслать вложение)`)
+			await tgSendMessage(target.externalId, `${text}\n(не удалось переслать вложение)`)
 		}
 	}
 }

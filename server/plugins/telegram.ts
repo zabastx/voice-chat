@@ -7,8 +7,8 @@ const SWEEP_INTERVAL_MS = 60 * 60 * 1000
 
 async function sweepNotificationMappings() {
 	await useDb()
-		.delete(schema.telegramNotifications)
-		.where(lt(schema.telegramNotifications.createdAt, new Date(Date.now() - MAPPING_TTL_MS)))
+		.delete(schema.notificationMappings)
+		.where(lt(schema.notificationMappings.createdAt, new Date(Date.now() - MAPPING_TTL_MS)))
 }
 
 export default defineNitroPlugin(async () => {

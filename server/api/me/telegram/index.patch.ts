@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm'
 import * as z from 'zod'
 
 const bodySchema = z.object({
@@ -9,11 +8,6 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
 	const body = await readValidatedBody(event, bodySchema.parse)
-	const [member] = await useDb()
-		.update(schema.members)
-		.set({ telegramNotificationsEnabled: body.notificationsEnabled })
-		.where(eq(schema.members.id, user.id))
-		.returning()
-	if (member) wsBroadcast({ type: 'member.updated', member: memberDto(member) })
+	await setNotificationsEnabled(user.id, 'telegram', body.notificationsEnabled)
 	return { notificationsEnabled: body.notificationsEnabled }
 })

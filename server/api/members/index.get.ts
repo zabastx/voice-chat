@@ -9,11 +9,10 @@ export default defineEventHandler(async (event) => {
 			displayName: schema.members.displayName,
 			avatarId: schema.members.avatarId,
 			role: schema.members.role,
-			createdAt: schema.members.createdAt,
-			telegramChatId: schema.members.telegramChatId,
-			telegramNotificationsEnabled: schema.members.telegramNotificationsEnabled
+			createdAt: schema.members.createdAt
 		})
 		.from(schema.members)
 		.orderBy(asc(schema.members.createdAt))
-	return rows.map(memberDto)
+	// one lookup for the whole list rather than one per member
+	return memberDtos(rows)
 })

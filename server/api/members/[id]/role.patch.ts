@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 400, message: 'Нельзя изменить роль админа' })
 	}
 	await db.update(schema.members).set({ role: body.role }).where(eq(schema.members.id, id))
-	const dto = memberDto({ ...member, role: body.role })
+	const dto = await memberDto({ ...member, role: body.role })
 	// the target's client sees its own id in this event and refreshes its session
 	wsBroadcast({ type: 'member.updated', member: dto })
 	return dto

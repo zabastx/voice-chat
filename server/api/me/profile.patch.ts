@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 	if (!member) {
 		throw createError({ statusCode: 404, message: 'Участник не найден' })
 	}
-	const dto = memberDto(member)
+	const dto = await memberDto(member)
 	wsBroadcast({ type: 'member.updated', member: dto })
 	return dto
 })

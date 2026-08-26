@@ -2,6 +2,6 @@
 // so re-linking later restores the member's previous preference.
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
-	await clearTelegramLink(user.id)
+	await clearLink(user.id, 'telegram')
 	return { ok: true }
 })

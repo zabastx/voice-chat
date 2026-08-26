@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 		await deleteAttachmentObjects([avatarObjectKey(user.id, member.avatarId)])
 	}
 
-	const dto = memberDto(updated!)
+	const dto = await memberDto(updated!)
 	wsBroadcast({ type: 'member.updated', member: dto })
 	return dto
 })
