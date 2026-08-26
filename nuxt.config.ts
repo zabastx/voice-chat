@@ -74,6 +74,11 @@ export default defineNuxtConfig({
 		// never talks to api.telegram.org directly — the relay does.
 		telegramRelayUrl: '',
 		telegramRelaySecret: '',
+		// VK notifications via the Callback API (adr/0011). Unset = feature disabled, and
+		// POST /api/vk/callback 404s. The confirmation string rotates — read the current one
+		// from Управление → Работа с API → Callback API, or groups.getCallbackConfirmationCode.
+		vkConfirmationCode: '',
+		vkCallbackSecret: '',
 		public: {
 			livekitUrl: 'ws://127.0.0.1:7880',
 			appVersion: pkg.version,
