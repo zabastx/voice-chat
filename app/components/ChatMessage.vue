@@ -49,11 +49,8 @@
 				</UDropdownMenu>
 				<span v-else class="text-highlighted text-sm font-semibold">{{ authorName }}</span>
 				<span class="text-dimmed text-xs">{{ formatTimestamp(message.createdAt) }}</span>
-				<span
-					v-if="message.source === 'telegram'"
-					class="text-dimmed bg-elevated rounded px-1 py-0.5 text-[10px]"
-				>
-					через Telegram
+				<span v-if="sourceLabel" class="text-dimmed bg-elevated rounded px-1 py-0.5 text-[10px]">
+					через {{ sourceLabel }}
 				</span>
 			</div>
 
@@ -219,6 +216,15 @@ const rendered = computed(() => {
 const authorName = computed(
 	() => author.value?.displayName ?? author.value?.username ?? props.message.authorName
 )
+
+// A message posted through a messenger bridge is badged with which one, so a
+// bridged reply is never mistaken for a native send (adr/0007, adr/0011).
+// 'app' has no badge.
+const SOURCE_LABELS: Partial<Record<MessageDto['source'], string>> = {
+	telegram: 'Telegram',
+	vk: 'VK'
+}
+const sourceLabel = computed(() => SOURCE_LABELS[props.message.source])
 
 // Read off the plain markdown pass, not `rendered` — embeds don't depend on the
 // member directory, and renderMarkdown is memoized so this costs a cache hit.

@@ -5,6 +5,12 @@
 // Only one inbound transport may run at a time. With both a poll loop and a
 // registered Callback server, VK delivers every event twice and each gets
 // handled twice, so NUXT_VK_INBOUND picks one.
+//
+// One *instance* may poll, too. Two app processes sharing a community both
+// receive every event and both act on it: for a single-use link token, one
+// consumes it and the other answers "your link expired" (GOTCHAS 22). A
+// Postgres advisory lock elects the poller; losers stay inert and let the
+// holder work.
 
 type LongPollServer = { key: string; server: string; ts: string }
 type Poll = { ts?: string; updates?: VkUpdate[]; failed?: number }
@@ -13,19 +19,29 @@ type Poll = { ts?: string; updates?: VkUpdate[]; failed?: number }
 const WAIT_SECONDS = 25
 const FETCH_TIMEOUT_MS = (WAIT_SECONDS + 15) * 1000
 const RETRY_DELAY_MS = 5000
+// arbitrary but fixed: any process using this key is contending for the same job
+const POLL_LOCK_KEY = 0x766b_6c70
 
 export default defineNitroPlugin((nitroApp) => {
 	const config = useRuntimeConfig()
 	if (!vkConfigured() || config.vkInbound !== 'longpoll') return
 
 	let stopped = false
+	let lock: { release: () => Promise<void> } | null = null
 	// the dev server re-runs plugins on reload; without this the pollers stack up
-	nitroApp.hooks.hook('close', () => {
+	nitroApp.hooks.hook('close', async () => {
 		stopped = true
+		await lock?.release()
 	})
 
 	void (async () => {
 		await initDb()
+		lock = await tryAdvisoryLock(POLL_LOCK_KEY)
+		if (!lock) {
+			console.log('vk long poll: another instance holds the poll lock, staying idle')
+			return
+		}
+		console.log('vk long poll: started')
 		let session: LongPollServer | null = null
 
 		while (!stopped) {

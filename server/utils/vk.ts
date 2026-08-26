@@ -161,6 +161,11 @@ async function deliver(peerId: string, payload: NotificationPayload): Promise<De
 			random_id: Date.now(),
 			// no snippet cards: preserves the SSRF/privacy posture from adr/0006
 			dont_parse_links: 1,
+			// VK turns a bare @name in the body into a mention of whichever VK
+			// account owns that screen name — an app member called "danil" became a
+			// link to an unrelated id7074907, who would also be notified. Our
+			// mentions are app members and mean nothing on VK, so suppress it.
+			disable_mentions: 1,
 			message: text,
 			...(attachments.length ? { attachment: attachments.join(',') } : {})
 		})
@@ -186,6 +191,7 @@ export async function vkSend(peerId: string, text: string) {
 			peer_ids: peerId,
 			random_id: Date.now(),
 			dont_parse_links: 1,
+			disable_mentions: 1,
 			message: text
 		})
 	} catch (err) {
