@@ -341,8 +341,9 @@ None of this bears on the prod host: a tunnel is reachable by construction, so t
 «Подтвердить» aimed at the prod host — is still unrun.
 
 **Why this matters.** ADR 0006's relay exists for exactly one reason: the prod host filtered
-inbound webhook delivery from Telegram's servers. Long poll has no inbound leg — both the API calls
-and the poll are outbound HTTPS to `api.vk.ru` — so a VK transport can live entirely inside the Nuxt
+inbound webhook delivery from Telegram's servers. Long poll has no inbound leg — the API calls and
+the poll are both outbound HTTPS, though to two different hosts (`api.vk.ru` and, for the poll
+itself, `lp.vk.ru`; allowlist both) — so a VK transport can live entirely inside the Nuxt
 app, as a Nitro plugin holding the loop, next to the existing sweeper in `server/plugins/telegram.ts`.
 No second relay, no second bearer secret, no `ingest.post.ts` equivalent.
 

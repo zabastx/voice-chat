@@ -37,7 +37,9 @@ The specifics VK forces, each different from Telegram:
 
 - **Transport is Bots Long Poll, in-process. No relay, no ingest route.**
   `groups.getLongPollServer` → `GET {server}?act=a_check&key&ts&wait=25`, handling `failed:1/2/3`.
-  Both hops are outbound HTTPS to `api.vk.ru`, so the inbound-filtering failure that produced
+  Both hops are outbound HTTPS, but to **two different hosts** — the method calls go to
+  `api.vk.ru`, the poll itself to whatever `groups.getLongPollServer` returns, currently
+  `lp.vk.ru`. Allowlist both. Being outbound-only, the inbound-filtering failure that produced
   `telegram-relay` structurally cannot recur. The poll loop lives in a Nitro plugin next to the
   existing sweeper; `handleVkUpdate(update)` stays free of `H3Event` so Callback API can be bolted
   on later without moving logic.
