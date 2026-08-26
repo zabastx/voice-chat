@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
 	return {
 		transport,
 		label: info.label,
+		icon: info.icon,
 		configured: info.configured,
 		linked: !!link?.externalId,
 		// no row yet = never linked, and the default is on

@@ -70,8 +70,9 @@ export interface MemberDto {
 	// derived: linked to Telegram AND notifications enabled. The chat id and link
 	// token stay server-only secrets (adr/0006); only this boolean is public.
 	// which messengers can reach this member when they are offline. Reachability
-	// only — never the account behind it (adr/0006, adr/0011).
-	notifications: { telegram: boolean; vk: boolean }
+	// only — never the account behind it (adr/0006, adr/0011). Keyed off the
+	// transport union so adding one is a compile error here, not a silent gap.
+	notifications: Record<NotificationTransport, boolean>
 }
 
 // a 1:1 direct-message conversation, from the perspective of the current member;

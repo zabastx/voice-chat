@@ -1,5 +1,7 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 
+import { NOTIFICATION_TRANSPORTS } from '../../shared/utils/notification-transports'
+
 interface MemberRow {
 	id: string
 	username: string
@@ -9,7 +11,7 @@ interface MemberRow {
 	createdAt: Date
 }
 
-function base(row: MemberRow, notifications: MemberDto['notifications']): MemberDto {
+function toDto(row: MemberRow, notifications: MemberDto['notifications']): MemberDto {
 	return {
 		id: row.id,
 		username: row.username,
@@ -32,11 +34,15 @@ export async function memberDto(row: MemberRow): Promise<MemberDto> {
 export async function memberDtos(rows: MemberRow[]): Promise<MemberDto[]> {
 	const ids = rows.map((r) => r.id)
 	// one query per transport for the whole list, not one per member
-	const [telegram, vk] = await Promise.all([
-		reachableMemberIds('telegram', ids),
-		reachableMemberIds('vk', ids)
-	])
-	return rows.map((r) => base(r, { telegram: telegram.has(r.id), vk: vk.has(r.id) }))
+	const sets = await Promise.all(
+		NOTIFICATION_TRANSPORTS.map(async (t) => [t, await reachableMemberIds(t, ids)] as const)
+	)
+	return rows.map((r) =>
+		toDto(
+			r,
+			Object.fromEntries(sets.map(([t, hit]) => [t, hit.has(r.id)])) as MemberDto['notifications']
+		)
+	)
 }
 
 async function reachableMemberIds(

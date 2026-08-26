@@ -21,6 +21,14 @@ export interface NotificationMedia {
 	mime: string
 }
 
+// The channel a notification is about. Written out inline in two signatures
+// before; it is one concept, so it gets one name.
+export interface NotifyChannel {
+	id: string
+	kind: 'text' | 'voice' | 'dm'
+	name: string
+}
+
 export interface NotificationPayload {
 	// full body, already mention-decoded and markdown-stripped, URLs intact
 	text: string
@@ -32,11 +40,13 @@ export interface NotificationPayload {
 // What a transport reports back for one recipient. Every delivered message gets
 // a mapping row, so a reply to any of them routes; `blocked` means the member
 // has barred the bot and should be auto-unlinked.
-export interface DeliveredMessage {
-	messageId: number
-	// VK only — its second id space (adr/0011). Telegram leaves it undefined.
-	conversationMessageId?: number
-}
+// At least one id must be set. Telegram always has `messageId`; VK usually has
+// both, but its docs warn the common message id "may be absent in some cases",
+// and a cmid-only delivery must still be recorded — dropping it is what would
+// make the reply unroutable, which is the whole reason both are stored.
+export type DeliveredMessage =
+	| { messageId: number; conversationMessageId?: number }
+	| { messageId?: undefined; conversationMessageId: number }
 
 export interface DeliveryResult {
 	delivered: DeliveredMessage[]
@@ -62,10 +72,7 @@ export function registerNotificationTransport(impl: NotificationTransportImpl) {
 // members for a text channel, or the other participant for a DM. Called
 // fire-and-forget from createChannelMessage — must never throw into the send
 // path, so every transport is isolated behind its own catch.
-export async function notifyOffline(
-	channel: { id: string; kind: 'text' | 'voice' | 'dm'; name: string },
-	dto: MessageDto
-) {
+export async function notifyOffline(channel: NotifyChannel, dto: MessageDto) {
 	const active = transports.filter((t) => t.configured())
 	if (active.length === 0) return
 
@@ -101,8 +108,8 @@ export async function notifyOffline(
 						transport: impl.transport,
 						memberId: target.memberId,
 						externalChatId: target.externalId,
-						messageId: msg.messageId,
-						conversationMessageId: msg.conversationMessageId,
+						messageId: msg.messageId ?? null,
+						conversationMessageId: msg.conversationMessageId ?? null,
 						channelId: channel.id
 					})
 				}
@@ -115,10 +122,7 @@ export async function notifyOffline(
 
 // The notification's content, built once and reused for every recipient and
 // every transport.
-async function buildPayload(
-	channel: { id: string; kind: 'text' | 'voice' | 'dm'; name: string },
-	dto: MessageDto
-): Promise<NotificationPayload> {
+async function buildPayload(channel: NotifyChannel, dto: MessageDto): Promise<NotificationPayload> {
 	const db = useDb()
 	// resolve mentioned members' usernames so <@id> tokens decode to @name —
 	// only the actually-mentioned members, not the whole table
@@ -175,8 +179,8 @@ async function recordMapping(opts: {
 	transport: NotificationTransport
 	memberId: string
 	externalChatId: string
-	messageId: number
-	conversationMessageId?: number
+	messageId: number | null
+	conversationMessageId: number | null
 	channelId: string
 }) {
 	await useDb()
@@ -187,7 +191,7 @@ async function recordMapping(opts: {
 			memberId: opts.memberId,
 			externalChatId: opts.externalChatId,
 			externalMessageId: opts.messageId,
-			conversationMessageId: opts.conversationMessageId ?? null,
+			conversationMessageId: opts.conversationMessageId,
 			channelId: opts.channelId
 		})
 		// a resent id would mean the messenger reused one; keep the first mapping

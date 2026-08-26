@@ -71,11 +71,16 @@ The specifics VK forces, each different from Telegram:
   from the web and Android clients.
   The pair is stored rather than just `conversation_message_id` because the spike ran in a fresh
   dialog where the two counters had not yet diverged — it proves both are _populated_, not that
-  either is always present.
+  either is always present. Which means the mapping must accept **either alone**: a delivery
+  carrying only a `conversation_message_id` still has to be recorded, or the reply it should have
+  routed is lost. `external_message_id` is therefore nullable, and the send records whichever ids
+  came back.
 
 - **Blocked detection parses the body, and also listens.** VK returns HTTP 200 with
   `error.error_code`; `901` ("Can't send messages for users without permission") is the analogue of
-  Telegram's 403 → auto-unlink, and it fires on the upload calls too, not only on the send. On top
+  Telegram's 403 → auto-unlink, and it fires on the upload calls too, not only on the send. `900`
+  (blacklisted) and `902` (barred by privacy settings) are treated identically — all three mean the
+  member cannot be reached and the link should go. On top
   of that VK _pushes_ `message_deny`, so auto-unlink is event-driven rather than waiting for the
   next failed send.
 
@@ -138,9 +143,14 @@ the two id spaces — while the cost of the extra column is one integer per noti
   correspondingly larger blast radius if it slips. The derived public boolean (reachability, not
   identity) stays safe.
 
-- The single-instance caveat carries over unchanged: two app instances polling with the same `key`
-  would split updates between them, the same class of problem as two instances fighting over
-  `setWebhook`. Fine for the current deploy.
+- **The single-instance caveat is worse than first written, and is now handled.** This ADR
+  originally said two instances polling with the same `key` "would split updates between them …
+  fine for the current deploy". That was wrong: VK gives _every_ poller _every_ update. Two dev
+  servers running at once each handled the same `message_new`, so one consumed a single-use link
+  token and the other told the member their link had expired — one second apart, in the member's
+  VK dialog. A Postgres advisory lock now elects one poller and the rest stay idle
+  (`tryAdvisoryLock` in [db.ts](../../server/utils/db.ts), taken in
+  [plugins/vk.ts](../../server/plugins/vk.ts)). Recorded as GOTCHAS 22.
 
 - One documented rule we will be out of compliance with: [Bots Rules](https://dev.vk.ru/ru/bots-rules)
   item 8 requires passing `content_source` when relaying user-generated content, naming

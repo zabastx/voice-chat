@@ -1,0 +1,1 @@
+ALTER TABLE "notification_mappings" ALTER COLUMN "external_message_id" DROP NOT NULL;

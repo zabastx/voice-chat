@@ -200,7 +200,7 @@ The origin previously hosted another app (Stoat); its SW outlives it and keeps s
 
 The VPS (`…cloud.ru`) blocks Telegram **both ways**: `api.telegram.org` resolves IPv6-only (no working v6 egress; Bun's fetch won't fall back to v4) and inbound webhook delivery is dropped — even though the site is publicly reachable. The app never talks to Telegram directly: the standalone stateless `telegram-relay/` service (hosted where Telegram is reachable) is the only thing touching `api.telegram.org`; the app reaches it over plain HTTP (`NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET`) and updates come back via `POST /api/telegram/ingest`. See [ADR 0006 "Update: relay transport"](adr/0006-telegram-notifications.md) and [telegram-relay/README.md](../telegram-relay/README.md). Local dev: point at a relay instance, or leave unset to no-op the feature.
 
-## VK notifications (researched, not built)
+## VK notifications
 
 ### 21. A confirmed VK Callback server delivers nothing until you subscribe it to events
 
