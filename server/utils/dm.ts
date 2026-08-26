@@ -53,9 +53,7 @@ export async function dmConversationDto(
 			displayName: schema.members.displayName,
 			avatarId: schema.members.avatarId,
 			role: schema.members.role,
-			createdAt: schema.members.createdAt,
-			telegramChatId: schema.members.telegramChatId,
-			telegramNotificationsEnabled: schema.members.telegramNotificationsEnabled
+			createdAt: schema.members.createdAt
 		})
 		.from(schema.channelParticipants)
 		.innerJoin(schema.members, eq(schema.channelParticipants.memberId, schema.members.id))
@@ -83,7 +81,7 @@ export async function dmConversationDto(
 
 	return {
 		channelId,
-		member: memberDto(other),
+		member: await memberDto(other),
 		lastMessageAt: lastMessage?.at ? new Date(lastMessage.at).toISOString() : null,
 		lastReadAt: state?.lastReadAt?.toISOString() ?? null
 	}

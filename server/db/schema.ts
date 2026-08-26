@@ -28,14 +28,8 @@ export const members = pgTable('members', {
 	role: text('role', { enum: ['admin', 'moderator', 'member'] })
 		.notNull()
 		.default('member'),
-	// Telegram bridge. chatId is null until the member links their account; the raw
-	// chatId and link token are SECRETS — never surfaced in memberDto or the session
-	// cookie; only the derived `telegramNotifications` boolean is public (see adr/0006).
-	telegramChatId: text('telegram_chat_id'),
-	telegramNotificationsEnabled: boolean('telegram_notifications_enabled').notNull().default(true),
-	// single-use deep-link token; cleared once the bot consumes `/start <token>`
-	telegramLinkToken: text('telegram_link_token'),
-	telegramLinkTokenExpiresAt: timestamp('telegram_link_token_expires_at', { withTimezone: true }),
+	// Messenger links live in member_notification_links, one row per transport —
+	// they used to be telegram_-prefixed columns here (see adr/0011).
 	createdAt: timestamp('created_at', { withTimezone: true })
 		.notNull()
 		.$defaultFn(() => new Date())
@@ -166,22 +160,59 @@ export const invites = pgTable('invites', {
 	usedAt: timestamp('used_at', { withTimezone: true })
 })
 
-// Maps a notification the bot delivered back to the app context, so a Telegram
-// reply lands in the right channel/DM authored by the right member. Rows are
-// swept after 7 days (server/plugins/telegram.ts); a reply to an older/expired
-// notification falls through to the "reply to a recent notification" hint.
-export const telegramNotifications = pgTable(
-	'telegram_notifications',
+// A member's opt-in binding to one messenger. One row per (member, transport);
+// replaces the telegram_* columns that used to live on `members` (adr/0011).
+// `externalId` (Telegram chat id / VK peer id) and `linkToken` are SECRETS —
+// never in a member DTO or the session cookie. Only the derived reachability
+// boolean is public. A VK peer id is additionally the member's public VK user
+// id, so leaking one deanonymises them; treat it at least as carefully.
+export const memberNotificationLinks = pgTable(
+	'member_notification_links',
+	{
+		memberId: text('member_id')
+			.notNull()
+			.references(() => members.id, { onDelete: 'cascade' }),
+		transport: text('transport', { enum: ['telegram', 'vk'] }).notNull(),
+		// null while a link token is minted but not yet consumed — the row is
+		// created at mint time, so "linked" means externalId is set, not row exists
+		externalId: text('external_id'),
+		notificationsEnabled: boolean('notifications_enabled').notNull().default(true),
+		// single-use deep-link token, consumed by /start <token> (Telegram) or by
+		// `ref` on the «Начать» press (VK)
+		linkToken: text('link_token'),
+		linkTokenExpiresAt: timestamp('link_token_expires_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true })
+			.notNull()
+			.$defaultFn(() => new Date())
+	},
+	(table) => [
+		primaryKey({ columns: [table.memberId, table.transport] }),
+		// one messenger account links to at most one member per transport
+		uniqueIndex('member_notification_links_external_idx').on(table.transport, table.externalId)
+	]
+)
+
+// Maps a notification the bot delivered back to the app context, so a reply in
+// the messenger lands in the right channel/DM authored by the right member.
+// Rows are swept after 7 days (server/plugins/notifications.ts); a reply to an
+// older/expired notification falls through to the "reply to a recent one" hint.
+export const notificationMappings = pgTable(
+	'notification_mappings',
 	{
 		id: text('id').primaryKey(),
+		transport: text('transport', { enum: ['telegram', 'vk'] }).notNull(),
 		// the member a reply is posted AS (the notification's recipient)
 		memberId: text('member_id')
 			.notNull()
 			.references(() => members.id, { onDelete: 'cascade' }),
-		// recipient's Telegram chat — half of the reply lookup key
-		chatId: text('chat_id').notNull(),
+		// recipient's Telegram chat / VK peer — half of the reply lookup key
+		externalChatId: text('external_chat_id').notNull(),
 		// the bot message the user replies to — the other half of the lookup key
-		telegramMessageId: bigint('telegram_message_id', { mode: 'number' }).notNull(),
+		externalMessageId: bigint('external_message_id', { mode: 'number' }).notNull(),
+		// VK only. VK has two id spaces and the docs warn the common message id
+		// "may be absent in some cases", so a reply is matched against either —
+		// which is why this is a second column and not a rename (adr/0011).
+		conversationMessageId: bigint('conversation_message_id', { mode: 'number' }),
 		// where the reply is posted
 		channelId: text('channel_id')
 			.notNull()
@@ -191,10 +222,18 @@ export const telegramNotifications = pgTable(
 			.$defaultFn(() => new Date())
 	},
 	(table) => [
-		// reply routing looks up by (chat, replied-to message id); unique because a
-		// Telegram message id is unique within a chat — also a guard against a reply
-		// ever resolving to two different members
-		uniqueIndex('telegram_notifications_lookup_idx').on(table.chatId, table.telegramMessageId)
+		// unique because a message id is unique within a chat — also a guard against
+		// a reply ever resolving to two different members
+		uniqueIndex('notification_mappings_lookup_idx').on(
+			table.transport,
+			table.externalChatId,
+			table.externalMessageId
+		),
+		index('notification_mappings_cmid_idx').on(
+			table.transport,
+			table.externalChatId,
+			table.conversationMessageId
+		)
 	]
 )
 

@@ -1,4 +1,4 @@
-import { and, eq, gt } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 // Raw Telegram update, forwarded verbatim by the telegram-relay service, narrowed
 // to the fields we use.
@@ -47,24 +47,13 @@ export default defineEventHandler(async (event) => {
 		if (!token) {
 			// bare /start (e.g. Telegram's persistent Start button on a returning user):
 			// don't nag an already-linked chat to go link again
-			const existing = await db.query.members.findFirst({
-				where: eq(schema.members.telegramChatId, chat)
-			})
+			const existing = await memberIdByExternalId('telegram', chat)
 			await tgSendMessage(chat, existing ? HINTS.linked : HINTS.howToLink)
 			return { ok: true }
 		}
-		const [member] = await db
-			.update(schema.members)
-			.set({ telegramChatId: chat, telegramLinkToken: null, telegramLinkTokenExpiresAt: null })
-			.where(
-				and(
-					eq(schema.members.telegramLinkToken, token),
-					gt(schema.members.telegramLinkTokenExpiresAt, new Date())
-				)
-			)
-			.returning()
-		if (member) wsBroadcast({ type: 'member.updated', member: memberDto(member) })
-		await tgSendMessage(chat, member ? HINTS.linked : HINTS.badToken)
+		// single-use: consumeLinkToken clears the token and broadcasts member.updated
+		const memberId = await consumeLinkToken('telegram', token, chat)
+		await tgSendMessage(chat, memberId ? HINTS.linked : HINTS.badToken)
 		return { ok: true }
 	}
 
@@ -82,14 +71,15 @@ export default defineEventHandler(async (event) => {
 
 	const [mapping] = await db
 		.select({
-			memberId: schema.telegramNotifications.memberId,
-			channelId: schema.telegramNotifications.channelId
+			memberId: schema.notificationMappings.memberId,
+			channelId: schema.notificationMappings.channelId
 		})
-		.from(schema.telegramNotifications)
+		.from(schema.notificationMappings)
 		.where(
 			and(
-				eq(schema.telegramNotifications.chatId, chat),
-				eq(schema.telegramNotifications.telegramMessageId, repliedTo)
+				eq(schema.notificationMappings.transport, 'telegram'),
+				eq(schema.notificationMappings.externalChatId, chat),
+				eq(schema.notificationMappings.externalMessageId, repliedTo)
 			)
 		)
 		.limit(1)

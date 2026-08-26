@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
 	// panel, @mention autocomplete and DM picker without a refresh. Kept after the
 	// session is sealed: the row is already committed and the invite spent, so a
 	// throw from here must not cost the newcomer their login.
-	wsBroadcast({ type: 'member.updated', member: memberDto(member) })
+	wsBroadcast({ type: 'member.updated', member: await memberDto(member) })
 
 	return { id: member.id, username: member.username, role: member.role }
 })

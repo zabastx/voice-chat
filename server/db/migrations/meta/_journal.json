@@ -29,6 +29,20 @@
 			"when": 1783323008521,
 			"tag": "0003_rapid_karma",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1787725544768,
+			"tag": "0004_closed_preak",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1787725571174,
+			"tag": "0005_marvelous_may_parker",
+			"breakpoints": true
 		}
 	]
 }
