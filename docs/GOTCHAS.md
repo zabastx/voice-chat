@@ -208,6 +208,14 @@ Registering a Callback server and subscribing it to event types are **independen
 
 Two smaller ones from the same run: the community's «Версия API» dropdown versions the _events_, independently of the `v` on your own method calls; and the «Добавить кнопку "Начать"» toggle (which makes deep-link linking one tap) exists only in the admin UI — dev.vk.ru documents neither.
 
+### 22. Two app instances polling VK both handle every event
+
+VK's Bots Long Poll hands the _same_ updates to every client polling with the same key — it does not split them. Two dev servers up at once meant one consumed a single-use link token and the other answered "ссылка недействительна" to the same member, one second apart. [ADR 0011](adr/0011-vk-as-second-notification-transport.md) called this a single-instance caveat but framed it as updates being divided; it is worse. `server/plugins/vk.ts` now takes a Postgres advisory lock (`tryAdvisoryLock` in [db.ts](../server/utils/db.ts)) and only the holder polls — the log line is `vk long poll: another instance holds the poll lock, staying idle`. Check with `SELECT count(*) FROM pg_locks WHERE locktype='advisory'` — it should be exactly 1.
+
+### 23. VK turns a bare `@name` in a message into a mention of a stranger
+
+Sending the plain text `@danil` made VK render `[id7074907|@danil]` — a link to whichever VK account owns that screen name, who also gets notified. Our mentions name app members and mean nothing on VK. Every `messages.send` passes `disable_mentions: 1`. Telegram has no equivalent behaviour, so this is easy to miss when porting a notification body from one to the other.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).
