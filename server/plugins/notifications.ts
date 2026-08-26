@@ -12,13 +12,17 @@ async function sweepNotificationMappings() {
 }
 
 export default defineNitroPlugin(async () => {
-	// Webhook registration now lives in the telegram-relay service; the main app
-	// only owns the reply-mapping table. Ensure the DB is ready first — this plugin
-	// can run before plugins/db.ts, and initDb() is memoised so it's a no-op once
+	// Register the transports before any message can be sent. Each decides for
+	// itself whether it is configured; an unconfigured one stays inert.
+	registerTelegramTransport()
+
+	// Webhook registration lives in the telegram-relay service; the main app owns
+	// the reply-mapping table. Ensure the DB is ready first — this plugin can run
+	// before plugins/db.ts, and initDb() is memoised so it's a no-op once
 	// initialised. Then sweep at boot and hourly, matching the stale-upload sweep.
 	await initDb()
-	sweepNotificationMappings().catch((err) => console.error('telegram mapping sweep failed', err))
+	sweepNotificationMappings().catch((err) => console.error('notification sweep failed', err))
 	setInterval(() => {
-		sweepNotificationMappings().catch((err) => console.error('telegram mapping sweep failed', err))
+		sweepNotificationMappings().catch((err) => console.error('notification sweep failed', err))
 	}, SWEEP_INTERVAL_MS)
 })
