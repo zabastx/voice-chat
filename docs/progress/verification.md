@@ -4,6 +4,38 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## v0.22.0 — VK as a second notification transport
+
+Driven 2026-08-26, against the live VK community and the dev database.
+
+**Against a real VK community** (via `scripts/vk-reply-spike.ts`, before writing any of it):
+
+- `reply_message` arrives on a 1:1 user↔community `message_new` carrying seven populated fields,
+  including **both** `id` and `conversation_message_id`, both matching the probe — byte-identical
+  from the web and Android clients. This is what makes reply-to-send buildable at all.
+- The «Начать» press delivers `ref=<token>` alongside `payload={"command":"start"}`, so linking
+  is one tap.
+- `message_allow` fires with an **empty** `key`, so the token has to come from `ref`.
+- Long Poll and Callback deliver identical event objects; Callback was driven end-to-end through an
+  ngrok tunnel (handshake, secret rejection, delivery, reply routing).
+- From the **prod host**: `api.vk.ru` → 200, `lp.vk.ru` → 403 on its bare root, both over IPv4.
+  No relay needed.
+
+**Against the app:**
+
+- A synthetic `message_new` carrying a reply to a seeded mapping posted into `#general` authored as
+  the mapped member with `source='vk'`, Cyrillic intact.
+- The two-step migration carries data before dropping anything: verified on a scratch database
+  seeded with a linked member, a linked-but-muted member (the disabled preference survives), a
+  member holding an unconsumed token, and one who never touched Telegram (no row at all).
+- Unknown transport segment 404s; minting a VK token returns the deep link and stores it unlinked.
+- **Privacy invariant holds**: no external id and no link token in `/api/members`, `/api/dm`, or the
+  session cookie.
+
+**Not verified:** a real member linking a real VK account through the settings UI and receiving an
+actual notification — the path has been driven in pieces, never in one run. Attachment forwarding
+to VK (the upload servers, the document path for voice/video) is entirely undriven.
+
 ## Verified locally
 
 Two parallel Playwright browser profiles + real MinIO S3:

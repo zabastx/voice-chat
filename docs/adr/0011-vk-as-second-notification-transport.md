@@ -1,8 +1,14 @@
 # 0011 — VK as a second notification transport, over Bots Long Poll
 
 Date: 2026-08-26
-Status: proposed (nothing built yet; the empirical claims below are verified — see
-[research/vk-notifications-feasibility.md](../research/vk-notifications-feasibility.md))
+Status: accepted — implemented 2026-08-26 (v0.22.0). Evidence for the empirical claims below is in
+[research/vk-notifications-feasibility.md](../research/vk-notifications-feasibility.md).
+
+**Shipped as decided**, with one deliberate omission: voice notes go to VK as documents rather
+than inline voice messages, because matching VK's OGG/OPUS 16 kHz / 16 kbps requirement needs
+ffmpeg in the runtime image. The document path is the ADR's own stated fallback; transcoding
+remains available later without changing anything else. Long poll is the default and Callback is
+config-selectable (`NUXT_VK_INBOUND`) — never both, or VK delivers every event twice.
 
 ## Context
 
