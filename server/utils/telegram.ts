@@ -1,5 +1,3 @@
-import { eq, inArray } from 'drizzle-orm'
-
 // The main app never talks to api.telegram.org directly (its host filters
 // Telegram traffic — see adr/0006). Instead it calls the standalone
 // telegram-relay service, which proxies sendMessage and forwards inbound updates
@@ -57,42 +55,6 @@ type TgMediaItem = {
 	mime: string
 }
 
-// Map an attachment to the Telegram send method that best represents it. Voice
-// messages (the app's recorded `voice-message-*` clips) go as `sendVoice` so
-// Telegram plays them inline with a waveform; images as `sendPhoto`, video as
-// `sendVideo`, anything else as `sendDocument`.
-function tgMediaType(att: { filename: string; mime: string }): TgMediaItem['type'] {
-	if (att.filename.startsWith('voice-message-')) return 'voice'
-	if (att.mime.startsWith('image/')) return 'photo'
-	if (att.mime.startsWith('video/')) return 'video'
-	return 'document'
-}
-
-// Record a mapping row for a delivered Telegram message so a reply to it routes
-// back into the right channel/DM as the right member.
-async function recordNotification(opts: {
-	memberId: string
-	chatId: string
-	telegramMessageId: number
-	channelId: string
-}) {
-	await useDb().insert(schema.notificationMappings).values({
-		id: newId(),
-		transport: 'telegram',
-		memberId: opts.memberId,
-		externalChatId: opts.chatId,
-		externalMessageId: opts.telegramMessageId,
-		channelId: opts.channelId
-	})
-}
-
-// Ask the relay to forward an attachment to a chat via the matching Telegram
-// send* method. The app fetches the object from S3 (header-signed GET — the
-// bucket is private and Telegram's servers can't reach it) and uploads the bytes
-// multipart to the relay, which proxies them to Telegram. `caption` is attached
-// only when it fits Telegram's 1024-char media-caption limit. As with
-// tgSendMessage, transport failures are logged and swallowed; a 403 returns
-// `blocked: true` so the caller auto-unlinks.
 export async function tgSendMedia(
 	chatId: string,
 	opts: {
@@ -133,166 +95,88 @@ export async function tgSendMedia(
 	}
 }
 
-// Fan a freshly-created message out to Telegram for every recipient who is
-// offline (no live WS) AND has linked + enabled notifications. Recipients are the
-// mentioned members for a channel message, or the other participant for a DM.
-// The notification carries the full text (URLs preserved as bare clickable
-// links, markdown stripped) AND any attachments — voice messages, images, video,
-// files — forwarded via the matching Telegram send* method. Called
-// fire-and-forget from createChannelMessage — must never throw into the send
-// path.
-export async function notifyOffline(
-	channel: { id: string; kind: 'text' | 'voice' | 'dm'; name: string },
-	dto: MessageDto
-) {
-	if (!telegramConfigured()) return
-	// voice channels carry no chat; only channels and DMs notify
-	let recipientIds: string[]
-	if (channel.kind === 'dm') {
-		recipientIds = (await channelParticipantIds(channel.id)).filter((id) => id !== dto.authorId)
-	} else if (channel.kind === 'text') {
-		recipientIds = mentionedIds(dto.content).filter((id) => id !== dto.authorId)
-	} else {
-		return
-	}
-	if (recipientIds.length === 0) return
+// Telegram maps the app's media kinds onto its own send methods, so a voice
+// message plays inline with a waveform rather than arriving as a file.
+const TG_METHOD: Record<NotificationMediaKind, TgMediaItem['type']> = {
+	voice: 'voice',
+	image: 'photo',
+	video: 'video',
+	file: 'document'
+}
 
-	// offline = no live WS connection right now
-	const online = new Set(wsOnline())
-	const offlineIds = recipientIds.filter((id) => !online.has(id))
-	if (offlineIds.length === 0) return
-
-	const db = useDb()
-	// linked AND notifications still on
-	const targets = await reachableLinks('telegram', offlineIds)
-	if (targets.length === 0) return
-
-	// resolve mentioned members' usernames so <@id> tokens decode to @name in
-	// the body — only the actually-mentioned members, not the whole table
-	const mentioned = mentionedIds(dto.content)
-	const nameRows = mentioned.length
-		? await db
-				.select({ id: schema.members.id, username: schema.members.username })
-				.from(schema.members)
-				.where(inArray(schema.members.id, mentioned))
-		: []
-	// plainTextBody preserves URLs intact (stashed during markdown stripping)
-	// so they stay clickable in Telegram's plain-text rendering
-	const body = plainTextBody(dto.content, nameRows)
-	const header =
-		channel.kind === 'dm'
-			? `Личное сообщение от ${dto.authorName}:`
-			: `${dto.authorName} упомянул(а) вас в #${channel.name}:`
-	const text = body ? `${header}\n${body}` : header
-
-	// resolve attachment object keys (the DTO carries no objectKey — it is
-	// server-only) so we can fetch + forward each attachment's bytes
-	const attRows = dto.attachments.length
-		? await db
-				.select({
-					id: schema.attachments.id,
-					objectKey: schema.attachments.objectKey,
-					filename: schema.attachments.filename,
-					mime: schema.attachments.mime
-				})
-				.from(schema.attachments)
-				.where(eq(schema.attachments.messageId, dto.id))
-		: []
-	const objectKeyById = new Map(attRows.map((r) => [r.id, r.objectKey]))
-	// preserve the DTO's attachment order (that's what the chat renders)
-	const mediaItems: TgMediaItem[] = []
-	for (const a of dto.attachments) {
-		const objectKey = objectKeyById.get(a.id)
-		if (!objectKey) continue
-		mediaItems.push({
-			type: tgMediaType(a),
-			filename: a.filename,
-			objectKey,
-			mime: a.mime
-		})
-	}
-
+// Delivery for one recipient. Telegram's quirk is that text and media are
+// separate messages, and a caption is capped far below a message body — so a
+// notification can take several messages, each of which gets its own mapping
+// row. VK, by contrast, sends the lot in one call (adr/0011).
+async function deliver(chatId: string, payload: NotificationPayload): Promise<DeliveryResult> {
+	const text = payload.text ? `${payload.header}\n${payload.text}` : payload.header
+	const media = payload.media
+	const delivered: DeliveredMessage[] = []
 	const textFitsCaption = text.length > 0 && text.length <= TG_CAPTION_MAX
+	let textDelivered = false
+	let mediaDelivered = false
 
-	for (const target of targets) {
-		const record = (messageId: number) =>
-			recordNotification({
-				memberId: target.memberId,
-				chatId: target.externalId,
-				telegramMessageId: messageId,
-				channelId: channel.id
-			})
-		let blocked = false
-		let textDelivered = false
-		let mediaDelivered = false
-
-		// 1. send text as its own message when there are no attachments to
-		//    caption it on, or when it exceeds the caption limit
-		if (text.length > 0 && (mediaItems.length === 0 || !textFitsCaption)) {
-			const r = await tgSendMessage(target.externalId, text)
-			if (r.blocked) {
-				await clearTelegramLink(target.memberId, true)
-				continue
-			}
-			if (r.messageId != null) {
-				await record(r.messageId)
-				textDelivered = true
-			}
-		}
-
-		// 2. forward each attachment; the first successful one carries the
-		//    text as its caption (when it fits and the text wasn't already
-		//    sent as its own message)
-		for (const m of mediaItems) {
-			const useCaption = !textDelivered && textFitsCaption
-			const r = await tgSendMedia(target.externalId, {
-				type: m.type,
-				caption: useCaption ? text : undefined,
-				filename: m.filename,
-				objectKey: m.objectKey,
-				mime: m.mime
-			})
-			if (r.blocked) {
-				await clearTelegramLink(target.memberId, true)
-				blocked = true
-				break
-			}
-			if (r.messageId != null) {
-				await record(r.messageId)
-				if (useCaption) textDelivered = true
-				mediaDelivered = true
-			}
-		}
-		if (blocked) continue
-
-		// 3. the text never made it through (it was meant to ride as a caption
-		//    on the first media item but every media send failed, or step 1's
-		//    own sendMessage failed) — deliver it as its own message so the
-		//    recipient still gets the content. When the message had attachments
-		//    and none came through, append a note so they know.
-		if (body.length > 0 && !textDelivered) {
-			const note =
-				mediaItems.length > 0 && !mediaDelivered ? '\n(вложение не удалось переслать)' : ''
-			const r = await tgSendMessage(target.externalId, text + note)
-			if (r.blocked) {
-				await clearTelegramLink(target.memberId, true)
-				continue
-			}
-			if (r.messageId != null) {
-				await record(r.messageId)
-				textDelivered = true
-			}
-		}
-
-		// 4. attachment-only message (no text) where there were attachments
-		//    and every media send failed — send the header (who/where) plus the
-		//    failure note so the recipient has context. The `mediaItems.length >
-		//    0` guard is what makes this "attachment-only": without it, a
-		//    marker-only message (e.g. "***") that plainTextBody strips to an
-		//    empty body would fire this after step 1 already sent the header.
-		//    No mapping row: a reply to this hint should not route into a channel.
-		if (body.length === 0 && mediaItems.length > 0 && !mediaDelivered) {
-			await tgSendMessage(target.externalId, `${text}\n(не удалось переслать вложение)`)
+	// 1. send text as its own message when there is no attachment to caption it
+	//    on, or when it exceeds the caption limit
+	if (text.length > 0 && (media.length === 0 || !textFitsCaption)) {
+		const r = await tgSendMessage(chatId, text)
+		if (r.blocked) return { delivered, blocked: true }
+		if (r.messageId != null) {
+			delivered.push({ messageId: r.messageId })
+			textDelivered = true
 		}
 	}
+
+	// 2. forward each attachment; the first successful one carries the text as
+	//    its caption (when it fits and wasn't already sent as its own message)
+	for (const m of media) {
+		const useCaption = !textDelivered && textFitsCaption
+		const r = await tgSendMedia(chatId, {
+			type: TG_METHOD[m.kind],
+			caption: useCaption ? text : undefined,
+			filename: m.filename,
+			objectKey: m.objectKey,
+			mime: m.mime
+		})
+		if (r.blocked) return { delivered, blocked: true }
+		if (r.messageId != null) {
+			delivered.push({ messageId: r.messageId })
+			if (useCaption) textDelivered = true
+			mediaDelivered = true
+		}
+	}
+
+	// 3. the text never made it through (it was meant to ride as a caption on
+	//    the first attachment but every media send failed, or step 1's own
+	//    sendMessage failed) — deliver it as its own message so the recipient
+	//    still gets the content, noting the attachment that didn't come through.
+	if (payload.text.length > 0 && !textDelivered) {
+		const note = media.length > 0 && !mediaDelivered ? '\n(вложение не удалось переслать)' : ''
+		const r = await tgSendMessage(chatId, text + note)
+		if (r.blocked) return { delivered, blocked: true }
+		if (r.messageId != null) delivered.push({ messageId: r.messageId })
+	}
+
+	// 4. attachment-only message where every media send failed — send the
+	//    header plus the note so the recipient still has context. The
+	//    `media.length > 0` guard is what makes this "attachment-only": without
+	//    it, a marker-only message (e.g. "***") that plainTextBody strips to an
+	//    empty body would fire this after step 1 already sent the header.
+	//    Deliberately unmapped: a reply to a hint must not route into a channel.
+	if (payload.text.length === 0 && media.length > 0 && !mediaDelivered) {
+		await tgSendMessage(chatId, `${text}\n(не удалось переслать вложение)`)
+	}
+
+	return { delivered, blocked: false }
+}
+
+// Called from server/plugins/notifications.ts at boot. Explicit rather than a
+// top-level side effect: auto-imported modules only evaluate when something
+// happens to reference them, which is far too late for a transport registry.
+export function registerTelegramTransport() {
+	registerNotificationTransport({
+		transport: 'telegram',
+		configured: telegramConfigured,
+		deliver
+	})
 }
