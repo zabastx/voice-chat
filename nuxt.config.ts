@@ -42,8 +42,19 @@ export default defineNuxtConfig({
 
 	vite: {
 		server: {
-			// lets the LiveKit dev container deliver webhooks to the dev server
-			allowedHosts: ['host.docker.internal']
+			// Vite rejects unknown Host headers (DNS-rebinding guard), which blocks anything
+			// reaching the dev server under a name other than localhost. Dev-only — prod is
+			// served by Nitro, which has no such check.
+			allowedHosts: [
+				// lets the LiveKit dev container deliver webhooks to the dev server
+				'host.docker.internal',
+				// tunnels, for driving VK Callback (adr/0011) against a local dev server;
+				// a leading dot matches any subdomain
+				'.ngrok-free.dev',
+				'.ngrok.io',
+				// escape hatch for any other tunnel provider: NUXT_DEV_ALLOWED_HOSTS=a.example,b.example
+				...(process.env.NUXT_DEV_ALLOWED_HOSTS?.split(',').filter(Boolean) ?? [])
+			]
 		}
 	},
 
