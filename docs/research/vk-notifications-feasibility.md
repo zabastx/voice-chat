@@ -344,9 +344,15 @@ None of this bears on the prod host: a tunnel is reachable by construction, so t
 inbound webhook delivery from Telegram's servers. Long poll has no inbound leg — both the API calls
 and the poll are outbound HTTPS to `api.vk.ru` — so a VK transport can live entirely inside the Nuxt
 app, as a Nitro plugin holding the loop, next to the existing sweeper in `server/plugins/telegram.ts`.
-No second relay, no second bearer secret, no `ingest.post.ts` equivalent. Whether `api.vk.ru` is
-actually reachable from the cloud.ru VPS is an empirical question the VK docs say nothing about,
-but a Russian API on a Russian host is the least likely thing on this list to be filtered.
+No second relay, no second bearer secret, no `ingest.post.ts` equivalent.
+
+**Measured from the prod host on 2026-08-26, and it holds.** Note that the poll does _not_ go to
+`api.vk.ru`: `groups.getLongPollServer` returns a different host, `https://lp.vk.ru/whp/<group_id>`,
+so both had to be checked. `api.vk.ru/method/utils.getServerTime` → `200` via `87.240.137.206`;
+`lp.vk.ru` → `403` on its bare root via `95.213.56.4` (correct — the endpoint needs its path and
+query; the point is that it answered rather than hung). Both resolved to **IPv4**, which is exactly
+where `api.telegram.org` failed: IPv6-only with no working v6 egress. Nothing on the VK side is
+filtered outbound, so the no-relay conclusion is empirical now, not optimism.
 
 The single-instance caveat carries over unchanged and is if anything softer: two app instances
 polling with the same `key` would split updates between them, the same class of problem as two
@@ -484,8 +490,10 @@ shows what was unknown and what settled it.
    is `message_deny` guaranteed to be delivered before the next send fails?
 7. **Can a community token upload video at all?** The rights table has no `video` entry; the docs
    never state the negative outright.
-8. **Is `api.vk.ru` reachable from the cloud.ru VPS?** Not a docs question — one `curl` on the prod
-   host answers it, and it decides whether §6's "no relay" conclusion holds in practice.
+8. ~~**Is `api.vk.ru` reachable from the cloud.ru VPS?**~~ **Closed:** yes, and so is `lp.vk.ru`,
+   the separate host the poll actually goes to — both over IPv4, both answering rather than
+   hanging. See §6. Still open in the other direction: whether VK's servers can reach the prod
+   host, which only matters if Callback is ever chosen over long poll.
 9. **Exact quantitative (non-per-second) limits.** VK states outright: "We do not provide
    information about the exact limits."
 
