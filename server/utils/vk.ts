@@ -172,13 +172,19 @@ async function deliver(peerId: string, payload: NotificationPayload): Promise<De
 			...(attachments.length ? { attachment: attachments.join(',') } : {})
 		})
 		const row = sent[0]
-		if (!row || typeof row.message_id !== 'number') return { delivered: [], blocked: false }
-		return {
-			delivered: [
-				{ messageId: row.message_id, conversationMessageId: row.conversation_message_id }
-			],
-			blocked: false
-		}
+		// Record the delivery if EITHER id came back. Requiring message_id would
+		// discard exactly the case both ids exist for — VK's docs warn the common
+		// id "may be absent in some cases", and a dropped mapping means the reply
+		// can never route back (adr/0011).
+		const messageId = typeof row?.message_id === 'number' ? row.message_id : undefined
+		const cmid =
+			typeof row?.conversation_message_id === 'number' ? row.conversation_message_id : undefined
+		if (messageId == null && cmid == null) return { delivered: [], blocked: false }
+		const delivered: DeliveredMessage =
+			messageId != null
+				? { messageId, conversationMessageId: cmid }
+				: { conversationMessageId: cmid! }
+		return { delivered: [delivered], blocked: false }
 	} catch (err) {
 		if (err instanceof VkApiError && err.blocked) return { delivered: [], blocked: true }
 		console.error('vk messages.send failed', err)
@@ -199,23 +205,6 @@ export async function vkSend(peerId: string, text: string) {
 	} catch (err) {
 		if (err instanceof VkApiError && err.blocked) return
 		console.error('vk send failed', err)
-	}
-}
-
-// Reply into a specific VK message — used for the hints, so a hint quotes the
-// message it is about instead of arriving detached.
-export async function vkReply(peerId: string, replyTo: number, text: string) {
-	try {
-		await vkApi('messages.send', {
-			peer_ids: peerId,
-			random_id: Date.now(),
-			reply_to: replyTo,
-			dont_parse_links: 1,
-			message: text
-		})
-	} catch (err) {
-		if (err instanceof VkApiError && err.blocked) return
-		console.error('vk reply failed', err)
 	}
 }
 

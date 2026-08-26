@@ -37,13 +37,6 @@ export async function tgSendMessage(
 	}
 }
 
-// Sever a member's Telegram link. `disableNotifications` is set on auto-unlink
-// (403) so a member who blocked the bot doesn't re-link with notifications still
-// firing into the void; the manual unlink endpoint leaves the flag untouched.
-export async function clearTelegramLink(memberId: string, disableNotifications = false) {
-	await clearLink(memberId, 'telegram', disableNotifications)
-}
-
 // Telegram caps a media caption at 1024 chars (vs 4096 for sendMessage); text
 // longer than that must go as its own message ahead of the media.
 const TG_CAPTION_MAX = 1024

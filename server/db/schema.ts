@@ -207,11 +207,13 @@ export const notificationMappings = pgTable(
 			.references(() => members.id, { onDelete: 'cascade' }),
 		// recipient's Telegram chat / VK peer — half of the reply lookup key
 		externalChatId: text('external_chat_id').notNull(),
-		// the bot message the user replies to — the other half of the lookup key
-		externalMessageId: bigint('external_message_id', { mode: 'number' }).notNull(),
-		// VK only. VK has two id spaces and the docs warn the common message id
-		// "may be absent in some cases", so a reply is matched against either —
-		// which is why this is a second column and not a rename (adr/0011).
+		// the bot message the user replies to — the other half of the lookup key.
+		// Nullable because VK's docs warn the common message id "may be absent in
+		// some cases": when it is, the row is keyed on conversationMessageId alone.
+		// At least one of the two is always set (adr/0011).
+		externalMessageId: bigint('external_message_id', { mode: 'number' }),
+		// VK's second id space. A reply may reference either, which is why this is
+		// a second column and not a rename (adr/0011).
 		conversationMessageId: bigint('conversation_message_id', { mode: 'number' }),
 		// where the reply is posted
 		channelId: text('channel_id')

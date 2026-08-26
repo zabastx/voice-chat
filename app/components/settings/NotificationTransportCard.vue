@@ -32,7 +32,7 @@
 
 			<template v-else>
 				<UButton
-					:icon="icon"
+					:icon="status.icon"
 					:label="`Подключить ${status.label}`"
 					:loading="linking"
 					variant="soft"
@@ -56,21 +56,25 @@
 </template>
 
 <script lang="ts" setup>
-const props = defineProps<{ transport: 'telegram' | 'vk' }>()
+const props = defineProps<{ transport: NotificationTransport }>()
 
 const toast = useToast()
 
 interface TransportStatus {
 	transport: string
 	label: string
+	icon: string
 	configured: boolean
 	linked: boolean
 	notificationsEnabled: boolean
 }
 
+// label and icon come from the server with the status — the client should not
+// hold a second copy of what each messenger is called (adr/0011).
 const status = reactive<TransportStatus>({
 	transport: props.transport,
-	label: props.transport === 'vk' ? 'VK' : 'Telegram',
+	label: '',
+	icon: '',
 	configured: false,
 	linked: false,
 	notificationsEnabled: true
@@ -79,9 +83,6 @@ const linking = ref(false)
 const awaiting = ref(false)
 
 const base = computed(() => `/api/me/notifications/${props.transport}`)
-const icon = computed(() =>
-	props.transport === 'vk' ? 'i-simple-icons-vk' : 'i-simple-icons-telegram'
-)
 // each messenger's "you're not done yet" step differs: Telegram shows a Start
 // button in the bot chat, VK shows «Начать» in the community dialog
 const hint = computed(() =>

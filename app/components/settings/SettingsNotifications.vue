@@ -35,16 +35,14 @@
 </template>
 
 <script lang="ts" setup>
+import { NOTIFICATION_TRANSPORTS } from '~~/shared/utils/notification-transports'
+
 const toast = useToast()
 const prefs = usePreferences()
 
 const blocked = ref(
 	import.meta.client && 'Notification' in window && Notification.permission === 'denied'
 )
-
-function errorMessage(e: unknown, fallback: string) {
-	return (e as { data?: { message?: string } }).data?.message ?? fallback
-}
 
 async function onDesktopToggle(enabled: boolean) {
 	if (!enabled) {
@@ -62,6 +60,6 @@ async function onDesktopToggle(enabled: boolean) {
 }
 
 // Each card loads its own status and hides itself when its messenger is not
-// configured, so this list needs no per-transport knowledge (adr/0011).
-const transports = ['telegram', 'vk'] as const
+// configured, so this screen needs no per-transport knowledge (adr/0011).
+const transports = NOTIFICATION_TRANSPORTS
 </script>

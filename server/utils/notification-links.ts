@@ -8,8 +8,6 @@ import { and, eq, gt, inArray, isNotNull } from 'drizzle-orm'
 // never reach a member DTO or the session cookie. A VK peer id is the member's
 // public VK user id, so leaking one deanonymises them.
 
-export type NotificationTransport = 'telegram' | 'vk'
-
 const TOKEN_TTL_MS = 15 * 60 * 1000
 
 export interface NotificationLink {
