@@ -470,4 +470,3 @@ list below.
 - Production Caddy: `request_body`/`header`/crawler-403 blocks parse on the live VPS. The config now
   validates and serves correctly in a local `caddy:2` container (same image as prod), so what's left
   is confirming it on the real host after a `docker compose up -d caddy`
-- Production Postgres cutover on the VPS (DEPLOY.md "Migrating an existing SQLite deployment")

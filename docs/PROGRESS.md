@@ -20,8 +20,12 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
 
 ## Remaining work / next steps
 
-1. **Postgres cutover on the VPS** — follow DEPLOY.md; back up the SQLite file first; afterwards
-   remove the legacy `app-data` volume in a follow-up change.
+1. **Drop the legacy `app-data` volume** — the Postgres cutover on the VPS is **done** (prod has
+   been on Postgres since before v0.21.0), but the volume that carried `/data/app.sqlite` is still
+   mounted in [compose.yaml](../compose.yaml) and the one-shot `scripts/migrate-sqlite-to-pg.ts` is
+   still copied into the image by the [Dockerfile](../Dockerfile). Both can go once you have
+   confirmed nothing on the VPS still reads them; DEPLOY.md's cutover section becomes history at
+   the same time.
 2. **Tune the noise gate at a real microphone** (v0.20.0) — the DSP is verified numerically and the
    gating is now verified end-to-end at a second browser (silence vs. bursts, mid-call device switch,
    hidden tab, and the mic-less-join re-attach; see [progress/verification.md](progress/verification.md)),
