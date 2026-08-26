@@ -24,3 +24,6 @@ logs
 !.env.example
 
 .playwright-cli
+
+# Spike output (scripts/vk-reply-spike.ts)
+vk-spike-updates.jsonl
