@@ -52,8 +52,17 @@ Also settled, having been open since the research pass: **`ref` is delivered whe
 _continues_ an existing conversation**, not only on a first «Начать». Re-linking works without the
 Start button, which never appears once a dialog exists.
 
-**Still not verified:** attachment forwarding to VK — the upload servers and the document path for
-voice/video have never been exercised.
+**Attachment forwarding driven 2026-08-26.** A 64×64 PNG and a `voice-message-*.webm` sent with a
+mention arrived in VK as one message carrying `photo(...)` and `doc(voice-message-test.webm)` —
+confirming both upload paths, the document fallback for voice, and that text plus attachments ride
+a single `messages.send` producing exactly one mapping row.
+
+That run also corrected an earlier claim: `disable_mentions` stops VK notifying the stranger whose
+screen name collides with an app username, but it does **not** stop VK rendering `@danil` as a link
+to them. The body still shows that link (GOTCHAS 23). Cosmetic, unfixed.
+
+**Still not verified:** a video attachment (only images and the document path were driven), and an
+attachment large enough to exercise the size limits.
 
 ## Verified locally
 

@@ -35,12 +35,12 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
    embedding-disabled video, and a real buffering stall are still undriven (see the v0.18.0 section
    in [progress/verification.md](progress/verification.md)). Optionally close the two known gaps: no
    «Смотреть вместе» in the sidebar `VoicePanel`, and no direct replace without stopping first.
-7. **Forward an attachment to VK** (v0.22.0) — the only part of
-   [ADR 0011](adr/0011-vk-as-second-notification-transport.md) never exercised: the upload servers
-   and the document path for voice/video. Everything else was driven end to end on 2026-08-26 (see
-   [progress/verification.md](progress/verification.md)). Optional follow-up: voice notes arrive as
-   documents; inline VK voice messages need ffmpeg in the runtime image to transcode to OGG/OPUS
-   16 kHz.
+7. **Optional VK polish** (v0.22.0) — everything in
+   [ADR 0011](adr/0011-vk-as-second-notification-transport.md) is now driven, attachments included
+   (see [progress/verification.md](progress/verification.md)). Two loose ends, neither blocking:
+   a notification body still renders `@username` as a link to whichever VK account owns that screen
+   name (GOTCHAS 23), and voice notes arrive as documents — inline VK voice messages need ffmpeg in
+   the runtime image to transcode to OGG/OPUS 16 kHz.
 8. **Twitch for Watch Together**, if wanted — the sync layer is source-agnostic and `WatchDto`
    already carries `source`, so this is a URL-parser case plus a second embed wrapper. Twitch
    embeds need `parent=<window.location.hostname>` and break on any unexpected host; live needs

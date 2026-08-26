@@ -162,9 +162,11 @@ async function deliver(peerId: string, payload: NotificationPayload): Promise<De
 			// no snippet cards: preserves the SSRF/privacy posture from adr/0006
 			dont_parse_links: 1,
 			// VK turns a bare @name in the body into a mention of whichever VK
-			// account owns that screen name — an app member called "danil" became a
-			// link to an unrelated id7074907, who would also be notified. Our
-			// mentions are app members and mean nothing on VK, so suppress it.
+			// account owns that screen name — an app member called "danil" renders as
+			// a link to an unrelated id7074907. This flag stops that person being
+			// *notified*; measured 2026-08-26, it does NOT stop the linkification, so
+			// the body still shows a link to a stranger's profile. Cosmetic but wrong;
+			// removing it entirely means not emitting a bare @ for VK at all.
 			disable_mentions: 1,
 			message: text,
 			...(attachments.length ? { attachment: attachments.join(',') } : {})
