@@ -194,6 +194,14 @@ The origin previously hosted another app (Stoat); its SW outlives it and keeps s
 
 The VPS (`…cloud.ru`) blocks Telegram **both ways**: `api.telegram.org` resolves IPv6-only (no working v6 egress; Bun's fetch won't fall back to v4) and inbound webhook delivery is dropped — even though the site is publicly reachable. The app never talks to Telegram directly: the standalone stateless `telegram-relay/` service (hosted where Telegram is reachable) is the only thing touching `api.telegram.org`; the app reaches it over plain HTTP (`NUXT_TELEGRAM_RELAY_URL` + `NUXT_TELEGRAM_RELAY_SECRET`) and updates come back via `POST /api/telegram/ingest`. See [ADR 0006 "Update: relay transport"](adr/0006-telegram-notifications.md) and [telegram-relay/README.md](../telegram-relay/README.md). Local dev: point at a relay instance, or leave unset to no-op the feature.
 
+## VK notifications (researched, not built)
+
+### 21. A confirmed VK Callback server delivers nothing until you subscribe it to events
+
+Registering a Callback server and subscribing it to event types are **independent** operations, and the first succeeds with the second entirely empty. `groups.getCallbackServers` returns `status: "ok"`, the admin UI shows the server as confirmed — and `groups.getCallbackSettings` returns every event `0`, so not one event is ever delivered. There is no warning anywhere. Fix: `groups.setCallbackSettings(group_id, server_id, message_new: 1, …)` after registering; assert on the **event flags**, never on the server status. The community's Long Poll event-type tab is a separate setting again — ticking it there does nothing for Callback, and vice versa. Cost an hour on 2026-08-26; see [ADR 0011](adr/0011-vk-as-second-notification-transport.md).
+
+Two smaller ones from the same run: the community's «Версия API» dropdown versions the _events_, independently of the `v` on your own method calls; and the «Добавить кнопку "Начать"» toggle (which makes deep-link linking one tap) exists only in the admin UI — dev.vk.ru documents neither.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).
