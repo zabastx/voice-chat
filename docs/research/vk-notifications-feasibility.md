@@ -482,9 +482,10 @@ shows what was unknown and what settled it.
 3. ~~**Do all VK clients offer "Ответить" on a community's message inside a personal dialog?**~~
    **Closed for web and Android** — both produced identical `reply_message` objects. Other clients
    (iOS, desktop app) untested.
-4. **When is `ref` actually delivered?** Partly closed: it _is_ delivered on the «Начать» press that
-   opens a fresh dialog. Still unknown for every message from that link, and for the relink case
-   where a conversation with the community already exists.
+4. ~~**When is `ref` actually delivered?**~~ **Closed:** on the «Начать» press that opens a fresh
+   dialog, _and_ on an ordinary message when the member re-opens the link with a conversation
+   already in place. That matters more than it sounds — «Начать» only ever appears for a
+   first-time dialog, so re-linking has no button at all and depends entirely on this.
 5. **Which `attachment` prefix does an uploaded voice message need** — `audio_message`, `doc`, or
    the `audio` used in VK's own example? Three VK pages disagree.
 6. **Which error code fires when a user has pressed "запретить сообщения"** — `900` or `901` — and

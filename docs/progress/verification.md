@@ -32,9 +32,28 @@ Driven 2026-08-26, against the live VK community and the dev database.
 - **Privacy invariant holds**: no external id and no link token in `/api/members`, `/api/dm`, or the
   session cookie.
 
-**Not verified:** a real member linking a real VK account through the settings UI and receiving an
-actual notification — the path has been driven in pieces, never in one run. Attachment forwarding
-to VK (the upload servers, the document path for voice/video) is entirely undriven.
+**Driven end to end in one run (two Playwright sessions + the real VK community):** the settings
+modal shows a card per configured transport; «Подключить VK» mints a token and produces
+`vk.me/club<id>?ref=<token>`; tapping it links the account (`external_id` set, token consumed);
+the VK badge appears against that member and no other; with the member offline, a mention from a
+second account delivered a real VK message and recorded a mapping row carrying both ids; replying
+to it in VK posted `pong` into `#general` authored as the linked member, badged «через VK».
+
+Three defects surfaced only here, all fixed:
+
+- **Two app instances each handled every event.** VK gives the same updates to every poller sharing
+  a key, so one consumed the single-use link token and the other told the member it had expired.
+  Now an advisory lock elects one poller (GOTCHAS 22).
+- **VK linkified `@danil`** into `[id7074907|@danil]`, a mention of an unrelated VK account that VK
+  would also notify. `disable_mentions` is now set (GOTCHAS 23).
+- **A VK reply was badged as a native send** — the source badge was hardcoded to Telegram.
+
+Also settled, having been open since the research pass: **`ref` is delivered when the member
+_continues_ an existing conversation**, not only on a first «Начать». Re-linking works without the
+Start button, which never appears once a dialog exists.
+
+**Still not verified:** attachment forwarding to VK — the upload servers and the document path for
+voice/video have never been exercised.
 
 ## Verified locally
 
