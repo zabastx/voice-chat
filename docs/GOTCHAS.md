@@ -24,6 +24,12 @@ Presents as any auto-import being "not defined" (`useRealtime is not defined`, `
 
 Two tells that it is this and not your code: a plain `fetch()` of the same path from the console renders clean HTML while navigating to it 500s, and it survives reloads plus cache-busting. If you need a second server rather than restarting someone else's, `nuxt dev` holds a per-directory lock — `NUXT_IGNORE_LOCK=1` with its own `PORT`.
 
+### 3b. The dev server rejects any hostname but localhost — and points you at a file that doesn't exist
+
+`Blocked request. This host ("…") is not allowed. To allow this host, add "…" to server.allowedHosts in vite.config.js.` There is no `vite.config.js` in a Nuxt project: the setting lives at `vite.server.allowedHosts` in [nuxt.config.ts](../nuxt.config.ts). It is Vite's DNS-rebinding guard, so it fires on **anything** reaching the dev server under a name other than localhost, `/api/*` routes included — and it has now been needed twice: `host.docker.internal` for LiveKit dev webhooks, and a tunnel hostname for driving the VK Callback endpoint ([ADR 0011](adr/0011-vk-as-second-notification-transport.md)). Both are already listed; a leading dot (`.ngrok-free.dev`) matches any subdomain, and `NUXT_DEV_ALLOWED_HOSTS=a.example,b.example` extends the list without editing config.
+
+**Dev-only.** Prod is served by Nitro, which has no host check — so a webhook that works in prod can still be blocked locally, and vice versa. Editing `nuxt.config.ts` restarts the dev server on its own; no manual restart needed.
+
 ### 4. vue-tsc "Excessive stack depth" on `$fetch('/api/...')`
 
 TS2321 — Nuxt's typed-route inference chokes without an explicit return type. Give `$fetch` a generic: `$fetch<ChannelDto[]>('/api/channels')`, or use `useRequestFetch<T>()`.
