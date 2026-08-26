@@ -15,6 +15,7 @@ export default defineNitroPlugin(async () => {
 	// Register the transports before any message can be sent. Each decides for
 	// itself whether it is configured; an unconfigured one stays inert.
 	registerTelegramTransport()
+	registerVkTransport()
 
 	// Webhook registration lives in the telegram-relay service; the main app owns
 	// the reply-mapping table. Ensure the DB is ready first — this plugin can run

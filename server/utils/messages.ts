@@ -153,7 +153,7 @@ export async function createChannelMessage(opts: {
 	content: string
 	replyToId?: string | null
 	attachmentIds?: string[]
-	source?: 'app' | 'telegram'
+	source?: 'app' | 'telegram' | 'vk'
 }): Promise<MessageDto> {
 	const db = useDb()
 	const message = {
@@ -194,7 +194,7 @@ export async function createChannelMessage(opts: {
 	// broadcast to everyone for text channels, only the two participants for a DM
 	await emitChannelEvent(opts.channel, { type: 'message.created', message: dto })
 	// bridge to Telegram for offline recipients (fire-and-forget; never blocks the send)
-	void notifyOffline(opts.channel, dto).catch((err) => console.error('telegram notify failed', err))
+	void notifyOffline(opts.channel, dto).catch((err) => console.error('offline notify failed', err))
 	return dto
 }
 

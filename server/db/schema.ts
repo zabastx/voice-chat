@@ -84,9 +84,9 @@ export const messages = pgTable(
 		// "исходное сообщение удалено" instead of silently losing the reply.
 		replyToId: text('reply_to_id'),
 		// the channel through which the author posted this message: the app UI
-		// ('app') or the Telegram bridge ('telegram'). Set once at creation; an
-		// edit in-app does not change it. See adr/0007.
-		source: text('source', { enum: ['app', 'telegram'] })
+		// ('app') or a messenger bridge ('telegram', 'vk'). Set once at creation;
+		// an edit in-app does not change it. See adr/0007 and adr/0011.
+		source: text('source', { enum: ['app', 'telegram', 'vk'] })
 			.notNull()
 			.default('app'),
 		createdAt: timestamp('created_at', { withTimezone: true })
