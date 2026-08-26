@@ -8,8 +8,10 @@
 // the Callback tab — the Long Poll tab's ticks do not carry over.
 export default defineEventHandler(async (event) => {
 	const config = useRuntimeConfig()
-	if (!vkConfigured()) {
-		throw createError({ statusCode: 404, message: 'VK-уведомления не настроены' })
+	// vkConfigured() answers 'can we send?'; this route needs the inbound half —
+	// the confirmation string, and callback actually being the chosen transport.
+	if (config.vkInbound !== 'callback' || !config.vkConfirmationCode) {
+		throw createError({ statusCode: 404, message: 'VK Callback не настроен' })
 	}
 
 	const update = await readBody<VkUpdate>(event)

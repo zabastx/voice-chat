@@ -74,16 +74,25 @@ export default defineNuxtConfig({
 		// never talks to api.telegram.org directly — the relay does.
 		telegramRelayUrl: '',
 		telegramRelaySecret: '',
-		// VK notifications via the Callback API (adr/0011). Unset = feature disabled, and
-		// POST /api/vk/callback 404s. The confirmation string rotates — read the current one
-		// from Управление → Работа с API → Callback API, or groups.getCallbackConfirmationCode.
+		// VK notifications (adr/0011). Sending needs a community access key with the
+		// messages/photos/docs rights plus the numeric community id; unset = disabled.
+		vkToken: '',
+		vkGroupId: '',
+		// which inbound transport runs: 'longpoll' (outbound-only, the default and
+		// what adr/0011 chose) or 'callback'. Never both — VK would deliver twice.
+		vkInbound: 'longpoll',
+		// Callback API only, when vkInbound is 'callback'. Unset = the route 404s.
+		// The confirmation string rotates: read the current one from Управление →
+		// Работа с API → Callback API, or via groups.getCallbackConfirmationCode.
 		vkConfirmationCode: '',
 		vkCallbackSecret: '',
 		public: {
 			livekitUrl: 'ws://127.0.0.1:7880',
 			appVersion: pkg.version,
 			// bot @username, used to build the t.me/<bot>?start=<token> deep link
-			telegramBotUsername: ''
+			telegramBotUsername: '',
+			// numeric community id, for the vk.me/club<id>?ref=<token> deep link
+			vkGroupId: ''
 		}
 	}
 })
