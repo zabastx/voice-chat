@@ -9,7 +9,7 @@ interface MemberRow {
 	createdAt: Date
 }
 
-function base(row: MemberRow, telegramNotifications: boolean): MemberDto {
+function base(row: MemberRow, notifications: MemberDto['notifications']): MemberDto {
 	return {
 		id: row.id,
 		username: row.username,
@@ -17,7 +17,7 @@ function base(row: MemberRow, telegramNotifications: boolean): MemberDto {
 		avatarUrl: row.avatarId ? `/api/members/${row.id}/avatar?v=${row.avatarId}` : null,
 		role: row.role,
 		createdAt: row.createdAt.toISOString(),
-		telegramNotifications
+		notifications
 	}
 }
 
@@ -25,16 +25,18 @@ function base(row: MemberRow, telegramNotifications: boolean): MemberDto {
 // the links live in their own table, so building a DTO costs a lookup. Use
 // memberDtos() for lists — memberDto() in a loop is an N+1.
 export async function memberDto(row: MemberRow): Promise<MemberDto> {
-	const reachable = await reachableMemberIds('telegram', [row.id])
-	return base(row, reachable.has(row.id))
+	const [dto] = await memberDtos([row])
+	return dto!
 }
 
 export async function memberDtos(rows: MemberRow[]): Promise<MemberDto[]> {
-	const reachable = await reachableMemberIds(
-		'telegram',
-		rows.map((r) => r.id)
-	)
-	return rows.map((r) => base(r, reachable.has(r.id)))
+	const ids = rows.map((r) => r.id)
+	// one query per transport for the whole list, not one per member
+	const [telegram, vk] = await Promise.all([
+		reachableMemberIds('telegram', ids),
+		reachableMemberIds('vk', ids)
+	])
+	return rows.map((r) => base(r, { telegram: telegram.has(r.id), vk: vk.has(r.id) }))
 }
 
 async function reachableMemberIds(

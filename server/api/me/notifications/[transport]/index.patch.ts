@@ -4,10 +4,12 @@ const bodySchema = z.object({
 	notificationsEnabled: z.boolean()
 })
 
-// Toggle Telegram notifications on/off without unlinking the account.
+// Toggle notifications for one messenger without unlinking, so the preference
+// survives a re-link.
 export default defineEventHandler(async (event) => {
 	const { user } = await requireUserSession(event)
+	const transport = requireTransport(event)
 	const body = await readValidatedBody(event, bodySchema.parse)
-	await setNotificationsEnabled(user.id, 'telegram', body.notificationsEnabled)
+	await setNotificationsEnabled(user.id, transport, body.notificationsEnabled)
 	return { notificationsEnabled: body.notificationsEnabled }
 })
