@@ -41,8 +41,8 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
    capability-by-capability comparison against Telegram. Reply-to-send and one-tap linking are both
    verified against a live community; Bots Long Poll means **no second relay service**. The work is
    generalizing the `telegram_`-prefixed schema and `notifyOffline` into a per-transport shape, plus
-   transcoding voice notes to OGG/OPUS 16 kHz. One thing to check first: `curl api.vk.ru` from the
-   prod host — if it is filtered the way `api.telegram.org` was, the no-relay conclusion collapses.
+   transcoding voice notes to OGG/OPUS 16 kHz. The prod host was checked and reaches both
+   `api.vk.ru` and `lp.vk.ru` over IPv4, so the no-relay conclusion holds — nothing blocks starting.
 8. **Twitch for Watch Together**, if wanted — the sync layer is source-agnostic and `WatchDto`
    already carries `source`, so this is a URL-parser case plus a second embed wrapper. Twitch
    embeds need `parent=<window.location.hostname>` and break on any unexpected host; live needs

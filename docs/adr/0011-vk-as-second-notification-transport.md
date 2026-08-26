@@ -150,10 +150,19 @@ the two id spaces — while the cost of the extra column is one integer per noti
   separate, and the two tabs do not share state) but shows it sooner, because nothing arrives at a
   poller that was never subscribed.
 
-- **Not settled by this ADR:** whether `api.vk.ru` is reachable from the cloud.ru VPS. One `curl`
-  on the prod host answers it. If it is filtered the way `api.telegram.org` was, the "no relay"
-  conclusion collapses and this decision needs revisiting — the relay shape from ADR 0006 would
-  then apply here too.
+- **The prod host does reach VK outbound (measured 2026-08-26).** This was the one thing that could
+  have collapsed the "no relay" conclusion, and it did not: from the VPS,
+  `https://api.vk.ru/method/utils.getServerTime` answers `200` via `87.240.137.206`, and the long
+  poll host — a _different_ host, `lp.vk.ru`, which `groups.getLongPollServer` hands back as
+  `https://lp.vk.ru/whp/<group_id>` — answers `403` on its bare root via `95.213.56.4`. A refusal
+  is the right answer there (the endpoint needs its path and query); what matters is that the host
+  replied instead of hanging. **Both resolved to IPv4**, which is precisely the failure
+  `api.telegram.org` hit: IPv6-only resolution with no working v6 egress. Long Poll is therefore
+  viable on the current deploy with no relay, as decided.
+
+  Worth keeping straight: this measures the **outbound** direction only, which is all Long Poll
+  needs. Callback needs the **inbound** one — VK's servers reaching the app — and that remains
+  unmeasured against the prod host; the «Подтвердить» handshake aimed at prod is still the test.
 
 - The glossary is deliberately **not** updated yet. `CONTEXT.md` currently defines Telegram Link,
   Telegram Notification, and a Notification Mapping shaped around Telegram's single id. Those terms
