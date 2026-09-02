@@ -81,6 +81,8 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   never raw palette). @click handlers that call `overlay.open()` must be wrapped in a void arrow
   (`@click="() => m.open()"`), or vue-tsc rejects the non-void return.
 - Quality gates: `bun run typecheck && bun run lint && bun run fmt`. All must stay green.
+- Claiming a change makes the app lighter on RAM? Prove it: `scripts/bench/` measures real
+  Chrome per scenario, before and after (see [docs/BENCH.md](docs/BENCH.md)).
 - New UI strings: **Russian**. Dates via `ru-RU` locale (see [app/utils/format.ts](app/utils/format.ts)).
 - Keep the progress docs in sync with reality as part of the same change: a build touches
   [progress/features.md](docs/progress/features.md), a verification run adds to

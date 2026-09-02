@@ -3,6 +3,8 @@
 		:class="[compact ? 'py-0.5' : 'pt-3 pb-0.5', { 'chat-flash': flash }]"
 		:data-message-id="message.id"
 		class="group hover:bg-elevated/50 relative flex gap-3 rounded-md px-2"
+		@focusin="wantsToolbar = true"
+		@pointerenter="wantsToolbar = true"
 	>
 		<UAvatar
 			v-if="!compact"
@@ -108,8 +110,15 @@
 			</div>
 		</div>
 
+		<!--
+			Mounted on first hover, not up front: the toolbar is a popover trigger plus
+			three buttons, and a full render window is 150 rows. Building all of them for
+			a bar that is invisible until the pointer arrives cost several hundred
+			component instances per channel. Once mounted it stays — the CSS below still
+			does the showing and hiding, so there is no remount on every pass of the mouse.
+		-->
 		<div
-			v-if="!editing"
+			v-if="!editing && wantsToolbar"
 			class="border-default bg-default pointer-events-none absolute -top-3 right-2 flex gap-0.5 rounded-md border p-0.5 opacity-0 shadow-sm group-hover:pointer-events-auto group-hover:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100"
 		>
 			<ReactionPicker @select="emit('react', $event)" />
@@ -166,6 +175,9 @@ const emit = defineEmits<{
 const { user } = useUserSession()
 const dm = useDmStore()
 const toast = useToast()
+
+// see the hover toolbar in the template — it is built on first hover/focus
+const wantsToolbar = ref(false)
 
 // you can DM any author other than yourself, straight from their name
 const canDm = computed(() => props.message.authorId !== user.value?.id)

@@ -4,6 +4,103 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## v0.24.0 — client memory
+
+Measured 2026-09-02 with `scripts/bench/memory.ts` (see [BENCH.md](../BENCH.md)) against a
+**production build** on :3000 — the port matters, LiveKit's dev webhooks go there and without them
+the call view renders no tiles at all. Two browsers with fake media devices; the measured one is
+sampled at the OS level (private commit of the whole Chrome process tree).
+
+**Noise floor first.** The baseline was run twice before any code changed: `total` moved ±3%,
+`renderer` ±5% (usually under 1%), `gpu` ±7%, `js heap` ±0.1%. Anything below that is not a result.
+
+**Deltas, `before` (v0.23.0) → `after` (v0.24.0), same seeded content:**
+
+| scenario                         | total            | renderer         | gpu       | js heap        | DOM nodes      |
+| -------------------------------- | ---------------- | ---------------- | --------- | -------------- | -------------- |
+| busy channel, 150-message window | 343 → 305 (−11%) | 131 → 95 (−28%)  | 133 → 133 | 45 → 12 (−73%) | 14 601 → 4 984 |
+| 8 × 30 s voice notes, opened     | 382 → 360 (−6%)  | 157 → 130 (−17%) | 114 → 118 | 11 → 9         | 2 289 → 2 812  |
+| quietest channel (the floor)     | 279 → 278        | 85 → 83          | 110 → 120 | 14 → 10 (−31%) | 3 087 → 2 051  |
+
+MB, private commit. Two of those need reading carefully:
+
+- The **floor is not a zero.** `idle` sits in #general, which holds ~20 messages, so the lazy-toolbar
+  fix acts there too — that, not noise, is its −31% js heap and its 1 036 fewer nodes. Nothing in
+  this build makes an _empty_ app cheaper.
+- The **gpu column moves on its own.** It is the noisiest of the four (±7% between two identical
+  runs) and none of the three fixes targets it outside a call. Read it only where it is the point,
+  which is the call pair below.
+
+**What each number is.** The busy-channel win is the lazy toolbar, and the bench never hovers a row,
+so it is that fix's best case — real use mounts a toolbar per hovered message. The voice-note win is
+the 8 kHz decode plus releasing the buffer: all eight players still draw their waveform
+(`decodedPlayers=8`), so this is not the observer skipping work, it is the same work done cheaper.
+
+**Fix A (`adaptiveStream`) measured on its own.** The first pass credited it with the whole movement
+in "in a call, reading a text channel", which was wrong: that scenario navigates to #general, so it
+carries the lazy-toolbar win as well, and its js-heap delta (−4.4 MB) was in fact identical to
+`idle`'s (−4.5 MB). The scenario now has a control — `no-call-same-channel`, the same channel in the
+same session with the call hung up from the sidebar — and the difference between the two is what an
+unrendered call actually holds. Re-measured on that pair alone (`before-a` / `after-a`, call suite
+only, both freshly built from the same tree):
+
+| held by the call while nothing renders it  | before  | after   | delta              |
+| ------------------------------------------ | ------- | ------- | ------------------ |
+| total                                      | 41.3 MB | 18.8 MB | **−22.6 MB**       |
+| renderer                                   | 15.6 MB | 6.7 MB  | −8.9 MB            |
+| **gpu** (where WebRTC decode buffers live) | 19.2 MB | 6.0 MB  | **−13.2 MB, −69%** |
+| js heap                                    | 0.3 MB  | −0.8 MB | noise              |
+
+The gpu row is the one that answers the original question: a subscribed camera nobody is looking at
+used to keep ~19 MB of decode buffers alive and now keeps ~6. The control moved too (−6.5 MB total,
+−9.0 MB renderer) — that is fix C acting on the destination channel, which is exactly what the pair
+exists to separate out.
+
+Caveat on the pair: the two halves are two visits to the same channel, not a byte-identical DOM
+(node counts differ by ~150 in `before-a` and ~1 000 in `after-a`), so `total` and `renderer` in that
+table are approximate to a few MB. `gpu` holds no DOM and is unaffected.
+
+Still measured against a **fake 720p camera**. A real 1080p screen share should be larger and is not
+measured: driving `getDisplayMedia` needs a bench scenario that does not exist yet.
+
+**Regression guard.** `call-video-return`: after coming back to the call view, `liveVideoElements`
+is 1 again, in both the full run and the isolated one. A paused subscription that never resumed
+would have looked like a win in every number above and like a black tile to a member.
+
+**Within noise, as expected.** `call-audio` and `call-video` hold the same tracks before and after:
+in the isolated run they moved +0.4% and −1.5% on total. (In the first, full run `call-audio`'s
+renderer read +6.7%, above the stated ±5% renderer floor — the isolated re-run puts it at +0.4%, so
+that was a single noisy sample, not a regression.)
+
+**Functional check, same build.** A 30 s note reports `duration: 30` and 48 bars, plays
+(`currentTime` 2.4 s, label «0:02»), pauses, and seeks — clicking at 80% of the waveform lands at
+24.0 s. In the busy channel, zero toolbars are mounted on load; hovering one message mounts exactly
+one, with its four buttons.
+
+**The app's own recordings, driven through the UI.** The bench seeds WAVs, which carry their length
+in the header — so the interesting container was never exercised by it. Recorded a real ~5 s note in
+a throwaway channel with the composer's microphone button (MediaRecorder, `audio/webm;codecs=opus`,
+no duration in the container) and drove it twice: the pre-send preview off the blob resolved
+`duration: 4.92`, drew its 48 bars and had an enabled play button; after sending and a full reload,
+the stored attachment did the same over HTTP and played (`currentTime` 1.94 s, «0:01»), with no
+disabled control anywhere in the message. The throwaway channel was deleted afterwards, so the
+seeded corpus is unchanged and older baselines stay comparable.
+
+**The stuck-loading defect this found (fixed in the same version).** The first cut of the rewrite
+gated the play button on knowing the duration, and the duration on a seek probe that nothing
+guarantees will answer — so a clip whose length never resolved was permanently unplayable, where the
+old full decode had always produced one. Playability and length are now two questions: `loading` is
+`!ready && !durationKnown`, `ready` comes from the element's own `canplay`, and the probe is bounded
+by a 4 s timeout that gives up on the length without giving up on the clip (the label reads 0:00 and
+the wave can't be scrubbed until the waveform decode fills it in). No test drives the never-answers
+path — it is guarded by construction, not by evidence.
+
+**Not covered.** Screen share, Firefox and Safari, mobile, and long-lived sessions — nothing here
+says anything about a leak over hours, only about resting cost. Nor does it cover the voice-note
+path this build did **not** make cheaper: `<audio preload="metadata">` still mounts per note, and
+for the app's own WebM recordings the duration probe seeks to the end, which pulls the clip. Only
+the decoded PCM was removed.
+
 ## v0.23.0 — persistent Sign-ins + Sign-in Epoch revocation
 
 Driven 2026-09-02 against the dev stack (Node dev server on :3001, dev Postgres), with two

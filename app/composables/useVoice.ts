@@ -282,6 +282,17 @@ export function useVoice() {
 			)
 
 			const nextRoom = new livekit.Room({
+				// Subscribe to video only where video is actually being shown, and at the
+				// layer the tile is actually sized for. Both default to false in
+				// livekit-client, and without them a member who joins a call and then goes
+				// to read a text channel keeps decoding somebody's 1080p screen share into
+				// memory with nothing on screen to render it; the Watch Together filmstrip
+				// (168×96 tiles) pulls full-resolution layers too. This works because every
+				// tile attaches its track to a real element — see VoiceTile — which is what
+				// adaptiveStream watches for visibility and size.
+				adaptiveStream: true,
+				// the publisher side of the same idea: stop encoding layers nobody subscribes to
+				dynacast: true,
 				audioCaptureDefaults: prefs.value.micDeviceId
 					? { deviceId: prefs.value.micDeviceId }
 					: undefined,

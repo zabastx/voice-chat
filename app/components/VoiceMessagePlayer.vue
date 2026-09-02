@@ -1,5 +1,5 @@
 <template>
-	<!-- graceful fallback if the audio can't be decoded -->
+	<!-- graceful fallback if the audio can't be played -->
 	<a
 		v-if="failed && attachment"
 		:href="`/api/attachments/${attachment.id}`"
@@ -20,8 +20,25 @@
 
 	<div
 		v-else
+		ref="root"
 		class="border-default bg-elevated/50 flex w-72 max-w-full items-center gap-3 rounded-lg border px-3 py-2"
 	>
+		<!-- Playback runs through a plain media element: it streams, and it holds a
+		     decoder rather than the whole clip as raw samples. -->
+		<audio
+			ref="audioEl"
+			:src="src"
+			preload="metadata"
+			@canplay="ready = true"
+			@durationchange="onDurationChange"
+			@ended="onEnded"
+			@error="failed = true"
+			@loadedmetadata="onLoadedMetadata"
+			@pause="playing = false"
+			@play="playing = true"
+			@timeupdate="onTimeUpdate"
+		/>
+
 		<UButton
 			:disabled="loading"
 			:icon="playing ? 'i-lucide-pause' : 'i-lucide-play'"
@@ -65,28 +82,35 @@ const props = defineProps<{ attachment?: AttachmentDto; blob?: Blob }>()
 
 const BARS = 48
 
-// One shared AudioContext for every player — browsers cap concurrent contexts,
-// and a channel can hold many voice messages.
-let sharedCtx: AudioContext | null = null
-function getCtx() {
-	if (!sharedCtx) sharedCtx = new AudioContext()
-	return sharedCtx
-}
+// Sample rate for the waveform decode. The bars are 48 peaks over the whole clip,
+// so the decode only has to be fine-grained enough to find them — and decoding at
+// 8 kHz instead of the file's own 48 kHz is 6× less memory while it happens. It
+// matters because this used to be a full-rate decode kept alive for the lifetime
+// of the component: a five-minute note is ~58 MB of Float32 that way, per note,
+// for a waveform 300 px wide.
+const WAVEFORM_RATE = 8000
 
-const loading = ref(true)
+// The button waits on `ready` (the element says it can play), NOT on knowing the
+// duration. Those are two different questions, and conflating them is how a clip
+// whose container hides its length ends up unplayable: see the probe below.
+const ready = ref(false)
+const durationKnown = ref(false)
+const loading = computed(() => !ready.value && !durationKnown.value)
 const failed = ref(false)
 const peaks = ref<number[]>([])
 const duration = ref(0)
 const currentTime = ref(0)
 const playing = ref(false)
 
+const root = ref<HTMLElement>()
 const waveEl = ref<HTMLElement>()
+const audioEl = ref<HTMLAudioElement>()
 
-let buffer: AudioBuffer | null = null
-let source: AudioBufferSourceNode | null = null
-let startedAt = 0 // ctx.currentTime when the current source started
-let startOffset = 0 // buffer offset the current source started from
-let rafId = 0
+// object URL for the pre-send preview; revoked on unmount
+const blobUrl = ref<string>()
+const src = computed(() =>
+	props.blob ? blobUrl.value : props.attachment ? `/api/attachments/${props.attachment.id}` : ''
+)
 
 const progress = computed(() => (duration.value ? currentTime.value / duration.value : 0))
 // total while idle, elapsed once playback has moved
@@ -110,7 +134,19 @@ function computePeaks(audioBuffer: AudioBuffer) {
 	return max > 0 ? result.map((v) => v / max) : result
 }
 
-async function load() {
+// --- waveform, on demand ----------------------------------------------------
+
+let waveformStarted = false
+
+/**
+ * Fetch and decode the clip once, purely to draw the bars, then let the samples
+ * go. Deliberately NOT called on mount: a channel can hold a screenful of voice
+ * messages, and downloading and decoding every one of them for a picture nobody
+ * has scrolled to yet was the single most expensive thing this component did.
+ */
+async function loadWaveform() {
+	if (waveformStarted) return
+	waveformStarted = true
 	try {
 		let bytes: ArrayBuffer
 		if (props.blob) {
@@ -122,81 +158,117 @@ async function load() {
 			if (!res.ok) throw new Error('fetch failed')
 			bytes = await res.arrayBuffer()
 		} else {
-			throw new Error('no source')
+			return
 		}
-		buffer = await getCtx().decodeAudioData(bytes)
-		duration.value = buffer.duration
+		// decodeAudioData resamples to the context's rate, so this is where the 6×
+		// saving comes from; the buffer is local and collectable the moment we're done
+		const offline = new OfflineAudioContext(1, 1, WAVEFORM_RATE)
+		const buffer = await offline.decodeAudioData(bytes)
 		peaks.value = computePeaks(buffer)
-	} catch {
-		failed.value = true
-	} finally {
-		loading.value = false
-	}
-}
-
-function tick() {
-	if (!sharedCtx || !playing.value) return
-	const t = startOffset + (sharedCtx.currentTime - startedAt)
-	currentTime.value = Math.min(t, duration.value)
-	rafId = requestAnimationFrame(tick)
-}
-
-function stopSource() {
-	cancelAnimationFrame(rafId)
-	if (source) {
-		source.onended = null
-		try {
-			source.stop()
-		} catch {
-			// already stopped
+		// a WebM/Opus recording carries no duration in its container, so the decoded
+		// buffer is the most reliable source we have — see onLoadedMetadata
+		if (!durationKnown.value) {
+			duration.value = buffer.duration
+			durationKnown.value = true
+			// the probe, if one is still waiting, has just been answered from elsewhere
+			endProbe()
 		}
-		source.disconnect()
-		source = null
+	} catch {
+		// no bars, but playback is unaffected — a flat line is a better outcome
+		// than the whole player falling back to a download link
 	}
 }
 
-// AudioBufferSourceNode is single-use — every play/seek spins up a fresh node
-function startPlayback(offset: number) {
-	const ctx = getCtx()
-	if (!buffer) return
-	stopSource()
-	source = ctx.createBufferSource()
-	source.buffer = buffer
-	source.connect(ctx.destination)
-	source.onended = () => {
-		source = null
-		cancelAnimationFrame(rafId)
-		playing.value = false
+// --- media element ----------------------------------------------------------
+
+// True while the duration probe below is seeking; position updates during it are
+// meaningless (the element reports the seek target, not a playback position).
+let probingDuration = false
+let probeTimer: ReturnType<typeof setTimeout> | undefined
+
+// How long to wait for the probe's `durationchange` before giving up on ever
+// knowing the length. Nothing guarantees the event: a truncated recording, a
+// range-less response, a browser that answers the seek with nothing. Waiting
+// forever would be silent — the player would just sit there.
+const PROBE_TIMEOUT_MS = 4000
+
+function endProbe() {
+	if (!probingDuration) return
+	probingDuration = false
+	clearTimeout(probeTimer)
+	probeTimer = undefined
+	const el = audioEl.value
+	if (el && el.currentTime > 0 && !durationKnown.value) el.currentTime = 0
+	currentTime.value = 0
+}
+
+function onLoadedMetadata() {
+	const el = audioEl.value
+	if (!el) return
+	if (Number.isFinite(el.duration) && el.duration > 0) {
+		duration.value = el.duration
+		durationKnown.value = true
+		return
+	}
+	// A MediaRecorder WebM carries no duration in its container until it has been
+	// seeked to the end — this is why the old full decode was load-bearing here, and
+	// the seek is the cheap way to get the same answer.
+	probingDuration = true
+	probeTimer = setTimeout(() => {
+		// Give up on the length, not on the clip. The waveform decode may still fill
+		// `duration` in later; until then the label reads 0:00 and the wave can't be
+		// scrubbed, but the thing plays, which is what the button is for.
+		endProbe()
+	}, PROBE_TIMEOUT_MS)
+	el.currentTime = 1e101
+}
+
+function onDurationChange() {
+	const el = audioEl.value
+	if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return
+	duration.value = el.duration
+	durationKnown.value = true
+	if (probingDuration) {
+		probingDuration = false
+		clearTimeout(probeTimer)
+		probeTimer = undefined
+		el.currentTime = 0
 		currentTime.value = 0
 	}
-	startOffset = offset
-	startedAt = ctx.currentTime
-	source.start(0, offset)
-	playing.value = true
-	tick()
 }
 
-function pause() {
-	if (!sharedCtx) return
-	const t = startOffset + (sharedCtx.currentTime - startedAt)
-	stopSource()
-	currentTime.value = Math.min(t, duration.value)
+function onTimeUpdate() {
+	if (probingDuration) return
+	currentTime.value = audioEl.value?.currentTime ?? 0
+}
+
+function onEnded() {
 	playing.value = false
+	currentTime.value = 0
+	if (audioEl.value) audioEl.value.currentTime = 0
 }
 
 async function togglePlay() {
-	if (!buffer) return
-	const ctx = getCtx()
-	if (ctx.state === 'suspended') await ctx.resume()
-	if (playing.value) pause()
-	else startPlayback(currentTime.value >= duration.value ? 0 : currentTime.value)
+	const el = audioEl.value
+	if (!el) return
+	if (playing.value) {
+		el.pause()
+		return
+	}
+	if (el.currentTime >= duration.value) el.currentTime = 0
+	try {
+		await el.play()
+	} catch {
+		failed.value = true
+	}
 }
 
 function seekTo(t: number) {
+	const el = audioEl.value
+	if (!el || !duration.value) return
 	const clamped = Math.min(Math.max(0, t), duration.value)
+	el.currentTime = clamped
 	currentTime.value = clamped
-	if (playing.value) startPlayback(clamped)
-	else startOffset = clamped
 }
 
 let dragging = false
@@ -220,6 +292,31 @@ function onPointerUp() {
 	dragging = false
 }
 
-onMounted(load)
-onBeforeUnmount(stopSource)
+// --- lifecycle --------------------------------------------------------------
+
+let observer: IntersectionObserver | undefined
+
+onMounted(() => {
+	if (props.blob) blobUrl.value = URL.createObjectURL(props.blob)
+	if (!root.value) return
+	// a little ahead of the viewport, so the bars are already drawn by the time
+	// the player is actually looked at
+	observer = new IntersectionObserver(
+		(entries) => {
+			if (!entries.some((entry) => entry.isIntersecting)) return
+			observer?.disconnect()
+			observer = undefined
+			void loadWaveform()
+		},
+		{ rootMargin: '300px' }
+	)
+	observer.observe(root.value)
+})
+
+onBeforeUnmount(() => {
+	clearTimeout(probeTimer)
+	observer?.disconnect()
+	audioEl.value?.pause()
+	if (blobUrl.value) URL.revokeObjectURL(blobUrl.value)
+})
 </script>

@@ -1,6 +1,6 @@
 {
 	"name": "voice-chat",
-	"version": "0.23.0",
+	"version": "0.24.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -13,7 +13,10 @@
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check",
 		"lint": "oxlint",
-		"lint:fix": "oxlint --fix"
+		"lint:fix": "oxlint --fix",
+		"bench:seed": "node scripts/bench/memory.ts seed",
+		"bench": "node scripts/bench/memory.ts run",
+		"bench:compare": "node scripts/bench/memory.ts compare"
 	},
 	"dependencies": {
 		"@iconify-json/lucide": "^1.2.116",
@@ -39,6 +42,7 @@
 		"drizzle-kit": "^0.31.10",
 		"oxfmt": "^0.58.0",
 		"oxlint": "^1.73.0",
+		"playwright-core": "^1.62.1",
 		"typescript": "^6.0.3",
 		"vue-tsc": "^3.3.7"
 	},

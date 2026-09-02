@@ -15,8 +15,8 @@ in sync with reality as part of the same change** — a stale progress doc is a 
 | [progress/verification.md](progress/verification.md) | What was actually driven and what it proved, per release, plus the standing list of things **not** yet verified (DMs end-to-end, Telegram end-to-end, NAT, mobile, prod Caddy/Postgres). Add a section here when you verify something.                                   |
 
 Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost time),
-[DEPLOY.md](DEPLOY.md) (VPS runbook), [adr/](adr/) (decision records),
-[CONTEXT.md](../CONTEXT.md) (glossary).
+[DEPLOY.md](DEPLOY.md) (VPS runbook), [BENCH.md](BENCH.md) (client memory benchmark),
+[adr/](adr/) (decision records), [CONTEXT.md](../CONTEXT.md) (glossary).
 
 ## Remaining work / next steps
 
@@ -45,7 +45,15 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
    a notification body still renders `@username` as a link to whichever VK account owns that screen
    name (GOTCHAS 23), and voice notes arrive as documents — inline VK voice messages need ffmpeg in
    the runtime image to transcode to OGG/OPUS 16 kHz.
-8. **Twitch for Watch Together**, if wanted — the sync layer is source-agnostic and `WatchDto`
+8. **Remaining client-memory items** (v0.24.0 took the three big ones — see
+   [progress/verification.md](progress/verification.md) for the measured deltas). Left on the table,
+   each worth a `scripts/bench` run to justify: a YouTube embed stays a live iframe once played until
+   its row is trimmed from the window, so an IntersectionObserver resetting `playing` would reclaim
+   tens of MB per played embed; `RENDER_CAP` could drop from 150 to ~80 (scroll-up reload already
+   exists, so it is invisible) and would halve DOM and decoded bitmaps again; and the adaptive-stream
+   win is so far only measured against a fake camera — a real 1080p screen share is the case worth
+   measuring, which needs a bench scenario that can drive `getDisplayMedia`.
+9. **Twitch for Watch Together**, if wanted — the sync layer is source-agnostic and `WatchDto`
    already carries `source`, so this is a URL-parser case plus a second embed wrapper. Twitch
    embeds need `parent=<window.location.hostname>` and break on any unexpected host; live needs
    no timeline sync, but Twitch VODs would need their own seek handling.
