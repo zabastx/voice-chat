@@ -113,16 +113,14 @@ export default defineEventHandler(async (event) => {
 		replyRefsFor(rows.flatMap((row) => (row.replyToId ? [row.replyToId] : []))),
 		reactionsFor(rows.map((row) => row.id))
 	])
-	const messages = rows.map(
-		({ replyToId, ...rest }): MessageDto => ({
-			...rest,
-			createdAt: rest.createdAt.toISOString(),
-			editedAt: rest.editedAt?.toISOString() ?? null,
-			attachments: attachments.get(rest.id) ?? [],
-			replyTo: resolveReplyRef(replyToId, replyRefs),
-			reactions: reactionMap.get(rest.id) ?? []
-		})
-	)
+	const messages = rows.map(({ replyToId, ...rest }): MessageDto => ({
+		...rest,
+		createdAt: rest.createdAt.toISOString(),
+		editedAt: rest.editedAt?.toISOString() ?? null,
+		attachments: attachments.get(rest.id) ?? [],
+		replyTo: resolveReplyRef(replyToId, replyRefs),
+		reactions: reactionMap.get(rest.id) ?? []
+	}))
 
 	return { messages, hasMore, hasMoreNewer }
 })

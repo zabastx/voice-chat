@@ -1,5 +1,5 @@
 import DOMPurify from 'isomorphic-dompurify'
-import MarkdownIt from 'markdown-it'
+import MarkdownIt, { type RendererRule } from 'markdown-it'
 
 // Discord-style subset: bold, italic, strikethrough, inline + fenced code,
 // blockquote, lists, and (auto)links. Headings, images, and tables are
@@ -13,9 +13,12 @@ const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).disable(
 	'table'
 ])
 
-// Force safe link attributes on every rendered anchor.
-type RenderRule = NonNullable<MarkdownIt['renderer']['rules'][string]>
-const defaultLinkOpen: RenderRule =
+// Force safe link attributes on every rendered anchor. markdown-it 15 ships its
+// own types and exports the rule signature directly; `MarkdownIt` is now the
+// instance type of a callable default export, so it can no longer be indexed.
+// `link_open` is not one of the renderer's default rules — the fallback below is
+// what actually runs, even though the type says the map is total.
+const defaultLinkOpen: RendererRule =
 	md.renderer.rules.link_open ??
 	((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {

@@ -30,13 +30,11 @@ export default defineEventHandler(async (event) => {
 		.where(ne(schema.channels.kind, 'dm'))
 		.orderBy(asc(schema.channels.position), asc(schema.channels.createdAt))
 
-	return rows.map(
-		(row): ChannelDto => ({
-			...row,
-			// the query excludes kind='dm', so this narrowing is sound
-			kind: row.kind as ChannelDto['kind'],
-			lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt).toISOString() : null,
-			lastReadAt: row.lastReadAt?.toISOString() ?? null
-		})
-	)
+	return rows.map((row): ChannelDto => ({
+		...row,
+		// the query excludes kind='dm', so this narrowing is sound
+		kind: row.kind as ChannelDto['kind'],
+		lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt).toISOString() : null,
+		lastReadAt: row.lastReadAt?.toISOString() ?? null
+	}))
 })
