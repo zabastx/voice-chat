@@ -50,6 +50,13 @@
 			"when": 1787758199886,
 			"tag": "0006_aromatic_echo",
 			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1788311968791,
+			"tag": "0007_peaceful_maginty",
+			"breakpoints": true
 		}
 	]
 }

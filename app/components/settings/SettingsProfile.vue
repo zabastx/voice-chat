@@ -66,6 +66,22 @@
 			</UFormField>
 			<UButton :loading="savingPassword" label="Изменить пароль" type="submit" />
 		</UForm>
+
+		<USeparator />
+
+		<div class="space-y-3">
+			<h3 class="text-highlighted font-medium">Сеансы</h3>
+			<p class="text-muted text-sm">
+				Завершает вход на всех устройствах, включая это — войти нужно будет заново.
+			</p>
+			<UButton
+				:loading="signingOutAll"
+				color="error"
+				label="Выйти со всех устройств"
+				variant="subtle"
+				@click="signOutAll"
+			/>
+		</div>
 	</div>
 </template>
 
@@ -73,8 +89,10 @@
 import type { FormSubmitEvent } from '@nuxt/ui'
 import * as z from 'zod'
 
+import ConfirmModal from '../ConfirmModal.vue'
+
 const toast = useToast()
-const { user } = useUserSession()
+const { user, clear: clearSession } = useUserSession()
 const membersStore = useMembersStore()
 
 const self = computed(() => membersStore.profile(user.value?.id))
@@ -178,6 +196,39 @@ async function savePassword(event: FormSubmitEvent<z.output<typeof passwordFormS
 		toast.add({ title: errorMessage(e, 'Не удалось изменить пароль'), color: 'error' })
 	} finally {
 		savingPassword.value = false
+	}
+}
+
+// sessions
+const { stop: stopRealtime } = useRealtime()
+const overlay = useOverlay()
+const confirmModal = overlay.create(ConfirmModal)
+const signingOutAll = ref(false)
+
+// Bumping the Sign-in Epoch takes this device with it, so there is nothing left
+// to fetch afterwards — go straight to /login rather than letting the next
+// request 401 into a blank screen.
+async function signOutAll() {
+	const instance = confirmModal.open({
+		title: 'Выйти со всех устройств?',
+		description: 'Все входы будут завершены, включая текущий. Войти нужно будет заново.',
+		confirmLabel: 'Выйти везде'
+	})
+	if (!(await instance.result)) return
+	signingOutAll.value = true
+	try {
+		await $fetch('/api/me/sign-out-all', { method: 'POST' })
+		// mirror SelfPanel's logout: drop the socket and the client-side session
+		// state before navigating. Without `clear()` the client still believes it
+		// is signed in, and the global auth middleware bounces /login back to the
+		// app — the cookie is gone, so every request then 401s on a live-looking UI.
+		stopRealtime()
+		await clearSession()
+		await navigateTo('/login')
+	} catch {
+		toast.add({ title: 'Не удалось выйти', color: 'error' })
+	} finally {
+		signingOutAll.value = false
 	}
 }
 </script>

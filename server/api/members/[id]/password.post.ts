@@ -16,5 +16,8 @@ export default defineEventHandler(async (event) => {
 		.update(schema.members)
 		.set({ passwordHash: await hashPassword(body.password) })
 		.where(eq(schema.members.id, id))
+	// An admin resetting someone's password is usually reacting to a problem, so
+	// the old Sign-ins go with it — the member signs in again with the new one.
+	await bumpSignInEpoch(id)
 	return { ok: true }
 })

@@ -28,6 +28,12 @@ export const members = pgTable('members', {
 	role: text('role', { enum: ['admin', 'moderator', 'member'] })
 		.notNull()
 		.default('member'),
+	// Sign-in Epoch: the generation a session cookie was issued under. A cookie
+	// carries the epoch it was sealed with and is honoured only while the two
+	// match, so bumping this ends every Sign-in the member holds, on every
+	// device, at once. The only revocation lever there is — sealed cookies are
+	// otherwise unrecallable. See docs/adr/0012.
+	signInEpoch: integer('sign_in_epoch').notNull().default(0),
 	// Messenger links live in member_notification_links, one row per transport —
 	// they used to be telegram_-prefixed columns here (see adr/0011).
 	createdAt: timestamp('created_at', { withTimezone: true })

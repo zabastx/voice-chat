@@ -44,12 +44,21 @@ const fields: AuthFormField[] = [
 		placeholder: 'Ваш пароль',
 		defaultValue: '',
 		required: true
+	},
+	// ticked by default: everyone here signs in from their own machine, and the
+	// opt-out exists for the odd login on someone else's
+	{
+		name: 'remember',
+		type: 'checkbox',
+		label: 'Запомнить меня',
+		defaultValue: true
 	}
 ]
 
 const schema = z.object({
 	username: z.string().min(1, 'Введите имя пользователя'),
-	password: z.string().min(1, 'Введите пароль')
+	password: z.string().min(1, 'Введите пароль'),
+	remember: z.boolean()
 })
 
 type Schema = z.output<typeof schema>

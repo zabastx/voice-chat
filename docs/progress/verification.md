@@ -4,6 +4,108 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## v0.23.0 — persistent Sign-ins + Sign-in Epoch revocation
+
+Driven 2026-09-02 against the dev stack (Node dev server on :3001, dev Postgres), with two
+Playwright browsers (`danil` admin, `maks`) plus curl cookie jars standing in for extra devices.
+
+**Cookie shape — both branches.** `Set-Cookie` compared directly off `/api/auth/login`:
+`remember: true` → `Expires=Thu, 07 Oct 2027` (the 400-day cap); `remember: false` → no `Expires`
+attribute at all, i.e. a browser-session cookie exactly as before v0.23.0; field omitted → remembered,
+confirming the default-on decision holds for any caller that doesn't send it.
+
+**Login form.** `input[name=remember]` present and `checked: true` on first paint, labelled
+«Запомнить меня»; login through the form lands on the channel view.
+
+**«Выйти со всех устройств» (own).** Two danil devices, both 200 → clicked in Настройки → Профиль →
+confirm «Выйти везде»: epoch 6→7, the browser lands on `/login`, and the _other_ device 401s. The
+confirm copy renders as written.
+
+**Admin cutoff.** maks signed in on two devices; danil opened Приглашения и участники → Участники →
+the new per-row button, whose confirm dialog reads «Завершить все сеансы maks?». On confirm: maks's
+epoch 1→2, both maks devices 401, danil unaffected (200). Admin's own row correctly has no button.
+
+**WS disconnect on bump.** danil's members panel went «В СЕТИ — 2» → «В СЕТИ — 1» (only zabastx
+left) within seconds of the cutoff — the server really closed maks's socket rather than leaving a
+revoked device streaming. This is the observable that matters; the socket itself can't be inspected
+from the page.
+
+**Password change.** danil on two devices; changing the password from device A left A signed in
+(200) and killed B (401), epoch 1→2. Restoring the password bumped again and again left A alive.
+
+**Authorization.** maks → danil cutoff = 403; anonymous → cutoff = 401; anonymous →
+`/api/me/sign-out-all` = 401.
+
+**`/api/auth/refresh` cannot resurrect a revoked cookie.** The middleware skips `/api/auth/*`, so
+this was tested directly: bump the epoch in SQL (leaving the browser's cookie untouched), then POST
+`refresh` → 401, and the cookie stays dead. Before the route carried its own epoch check it would
+have re-sealed the cookie under the current epoch and handed access back.
+
+**Pre-0012 cookies are rejected.** Two cookies sealed by hand with the app's own session password
+([scratch script], iron-webcrypto, same seal format): one carrying the correct `signInEpoch` → **200**
+(so the forgery format is valid and the app accepts it), the same payload with the field absent →
+**401 «Сеанс завершён — войдите заново»**. That is the rollout claim — everyone signs in once after
+deploy — verified rather than assumed.
+
+### Re-driven 2026-09-02 after the code review
+
+A two-axis review found the renewal branch was broken; it was fixed and the whole feature re-driven.
+
+**Spec 6 (rolling window) — was broken, now fixed and driven.** `replaceUserSession` does **not**
+reset `session.createdAt`: `clear()` drops the context entry and writes an empty _response_ cookie,
+but the _request_ cookie survives, so the next `getSession` re-unseals it and `Object.assign`s the
+old `createdAt` back — `if (!session.id)` is then false and `createdAt = Date.now()` never runs.
+Measured before the fix: two re-issues 5s apart both returned `Expires=Thu, 07 Oct 2027 02:31:00 GMT`,
+byte-identical — i.e. exactly the fixed 400-day-from-first-login window the spec rejected. `issueSignIn`
+now passes `cookie: { expires }` explicitly (h3 spreads `config.cookie` last, so it wins) and
+`runtimeConfig.session.maxAge` became a long seal backstop, since `unsealSession` independently
+rejects on `Date.now() - createdAt > maxAge` and would have hit a hard wall regardless. After the fix,
+two re-issues 6s apart: `02:34:59` → `02:35:05`. See GOTCHAS #24, rewritten — its original prescription
+(«use replaceUserSession») was wrong.
+
+**Renewal threshold — driven for the first time**, with `SIGN_IN_RENEWAL_MS` temporarily at 5s
+(restored afterwards). Below the threshold a request returns **zero** `Set-Cookie` headers, which is
+the whole point of having a threshold; past it the cookie is re-issued with the expiry moved (+8s).
+The negative case matters more: an **unremembered** Sign-in left 8s past the same threshold also
+produced zero `Set-Cookie` and stayed authed — renewal never promotes an opt-out session into a
+persistent one.
+
+**Full regression after the fix**, all passing: both cookie branches (400-day `Expires` vs none);
+own sign-out-all across two devices (epoch 0→1, both 401); password change (changing device 200,
+other 401, restore clean); admin cutoff scoped to the target (maks 401, danil 200); authorization
+(non-admin 403, anonymous 401); `refresh` refusing to resurrect a revoked cookie (401); pre-0012
+rejection against a valid-forgery control (control with epoch → 200, same payload without → 401
+«Сеанс завершён — войдите заново»).
+
+**Browser re-run**, both flows through the real UI: checkbox present and `checked: true` on first
+paint; admin cutoff via ManageModal (confirm «Завершить все сеансы maks?» → epoch 1→2, presence
+«В СЕТИ — 2» → «В СЕТИ — 1», maks 401); own sign-out-all via Настройки → Профиль (epoch 4→5, browser
+lands on `/login`, second device 401).
+
+Two other review findings fixed in the same pass: the session fields were declared **required** in
+`shared/types/auth.d.ts` while the code's whole purpose is handling cookies that lack them (making
+them optional immediately surfaced two `boolean | undefined` call sites that had been silently
+wrong), and `bumpSignInEpoch`'s `?? 0` fallback would have sealed a cookie at a fabricated epoch 0 —
+a valid epoch for a member still at 0, i.e. a revocation that revoked nothing. It now throws.
+
+### Found and fixed during the first run
+
+- **«Выйти со всех устройств» did not leave the page.** The epoch bumped and other devices died, but
+  the browser stayed on the channel view: the handler navigated to `/login` without clearing the
+  _client-side_ session state, so `auth.global.ts` saw `loggedIn === true` and bounced it straight
+  back — leaving a live-looking UI whose every request 401s. Fixed by mirroring `SelfPanel`'s
+  logout (`stop()` on the realtime socket, then `clear()`, then navigate); re-driven, now lands on
+  `/login`.
+
+### Not verified
+
+- **A real 400-day expiry**, for obvious reasons — only the `Expires` header value was checked, and
+  the rolling behaviour was driven at a 5-second threshold rather than a 7-day one.
+- **What a revoked member's open tab looks like.** After a cutoff the other client keeps its
+  client-side session state and only discovers the revocation as 401s on its next requests; it is
+  not pushed to `/login`. Same shape as the pre-existing deleted-member path, so not new in v0.23.0,
+  but more reachable now that a cutoff exists.
+
 ## v0.22.0 — VK as a second notification transport
 
 Driven 2026-08-26, against the live VK community and the dev database.

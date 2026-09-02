@@ -73,9 +73,9 @@ export default defineEventHandler(async (event) => {
 		return inserted!
 	})
 
-	await setUserSession(event, {
-		user: { id: member.id, username: member.username, role: member.role }
-	})
+	// always remembered: accepting an invite is a one-shot flow on your own
+	// machine, and being logged out an hour later is a poor first impression.
+	await issueSignIn(event, member, true)
 
 	// everyone already online holds a client-side member directory that is only
 	// refetched on page load — announce the newcomer so they show up in the members

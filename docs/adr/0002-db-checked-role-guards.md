@@ -1,7 +1,10 @@
 # 0002 — Privileged endpoints authorize against the DB, not the session cookie
 
 Date: 2026-07-04
-Status: accepted
+Status: accepted — premise amended by [adr/0012](0012-sign-in-epoch-revocable-sessions.md), which
+makes sealed cookies revocable in bulk via a per-Member Sign-in Epoch. The rule below is unaffected:
+the epoch does not move on a role change, so nothing on the server may authorize against the
+cookie's `role`.
 
 ## Context
 
@@ -41,3 +44,6 @@ notices its own role changed (via the `member.updated` WS event) so the UI stays
   middleware (defense in depth).
 - The cookie's `role` field can be stale; nothing on the server may ever authorize against
   it. New privileged endpoints must use `requireRole`, not the session user.
+- adr/0012 later made sessions revocable, which weakens but does not remove the reason for this
+  rule: revocation is deliberately not triggered by role changes, so a promoted or demoted member
+  keeps their existing cookie and its stale `role` until something else re-seals it.

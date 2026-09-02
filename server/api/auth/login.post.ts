@@ -3,7 +3,10 @@ import * as z from 'zod'
 
 const bodySchema = z.object({
 	username: z.string().trim().min(1),
-	password: z.string().min(1)
+	password: z.string().min(1),
+	// «запомнить меня», ticked by default in the form. Unticked, the cookie gets
+	// no expiry and dies with the browser — see issueSignIn.
+	remember: z.boolean().default(true)
 })
 
 export default defineEventHandler(async (event) => {
@@ -18,8 +21,5 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 401, message: 'Неверное имя пользователя или пароль' })
 	}
 
-	await setUserSession(event, {
-		user: { id: member.id, username: member.username, role: member.role }
-	})
-	return { id: member.id, username: member.username, role: member.role }
+	return await issueSignIn(event, member, body.remember)
 })

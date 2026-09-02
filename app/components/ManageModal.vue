@@ -143,6 +143,15 @@
 										@click="startReset(member.id)"
 									/>
 								</UTooltip>
+								<UTooltip text="Выйти со всех устройств">
+									<UButton
+										color="neutral"
+										icon="i-lucide-log-out"
+										size="xs"
+										variant="ghost"
+										@click="signOutMember(member)"
+									/>
+								</UTooltip>
 								<UTooltip text="Удалить участника">
 									<UButton
 										color="error"
@@ -243,6 +252,23 @@ async function toggleModerator(member: MemberDto) {
 			title: (e as { data?: { message?: string } }).data?.message ?? 'Не удалось изменить роль',
 			color: 'error'
 		})
+	}
+}
+
+// Ends every Sign-in this member holds without deleting them or changing their
+// password — the lever for "they left" or "their laptop was stolen".
+async function signOutMember(member: { id: string; username: string }) {
+	const instance = confirmModal.open({
+		title: `Завершить все сеансы ${member.username}?`,
+		description: 'Участник будет разлогинен на всех устройствах и войдёт заново по своему паролю.',
+		confirmLabel: 'Завершить'
+	})
+	if (!(await instance.result)) return
+	try {
+		await $fetch(`/api/members/${member.id}/sign-out-all`, { method: 'POST' })
+		toast.add({ title: `Сеансы ${member.username} завершены`, color: 'success' })
+	} catch {
+		toast.add({ title: 'Не удалось завершить сеансы', color: 'error' })
 	}
 }
 

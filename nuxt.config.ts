@@ -59,6 +59,17 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
+		session: {
+			// Seal lifetime ONLY — a backstop, deliberately far longer than any cookie
+			// we actually write. h3 derives both the seal's ttl and (by default) the
+			// cookie's expiry from this plus `session.createdAt`, and createdAt never
+			// moves once a cookie exists (GOTCHAS #24) — so a rolling window cannot be
+			// built on it, and leaving this at 400 days would hard-expire the seal 400
+			// days after a member's FIRST login however active they were since.
+			// `issueSignIn` writes the real, rolling expiry itself; this only has to
+			// outlive it. See docs/adr/0012.
+			maxAge: 10 * 365 * 24 * 60 * 60
+		},
 		// dev default matches the postgres service in compose.dev.yaml
 		databaseUrl: 'postgres://postgres:postgres@127.0.0.1:5432/voicechat',
 		migrationsDir: 'server/db/migrations',

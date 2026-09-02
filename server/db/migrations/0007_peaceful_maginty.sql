@@ -1,0 +1,1 @@
+ALTER TABLE "members" ADD COLUMN "sign_in_epoch" integer DEFAULT 0 NOT NULL;

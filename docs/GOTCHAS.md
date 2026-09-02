@@ -216,6 +216,20 @@ VK's Bots Long Poll hands the _same_ updates to every client polling with the sa
 
 Sending the plain text `@danil` made VK render `[id7074907|@danil]` — a link to whichever VK account owns that screen name, who also gets notified. Our mentions name app members and mean nothing on VK, so every `messages.send` passes `disable_mentions: 1`. **That only stops the notification.** Measured 2026-08-26: the body still renders as a link to that stranger's profile, because VK linkifies any `@word` and documents no escape. Removing it entirely means not emitting a bare `@` for VK at all. Telegram has no equivalent behaviour, so this is easy to miss when porting a notification body between the two.
 
+### 24. `session.createdAt` never moves, so a cookie's expiry cannot roll — write it yourself
+
+h3 writes the cookie expiry as `new Date(session.createdAt + maxAge)` ([`updateSession`](../node_modules/h3/dist/index.mjs)), and `createdAt` is stamped only when a session is created with no readable cookie. **`replaceUserSession` does not reset it**, which is the trap: `session.clear()` deletes the _context_ entry and writes an empty _response_ cookie, but the _request_ `Cookie` header is untouched, so the `getSession` inside the following `update()` re-reads it, unseals it and `Object.assign`s the old `id` and `createdAt` back. `if (!session.id)` is then false, so `createdAt = Date.now()` never runs.
+
+Measured 2026-09-02: two re-issues five seconds apart both returned `Expires=Thu, 07 Oct 2027 02:31:00 GMT` — byte-identical. A "rolling" window built on re-sealing silently never rolls, and the member is logged out `maxAge` after their **first** login however active they have been. Worse, `unsealSession` independently rejects on `Date.now() - createdAt > maxAge`, so stretching the cookie alone would still hit a hard wall at the seal.
+
+The fix is to stop deriving the expiry from h3 at all: pass `cookie: { expires }` explicitly (h3 spreads `config.cookie` last, so it wins) and set `runtimeConfig.session.maxAge` to a long backstop that only has to outlive it — [`issueSignIn`](../server/utils/auth.ts). Track session age in your own field; `getUserSession` does not expose `createdAt` anyway.
+
+The same asymmetry bites the opt-out branch. Passing `cookie: { expires: undefined }` to suppress the expiry does **not** work — nuxt-auth-utils merges config with `defu`, which drops `undefined` keys, so the computed expiry survives. Pass `maxAge: 0` instead: it is falsy where h3 tests it, so no expiry attribute is written and the browser treats it as a session cookie.
+
+### 25. Session type augmentations belong in `shared/types/`, not the repo root
+
+`.nuxt/tsconfig.app.json` includes `../*.d.ts`, but `.nuxt/tsconfig.server.json` does **not** — it takes `../server/**/*` and `../shared/**/*.d.ts`. So a root `auth.d.ts`, which is where nuxt-auth-utils' own docs tell you to put the `declare module '#auth-utils'` block, types the session on the client and leaves every server handler seeing `UserSession`'s `[key: string]: unknown` index signature: custom fields come back as `unknown` and fail on arithmetic or assignment, with an error pointing at your handler rather than at the missing declaration. This repo already puts it in the right place — [shared/types/auth.d.ts](../shared/types/auth.d.ts), included by both tsconfigs — so extend that file rather than creating a new one.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).
