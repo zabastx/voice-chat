@@ -4,6 +4,51 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## v0.25.0 — Tauri 2 Windows prototype
+
+2026-09-09, local release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66,
+production Nuxt build on localhost:3000. `bun run desktop:bench` joins Tauri and Chrome
+to the seeded `bench-voice` channel as two local fixture users. Microphone input is a
+synthetic 440 Hz WebAudio stream; received media is muted. No hardware is captured.
+
+One completed exploratory run, private commit of **all Tauri/WebView2 descendants**,
+including GPU and audio processes. Each number is a median of three OS samples after
+settling and forced page GC, matching the metric in [BENCH.md](../BENCH.md):
+
+| Scenario                             | Private commit, MiB | Working set sum, MiB |
+| ------------------------------------ | ------------------: | -------------------: |
+| Empty voice-channel view, not joined |               221.2 |                362.2 |
+| Two-person audio call, window open   |               240.8 |                428.2 |
+| Same call, window hidden in tray     |               239.5 |                433.9 |
+
+**Verdict:** a working shell, but the requested 100–200 MB call budget is not met.
+The 1.3 MiB open/hidden difference is too small to claim a memory improvement.
+Earlier exploratory call-window samples were 253.6 and 262.4 MiB, so do not treat
+239.5 as a guaranteed footprint. No matched Chrome comparison was run; this establishes
+an absolute cost, not savings over the web app. CDP and synthetic audio are measurement
+overhead, and working-set sums include shared pages.
+
+Verified: login and channel rendering, LiveKit bidirectional RTP, a 15-second hidden-window
+interval with sent bytes 207376 → 392873 and received bytes 204243 → 389493, and native
+window restoration through the single-instance plugin. `node desktop-prototype/tray-check.mjs`
+also passes start-in-tray, show, and hide without needing auth or media.
+
+Two harness traps resolved: navigation waits for DOM content plus the target control,
+not external-resource `load`; `MainWindowHandle` remains nonzero when hidden because
+the single-instance plugin has a `com.voicechat.desktop-prototype-siw` helper window.
+The check distinguishes that helper from the chat window. WebView2's document still
+reported `visibilityState: visible` while its native host window was hidden.
+
+Local artifacts: `.data/desktop-memory/{idle-voice-window,call-window,call-tray}.json`,
+`call-evidence.json`, and `call-window.png`. The scripts are retained in
+[desktop-prototype](../../desktop-prototype/README.md) to reproduce the experiment.
+Release build, `bun run typecheck`, `bun run lint`, `bun run fmt`, and Rust formatting passed.
+
+Not verified: clicks on the native tray menu or close button (Computer Use's native pipe
+was unavailable), real microphone/playback quality, PTT, screen-share video/system audio,
+device changes, embeds, suspend/resume and long calls. Hide/restore was driven through
+the application's CLI, not by clicking the tray. No installer or updater; nothing deployed.
+
 ## v0.24.0 — client memory
 
 Measured 2026-09-02 with `scripts/bench/memory.ts` (see [BENCH.md](../BENCH.md)) against a

@@ -24,7 +24,13 @@ plan. Part of [PROGRESS.md](../PROGRESS.md).
 | Notifications  | In-app (unread badges, tab-title counter, sounds) + opt-in **Telegram bridge** for offline mentions/DMs with reply-to-send (v0.14.0, [ADR 0006](../adr/0006-telegram-notifications.md)); v0.15.0 forwards attachments + clickable links, badges Telegram replies «через Telegram» ([ADR 0007](../adr/0007-message-source.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Watch Together | **Synced local embeds**, not relayed video — the SFU never carries the film ([ADR 0008](../adr/0008-watch-together-synced-embeds.md)); ephemeral room state, anyone in the roster controls, no host ([ADR 0009](../adr/0009-watch-session-in-memory-anyone-controls.md)). YouTube (video/Shorts/live) in v0.18.0; Twitch deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-**Deferred to v2+:** browser/Web Push, desktop wrapper / global PTT, multiple spaces, a real roles
+**Desktop experiment, 2026-09-09:** try Tauri 2 on Windows, reusing the server-hosted UI;
+the primary goal is 100–200 MB for a voice call in the tray, with global PTT also wanted.
+The [prototype](../../desktop-prototype/README.md) is built and measured at 239.5 MiB for
+a two-person synthetic call in the tray. This does not settle the production client architecture
+or claim savings. Desktop delivery and global PTT remain deferred pending that evaluation.
+
+**Deferred to v2+:** browser/Web Push, production desktop client / global PTT, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs
 (v0.13.0, [ADR 0005](../adr/0005-direct-messages-as-channel-rows.md)), the mic noise gate

@@ -1,11 +1,15 @@
 {
 	"name": "voice-chat",
-	"version": "0.24.0",
+	"version": "0.25.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"build": "nuxt build",
 		"dev": "nuxt dev --host",
+		"desktop:dev": "bun scripts/desktop.ts dev",
+		"desktop:build": "bun scripts/desktop.ts build",
+		"desktop:run": "bun scripts/desktop.ts run",
+		"desktop:bench": "node desktop-prototype/bench.mjs",
 		"db:generate": "drizzle-kit generate",
 		"preview": "nuxt preview",
 		"postinstall": "nuxt prepare",
@@ -37,6 +41,7 @@
 		"zod": "^4.5.4"
 	},
 	"devDependencies": {
+		"@tauri-apps/cli": "^2",
 		"@types/bun": "^1.4.0",
 		"drizzle-kit": "^0.31.10",
 		"oxfmt": "^0.66.0",

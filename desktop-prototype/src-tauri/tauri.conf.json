@@ -1,0 +1,19 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Голосовой чат (прототип)",
+	"version": "0.25.0",
+	"identifier": "com.voicechat.desktop-prototype",
+	"build": {
+		"frontendDist": "../frontend"
+	},
+	"app": {
+		"windows": [],
+		"security": {
+			"capabilities": []
+		}
+	},
+	"bundle": {
+		"active": false,
+		"icon": ["icons/icon.ico", "icons/icon.png"]
+	}
+}

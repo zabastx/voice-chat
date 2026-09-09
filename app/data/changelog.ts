@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.25.0',
+		date: '2026-09-09',
+		title: 'Пробный клиент для Windows',
+		changes: [
+			'Добавлен экспериментальный клиент на Tauri 2: он открывает приложение в отдельном окне и сворачивается в трей при закрытии.',
+			'Прототип предназначен для проверки расхода памяти. Push-to-talk пока не реализован.'
+		]
+	},
+	{
 		version: '0.24.0',
 		date: '2026-09-02',
 		title: 'Меньше памяти',
