@@ -24,13 +24,36 @@ plan. Part of [PROGRESS.md](../PROGRESS.md).
 | Notifications  | In-app (unread badges, tab-title counter, sounds) + opt-in **Telegram bridge** for offline mentions/DMs with reply-to-send (v0.14.0, [ADR 0006](../adr/0006-telegram-notifications.md)); v0.15.0 forwards attachments + clickable links, badges Telegram replies «через Telegram» ([ADR 0007](../adr/0007-message-source.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Watch Together | **Synced local embeds**, not relayed video — the SFU never carries the film ([ADR 0008](../adr/0008-watch-together-synced-embeds.md)); ephemeral room state, anyone in the roster controls, no host ([ADR 0009](../adr/0009-watch-session-in-memory-anyone-controls.md)). YouTube (video/Shorts/live) in v0.18.0; Twitch deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-**Desktop experiment, 2026-09-09:** try Tauri 2 on Windows, reusing the server-hosted UI;
-the primary goal is 100–200 MB for a voice call in the tray, with global PTT also wanted.
-The [prototype](../../desktop-prototype/README.md) is built and measured at 239.5 MiB for
-a two-person synthetic call in the tray. This does not settle the production client architecture
-or claim savings. Desktop delivery and global PTT remain deferred pending that evaluation.
+**Desktop Client, 2026-09-09:** proceed from the Tauri 2 prototype to a public Windows 10/11 x64
+alpha. The Desktop Client continues to load the Web Release from one embedded production HTTPS
+origin; a small versioned Native Bridge supplies only allowlisted native capabilities
+([ADR 0013](../adr/0013-remote-ui-behind-versioned-native-bridge.md)). `0.1.0-alpha.1` proves the
+installer, updater, tray, and single-instance delivery path. Global PTT remains a possible future
+feature and is outside the current release plan.
+The [prototype](../../desktop-prototype/README.md) measured 239.5 MiB for a two-person call in the
+tray against the original 100–200 MB goal. Keep measuring the whole process tree and compare
+like-for-like scenarios before claiming savings. Lower memory remains an optimization goal rather
+than a release gate. Desktop Releases use the `Voice Chat` name, `ru.zabastx.voicechat` identifier,
+independent `desktop-v<version>` tags, and one consent-based Desktop Update stream backed by signed
+GitHub Release assets ([ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md)).
+Tags build drafts; publishing is the promotion step because the server endpoint selects the newest
+published `desktop-v*` Release, while drafts remain invisible. The Web Release feature-detects each Native Bridge
+capability; the initial bridge adds only immutable native state/events and the validated
+`setVoiceActive(boolean)` signal needed to defer updates during a Voice Channel. Server failure
+shows a bundled retry/exit screen; diagnostics remain in bounded local logs with no automatic
+telemetry. Release assets include both the NSIS installer and a portable executable. Web and Desktop
+Release versions/changelogs remain independent; bridge work updates whichever side changed.
+The Portable EXE is a no-install binary that shares `%LOCALAPPDATA%` state with the installed client.
+Uninstalling performs a full cleanup of that shared profile, settings, and local logs. Alpha keeps
+the prototype's green headphones icon and uses Russian GitHub Release notes. The tag workflow runs
+the repository and Rust quality gates before signing or bundling.
+Portable updates open the replacement GitHub Release for manual download; installed and portable
+launches share a single-instance boundary. DM and mention notifications must work while hidden,
+using Web Notifications when verified and one bounded native bridge operation otherwise. The alpha
+tray icon stays static. Updater signing secrets are released only by manual approval in the
+`desktop-release` GitHub Environment and have an encrypted backup outside GitHub.
 
-**Deferred to v2+:** browser/Web Push, production desktop client / global PTT, multiple spaces, a real roles
+**Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs
 (v0.13.0, [ADR 0005](../adr/0005-direct-messages-as-channel-rows.md)), the mic noise gate

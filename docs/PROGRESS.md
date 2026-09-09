@@ -57,12 +57,20 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
    already carries `source`, so this is a URL-parser case plus a second embed wrapper. Twitch
    embeds need `parent=<window.location.hostname>` and break on any unexpected host; live needs
    no timeline sync, but Twitch VODs would need their own seek handling.
-10. **Evaluate the Tauri 2 Windows prototype** (2026-09-09) — built on
-    `prototype/tauri-windows`; [run instructions](../desktop-prototype/README.md).
-    Login, bidirectional synthetic audio, tray hide/restore, and continued audio while hidden
-    are verified. A two-person audio call in the tray measured **239.5 MiB private commit**
-    across the whole client process tree, above the requested 100–200 MB budget; see
-    [verification](progress/verification.md). Next: decide whether to optimize this approach
-    or separate voice from the web UI, then scope global PTT and required feature parity.
-    Real devices, screen sharing, embedded players, long calls and installer/update delivery
-    remain unverified or unbuilt. This is a local experiment, not a deployed desktop release.
+10. **Build the Tauri 2 Windows alpha** ([spec #4](https://github.com/zabastx/voice-chat/issues/4),
+    decision recorded 2026-09-09) from the prototype on
+    `prototype/tauri-windows`; [run instructions](../desktop-prototype/README.md). The accepted
+    shape is Windows 10/11 x64 with the server-hosted Web Release behind a versioned Native Bridge
+    ([ADR 0013](adr/0013-remote-ui-behind-versioned-native-bridge.md)) and one GitHub-backed update
+    stream ([ADR 0014](adr/0014-independent-desktop-releases-with-one-update-stream.md)). First deliver
+    `0.1.0-alpha.1` with an installer, updater, tray, and single-instance behavior; global PTT is
+    left for a future plan. Release assets include NSIS and a no-install Portable EXE; both share a
+    single profile and instance, while only the installed client applies updates automatically.
+    Login, bidirectional synthetic audio, tray hide/restore, and continued audio
+    while hidden are verified. A two-person audio call in the tray measured **239.5 MiB private
+    commit**, above the original 100–200 MB optimization goal, which is not a release gate. Real
+    devices, screen sharing, embedded players, long calls, and installer/update delivery remain
+    unverified or unbuilt. Spec #4 is split into native GitHub sub-issues
+    [#5–#14](https://github.com/zabastx/voice-chat/issues/4); the current implementation frontier is
+    [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) and
+    [#8 Update feed](https://github.com/zabastx/voice-chat/issues/8).

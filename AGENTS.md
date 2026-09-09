@@ -89,9 +89,11 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   [progress/verification.md](docs/progress/verification.md), a settled trade-off goes in
   [progress/decisions.md](docs/progress/decisions.md), and finishing an item edits the next-steps
   list in [docs/PROGRESS.md](docs/PROGRESS.md).
-- User-facing changes: bump `version` in [package.json](package.json) and prepend a Russian entry
-  to [app/data/changelog.ts](app/data/changelog.ts) (newest first) in the same commit — it powers
-  the "Что нового" badge/modal.
+- User-facing Web Release changes: bump `version` in [package.json](package.json) and prepend a
+  Russian entry to [app/data/changelog.ts](app/data/changelog.ts) (newest first) in the same commit —
+  it powers the "Что нового" badge/modal. Desktop shell-only changes instead bump the independent
+  Tauri/Cargo version and use GitHub Release notes; a Native Bridge change updates each release line
+  whose code changed.
 
 ## Agent skills
 
