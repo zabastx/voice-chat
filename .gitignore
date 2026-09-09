@@ -25,9 +25,9 @@ logs
 
 .playwright-cli
 
-# Tauri prototype build outputs
-desktop-prototype/src-tauri/target
-desktop-prototype/src-tauri/gen
+# Tauri desktop build outputs
+desktop/src-tauri/target
+desktop/src-tauri/gen
 
 # Spike output (scripts/vk-reply-spike.ts)
 vk-spike-updates.jsonl

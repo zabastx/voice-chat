@@ -59,7 +59,7 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
    no timeline sync, but Twitch VODs would need their own seek handling.
 10. **Build the Tauri 2 Windows alpha** ([spec #4](https://github.com/zabastx/voice-chat/issues/4),
     decision recorded 2026-09-09) from the prototype on
-    `prototype/tauri-windows`; [run instructions](../desktop-prototype/README.md). The accepted
+    `prototype/tauri-windows`; [run instructions](../desktop/README.md). The accepted
     shape is Windows 10/11 x64 with the server-hosted Web Release behind a versioned Native Bridge
     ([ADR 0013](adr/0013-remote-ui-behind-versioned-native-bridge.md)) and one GitHub-backed update
     stream ([ADR 0014](adr/0014-independent-desktop-releases-with-one-update-stream.md)). First deliver
@@ -72,5 +72,7 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     devices, screen sharing, embedded players, long calls, and installer/update delivery remain
     unverified or unbuilt. Spec #4 is split into native GitHub sub-issues
     [#5–#14](https://github.com/zabastx/voice-chat/issues/4); the current implementation frontier is
-    [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) and
+    [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is now built and verified
+    locally. The current implementation frontier is
+    [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6) and
     [#8 Update feed](https://github.com/zabastx/voice-chat/issues/8).

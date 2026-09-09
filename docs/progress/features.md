@@ -4,9 +4,26 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop 0.1.0-alpha.1 — production shell
+
+Issue #5 is built on `prototype/tauri-windows`: product `Voice Chat`, binary `voice-chat.exe`,
+identifier `ru.zabastx.voicechat`, independent Desktop version `0.1.0-alpha.1`. A release build
+embeds one root HTTPS origin and ignores runtime `VOICECHAT_DESKTOP_URL`; debug accepts HTTPS or
+loopback HTTP. Cross-origin navigations and all new windows go to the system browser, while remote
+content still has no Tauri capabilities.
+
+If the origin is unreachable at startup, the bundled Russian screen offers «Повторить» and «Выйти»;
+the same worker retries every 30 seconds and navigates the existing WebView after recovery. Close,
+tray hide/show and single-instance restore share one lifecycle path. The tray also opens bounded
+local logs: at most three 256 KiB files containing only fixed shell events, never page content, URL,
+cookie or Sign-in data. `desktop:check` verifies the release artifact against a temporary HTTPS
+origin, including runtime-override rejection, offline/retry, process lifecycle and log bounds.
+Installer, Portable packaging, Native Bridge, notifications and updater remain in issues #6–#12.
+Nothing deployed.
+
 ## v0.25.0 — Windows desktop experiment
 
-[Tauri 2 prototype](../../desktop-prototype/README.md), on `prototype/tauri-windows` only.
+[Tauri 2 prototype](../../desktop/README.md), on `prototype/tauri-windows` only.
 Release EXE opens the existing server-rendered app in WebView2; Russian tray menu,
 close-to-tray, single-instance restore and `--tray` startup/control are implemented.
 No Nuxt server is bundled. Server URL comes from `VOICECHAT_DESKTOP_URL`, default localhost:3000;

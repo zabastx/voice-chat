@@ -5,7 +5,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Root) {
-    $clients = @(Get-Process -Name 'voice-chat-desktop-prototype' -ErrorAction SilentlyContinue)
+    $clients = @(Get-Process -Name 'voice-chat' -ErrorAction SilentlyContinue)
     if ($clients.Count -ne 1) { throw 'Expected one running desktop prototype; pass -Root PID explicitly.' }
     $Root = $clients[0].Id
 }

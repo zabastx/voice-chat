@@ -30,7 +30,7 @@ origin; a small versioned Native Bridge supplies only allowlisted native capabil
 ([ADR 0013](../adr/0013-remote-ui-behind-versioned-native-bridge.md)). `0.1.0-alpha.1` proves the
 installer, updater, tray, and single-instance delivery path. Global PTT remains a possible future
 feature and is outside the current release plan.
-The [prototype](../../desktop-prototype/README.md) measured 239.5 MiB for a two-person call in the
+The [prototype](../../desktop/README.md) measured 239.5 MiB for a two-person call in the
 tray against the original 100–200 MB goal. Keep measuring the whole process tree and compare
 like-for-like scenarios before claiming savings. Lower memory remains an optimization goal rather
 than a release gate. Desktop Releases use the `Voice Chat` name, `ru.zabastx.voicechat` identifier,

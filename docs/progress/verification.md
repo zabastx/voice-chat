@@ -4,6 +4,34 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop 0.1.0-alpha.1 — production shell
+
+2026-09-09, local Windows release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66.
+`bun run desktop:check` created a temporary self-signed HTTPS endpoint, compiled that exact origin
+into the release binary, and drove the shell through WebView2 CDP plus the Windows process adapter.
+
+Verified:
+
+- The artifact is `voice-chat.exe`; Windows metadata reports product `Voice Chat` and version
+  `0.1.0-alpha.1`. The Tauri identifier is `ru.zabastx.voicechat` and supplies the shared profile,
+  single-instance identity and `%LOCALAPPDATA%\ru.zabastx.voicechat\logs` path.
+- A live loopback HTTP server planted in `VOICECHAT_DESKTOP_URL` was ignored by the release. With the
+  embedded HTTPS endpoint stopped, the WebView showed the bundled Russian «Повторить» and «Выйти»
+  actions instead of that runtime override or WebView2's error page.
+- Starting the embedded HTTPS endpoint and clicking «Повторить» loaded its marker in the same
+  process. No application restart was used.
+- `CloseMainWindow()` hid the chat window; a second normal launch restored it; `--tray` hid it;
+  another normal launch restored it; the process count stayed exactly one; `--exit` stopped it.
+- The identifier-scoped log directory contained one to three `.log` files, each no larger than
+  256 KiB. Every file was scanned for URL, cookie and session text and passed. The logger's API only
+  accepts fixed lifecycle events, so page text and request data cannot enter it.
+
+The harness generated and removed its CurrentUser test certificate and temporary PFX in the same
+run. Not yet driven against the production host: an actual tray-icon left click, each native tray
+menu item, and a cross-origin link opening the chosen default browser. Their Tauri handlers are in
+place; the prior prototype already proved the underlying left-click/show path. Installer and updater
+delivery remain separate tickets.
+
 ## v0.25.0 — Tauri 2 Windows prototype
 
 2026-09-09, local release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66,
@@ -30,7 +58,7 @@ overhead, and working-set sums include shared pages.
 
 Verified: login and channel rendering, LiveKit bidirectional RTP, a 15-second hidden-window
 interval with sent bytes 207376 → 392873 and received bytes 204243 → 389493, and native
-window restoration through the single-instance plugin. `node desktop-prototype/tray-check.mjs`
+window restoration through the single-instance plugin. `node desktop/tray-check.mjs`
 also passes start-in-tray, show, and hide without needing auth or media.
 
 Two harness traps resolved: navigation waits for DOM content plus the target control,
@@ -41,7 +69,7 @@ reported `visibilityState: visible` while its native host window was hidden.
 
 Local artifacts: `.data/desktop-memory/{idle-voice-window,call-window,call-tray}.json`,
 `call-evidence.json`, and `call-window.png`. The scripts are retained in
-[desktop-prototype](../../desktop-prototype/README.md) to reproduce the experiment.
+[desktop](../../desktop/README.md) to reproduce the experiment.
 Release build, `bun run typecheck`, `bun run lint`, `bun run fmt`, and Rust formatting passed.
 
 Not verified: clicks on the native tray menu or close button (Computer Use's native pipe

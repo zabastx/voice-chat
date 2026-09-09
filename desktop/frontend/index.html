@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Voice Chat</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				font-family: 'Segoe UI', sans-serif;
+				background: #111827;
+				color: #f8fafc;
+			}
+			body {
+				min-height: 100vh;
+				margin: 0;
+				display: grid;
+				place-items: center;
+			}
+			main {
+				width: min(28rem, calc(100% - 3rem));
+				text-align: center;
+			}
+			p {
+				color: #94a3b8;
+				line-height: 1.5;
+			}
+			.actions {
+				display: flex;
+				justify-content: center;
+				gap: 0.75rem;
+				margin-top: 1.5rem;
+			}
+			button {
+				border: 1px solid #334155;
+				border-radius: 0.5rem;
+				padding: 0.65rem 1rem;
+				background: #1e293b;
+				color: inherit;
+				font: inherit;
+				cursor: pointer;
+			}
+			button:first-child {
+				border-color: #16a34a;
+				background: #16a34a;
+			}
+		</style>
+	</head>
+	<body>
+		<main id="connection-error">
+			<h1>Нет соединения с сервером</h1>
+			<p>Voice Chat продолжит пробовать подключиться. Можно повторить сейчас или выйти.</p>
+			<div class="actions">
+				<button type="button" onclick="location.href = 'voicechat://retry'">Повторить</button>
+				<button type="button" onclick="location.href = 'voicechat://exit'">Выйти</button>
+			</div>
+		</main>
+	</body>
+</html>

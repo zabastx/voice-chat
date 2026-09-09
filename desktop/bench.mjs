@@ -8,8 +8,13 @@ import { chromium } from 'playwright-core'
 import { collectGarbage, findChrome } from '../scripts/bench/harness.ts'
 
 const root = join(import.meta.dirname, '..')
-const exe = join(import.meta.dirname, 'src-tauri/target/release/voice-chat-desktop-prototype.exe')
-const base = 'http://localhost:3000'
+const exe = join(import.meta.dirname, 'src-tauri/target/release/voice-chat.exe')
+const base = process.env.VOICECHAT_DESKTOP_BENCH_ORIGIN
+if (!base || new URL(base).protocol !== 'https:') {
+	throw new Error(
+		'Set VOICECHAT_DESKTOP_BENCH_ORIGIN to the HTTPS origin embedded in voice-chat.exe'
+	)
+}
 const output = join(root, '.data/desktop-memory')
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 mkdirSync(output, { recursive: true })
@@ -96,7 +101,7 @@ function windowIsVisible(pid) {
 		[
 			'-NoProfile',
 			'-Command',
-			`(Get-Process -Id ${pid}).MainWindowTitle -eq 'com.voicechat.desktop-prototype-siw'`
+			`(Get-Process -Id ${pid}).MainWindowTitle -eq 'ru.zabastx.voicechat-siw'`
 		],
 		{ encoding: 'utf8' }
 	).trim()
@@ -117,11 +122,11 @@ const running = execFileSync(
 	[
 		'-NoProfile',
 		'-Command',
-		"@(Get-Process -Name 'voice-chat-desktop-prototype' -ErrorAction SilentlyContinue).Count"
+		"@(Get-Process -Name 'voice-chat' -ErrorAction SilentlyContinue).Count"
 	],
 	{ encoding: 'utf8' }
 ).trim()
-if (running !== '0') throw new Error('Close the existing desktop prototype before benchmarking')
+if (running !== '0') throw new Error('Close Voice Chat before benchmarking')
 await fetch(base, { signal: AbortSignal.timeout(5000) })
 const child = spawn(exe, [], {
 	cwd: root,
@@ -129,7 +134,6 @@ const child = spawn(exe, [], {
 	stdio: 'ignore',
 	env: {
 		...process.env,
-		VOICECHAT_DESKTOP_URL: base,
 		WEBVIEW2_USER_DATA_FOLDER: join(root, `.data/desktop-bench-profile-${Date.now()}`),
 		WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9337'
 	}
@@ -175,7 +179,7 @@ try {
 	await page.screenshot({ path: join(output, 'call-window.png') })
 	await measure(page, child.pid, 'call-window')
 
-	execFileSync(exe, ['--tray'], { env: { ...process.env, VOICECHAT_DESKTOP_URL: base } })
+	execFileSync(exe, ['--tray'])
 	await waitForWindow(child.pid, false)
 	const before = await audioStats(page)
 	await sleep(15000)
@@ -184,7 +188,7 @@ try {
 		throw new Error(`Audio stalled in tray: ${JSON.stringify({ before, after })}`)
 	}
 	await measure(page, child.pid, 'call-tray')
-	execFileSync(exe, [], { env: { ...process.env, VOICECHAT_DESKTOP_URL: base } })
+	execFileSync(exe, [])
 	await waitForWindow(child.pid, true)
 	writeFileSync(
 		join(output, 'call-evidence.json'),
