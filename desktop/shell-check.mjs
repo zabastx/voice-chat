@@ -145,6 +145,107 @@ try {
 		throw new Error(`Recovery navigated to an unexpected origin: ${page.url()}`)
 	}
 	console.log('PASS recovery: retry loads the embedded HTTPS origin without restarting')
+
+	// The Native Bridge (#6) runs the same contract scenarios as `bun test`, here against the
+	// object the release shell actually froze onto the remote page.
+	const contractBundle = join(temp, 'native-bridge-contract.js')
+	execFileSync(
+		'bun',
+		[
+			'build',
+			join(root, 'test', 'native-bridge-contract.browser.ts'),
+			'--target=browser',
+			'--outfile',
+			contractBundle
+		],
+		{ cwd: root, stdio: 'inherit' }
+	)
+	await page.evaluate(
+		(source) => {
+			new Function(source)()
+		},
+		readFileSync(contractBundle, 'utf8')
+	)
+
+	const descriptor = await page.evaluate(() => {
+		const value = globalThis.voiceChatDesktop
+		if (!value) return null
+		return {
+			desktopVersion: value.desktopVersion,
+			bridgeVersion: value.bridgeVersion,
+			capabilities: [...value.capabilities],
+			operations: Object.keys(value).filter((key) => typeof value[key] === 'function'),
+			frozen: Object.isFrozen(value)
+		}
+	})
+	if (
+		descriptor?.desktopVersion !== version.ProductVersion ||
+		descriptor.bridgeVersion !== 1 ||
+		descriptor.frozen !== true ||
+		descriptor.capabilities.join(',') !== 'voice-lifecycle' ||
+		descriptor.operations.join(',') !== 'setVoiceActive'
+	) {
+		throw new Error(`Unexpected Native Bridge descriptor: ${JSON.stringify(descriptor)}`)
+	}
+	console.log(
+		`PASS bridge: the remote page sees a frozen desktop ${version.ProductVersion} / bridge 1 descriptor`
+	)
+
+	const contract = await page.evaluate(() =>
+		globalThis.__voiceChatBridgeContract(globalThis.voiceChatDesktop, { desktop: true })
+	)
+	const failedScenarios = contract.filter((result) => !result.passed)
+	if (failedScenarios.length > 0 || contract.length === 0) {
+		throw new Error(
+			`Native Bridge contract failed against the real adapter: ${JSON.stringify(failedScenarios)}`
+		)
+	}
+	console.log(
+		`PASS bridge: ${contract.length} contract scenarios pass against the real Tauri adapter`
+	)
+
+	const authority = await page.evaluate(async () => {
+		const report = { invoke: 'unavailable', globals: [] }
+		for (const name of ['__TAURI__', '__TAURI_INTERNALS__', '__TAURI_EVENT_PLUGIN_INTERNALS__']) {
+			if (name in globalThis) report.globals.push(name)
+		}
+		const invoke = globalThis.__TAURI_INTERNALS__?.invoke
+		if (typeof invoke === 'function') {
+			// If the boundary held, this rejects; if it resolved it would open a browser tab,
+			// which is exactly the failure this check exists to catch.
+			report.invoke = await invoke('plugin:opener|open_url', { url: 'https://example.invalid' })
+				.then(() => 'resolved')
+				.catch(() => 'rejected')
+		}
+		return report
+	})
+	if (authority.invoke === 'resolved') {
+		throw new Error('Remote origin reached a Tauri plugin command through invoke')
+	}
+	console.log(
+		`PASS bridge: remote origin has no usable Tauri invoke (globals: ${authority.globals.join(', ') || 'none'}, invoke: ${authority.invoke})`
+	)
+
+	// The reverse operation, then the same guard reached by a page that skips the injected
+	// descriptor and writes the URL itself. One navigation per evaluate: assigning
+	// `location.href` twice in a synchronous block only performs the last one.
+	await page.evaluate(() => globalThis.voiceChatDesktop.setVoiceActive(true))
+	for (const forged of [
+		// The shape an embed that navigated the top frame can produce: right operation,
+		// no token.
+		'voicechat://bridge/setVoiceActive?value=0',
+		'voicechat://bridge/installUpdate?value=1',
+		'voicechat://bridge/setVoiceActive?value=yes',
+		'voicechat://bridge/openLogFolder?value=1'
+	]) {
+		await page.evaluate((url) => {
+			location.href = url
+		}, forged)
+		await sleep(50)
+	}
+	if ((await page.locator('#production-app').count()) !== 1) {
+		throw new Error('A Native Bridge navigation replaced the remote document')
+	}
 	await page.evaluate(() => {
 		location.href = 'voicechat://exit'
 	})
@@ -163,6 +264,10 @@ try {
 			(await page.locator('#connection-error').count()) === 1,
 		'local screen after a later failed navigation'
 	)
+	if (await page.evaluate(() => 'voiceChatDesktop' in globalThis)) {
+		throw new Error('The bundled error screen received the Native Bridge')
+	}
+	console.log('PASS bridge: only the trusted origin receives the descriptor')
 	await listen(productionServer, productionPort)
 	await page.evaluate(() => document.querySelector('button')?.click())
 	await page.locator('#production-app').waitFor({ timeout: 10_000 })
@@ -199,14 +304,24 @@ try {
 	if (logs.length === 0 || logs.length > 3) {
 		throw new Error(`Expected 1-3 bounded log files, found ${logs.length}`)
 	}
+	let recorded = ''
 	for (const log of logs) {
 		if (statSync(log).size > 256 * 1024) throw new Error(`Oversized desktop log: ${log}`)
 		const contents = readFileSync(log, 'utf8')
 		if (/cookie|session|https?:\/\//i.test(contents)) {
 			throw new Error(`Desktop log contains secret-bearing data: ${log}`)
 		}
+		recorded += contents
 	}
 	console.log('PASS diagnostics: local logs are bounded and contain no URLs or session material')
+
+	if (!recorded.includes('voice channel active') || !recorded.includes('voice channel idle')) {
+		throw new Error('The shell never observed the voice lifecycle signal')
+	}
+	if (!recorded.includes('native bridge message rejected')) {
+		throw new Error('The shell accepted a forged Native Bridge message')
+	}
+	console.log('PASS bridge: the shell applied setVoiceActive and refused every forged envelope')
 } finally {
 	await browser?.close().catch(() => {})
 	if (child?.exitCode === null) child.kill()

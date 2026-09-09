@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bridge;
 mod desktop_log;
 #[path = "../origin.rs"]
 mod origin;
@@ -412,6 +413,8 @@ fn main() {
             let navigation_reconnect = reconnect.clone();
             let connection = Arc::new(ConnectionState::default());
             let navigation_connection = Arc::clone(&connection);
+            let bridge = Arc::new(bridge::Bridge::default());
+            let navigation_bridge = Arc::clone(&bridge);
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                     .title("Voice Chat")
@@ -419,27 +422,49 @@ fn main() {
                     .inner_size(1180.0, 780.0)
                     .min_inner_size(720.0, 480.0)
                     .initialization_script(health_check_script(&url))
+                    .initialization_script(bridge.script(&url))
                     .on_navigation(move |destination| {
-                        match (destination.scheme(), destination.host_str()) {
+                        let loads_document = match (destination.scheme(), destination.host_str()) {
+                            // The remote page's only reach into the shell: a cancelled
+                            // navigation carrying one named, validated operation.
+                            ("voicechat", Some("bridge"))
+                                if bridge::is_trusted_document(
+                                    &navigation_app,
+                                    &navigation_origin,
+                                ) =>
+                            {
+                                navigation_bridge.handle(&navigation_app, destination);
+                                false
+                            }
                             ("voicechat", Some("retry"))
                                 if is_local_fallback(&navigation_app, &navigation_connection) =>
                             {
-                                navigation_reconnect.request()
+                                navigation_reconnect.request();
+                                false
                             }
                             ("voicechat", Some("exit"))
                                 if is_local_fallback(&navigation_app, &navigation_connection) =>
                             {
-                                perform_action(&navigation_app, ShellAction::Exit)
+                                perform_action(&navigation_app, ShellAction::Exit);
+                                false
                             }
-                            _ if destination.origin() == navigation_origin => return true,
+                            _ if destination.origin() == navigation_origin => true,
                             ("tauri", Some("localhost")) | ("http", Some("tauri.localhost"))
                                 if navigation_connection.allows_local_page() =>
                             {
-                                return true;
+                                true
                             }
-                            _ => open_link(&navigation_app, destination),
+                            _ => {
+                                open_link(&navigation_app, destination);
+                                false
+                            }
+                        };
+                        // Whatever the outgoing document reported about a live call goes
+                        // with it, so only a navigation we actually let through clears it.
+                        if loads_document {
+                            navigation_bridge.clear_voice(&navigation_app);
                         }
-                        false
+                        loads_document
                     })
                     .on_new_window(move |destination, _| {
                         open_link(&popup_app, &destination);
@@ -448,6 +473,8 @@ fn main() {
                     .build()?;
 
             watch_navigation(&window, origin, Arc::clone(&connection))?;
+            // Kept for the updater ticket: an agreed update waits for the call to end.
+            app.manage(bridge);
             start_reconnect_worker(
                 app.handle().clone(),
                 url,

@@ -230,6 +230,41 @@ The same asymmetry bites the opt-out branch. Passing `cookie: { expires: undefin
 
 `.nuxt/tsconfig.app.json` includes `../*.d.ts`, but `.nuxt/tsconfig.server.json` does **not** — it takes `../server/**/*` and `../shared/**/*.d.ts`. So a root `auth.d.ts`, which is where nuxt-auth-utils' own docs tell you to put the `declare module '#auth-utils'` block, types the session on the client and leaves every server handler seeing `UserSession`'s `[key: string]: unknown` index signature: custom fields come back as `unknown` and fail on arithmetic or assignment, with an error pointing at your handler rather than at the missing declaration. This repo already puts it in the right place — [shared/types/auth.d.ts](../shared/types/auth.d.ts), included by both tsconfigs — so extend that file rather than creating a new one.
 
+## Windows desktop shell
+
+### 26. A second `WebMessageReceived` handler never runs — wry's IPC handler fails first
+
+The obvious reverse channel from the remote page to the Tauri shell is WebView2's own
+`chrome.webview.postMessage`, with a **non-string** payload so it cannot be confused with Tauri's
+string IPC. It silently never arrives. wry registers the first `WebMessageReceived` handler for
+Tauri's IPC (`attach_ipc_handler` in `wry/src/webview2/mod.rs`), and that handler does
+`args.TryGetWebMessageAsString(&mut js)?` — which returns `E_INVALIDARG` for an object payload, so
+the handler returns `Err` and **WebView2 stops calling the remaining handlers**. Measured
+2026-09-09 with probe events in the desktop log: a string message reached our handler, an object
+message never did, on the same run and the same registration.
+
+A string payload does reach it, but then Tauri's own handler parses it as an invoke `Message`,
+fails, and evals `console.error(...)` into the page — one error line per bridge call.
+
+So the Native Bridge's reverse operations ride a cancelled `voicechat://bridge/<op>?value=…`
+navigation through `on_navigation` instead, the same mechanism the bundled error screen already
+uses for retry and exit. Cancelling in `NavigationStarting` leaves the document untouched, which
+the desktop check asserts.
+
+Two traps come with that channel:
+
+- **Assign `location.href` once per tick.** Two assignments in the same synchronous block only
+  perform the last one. The injected descriptor sends only on a _change_ of value, which removes
+  the case this repo actually produces (`leave()` and LiveKit's `Disconnected` handler both call
+  `reset()`).
+- **The trusted origin of the main document does not tell you which frame asked.** wry hooks only
+  the top-level `NavigationStarting`, never `CoreWebView2Frame`'s — but a cross-origin embed
+  (a YouTube player, say) can navigate the _top_ frame given user activation, and it arrives while
+  the main document is still the trusted origin. So every reverse-operation URL must also carry a
+  per-process token that only lives in the trusted document's script scope, where a cross-origin
+  frame cannot read it. See `Bridge::script` in
+  [bridge.rs](../desktop/src-tauri/src/bridge.rs).
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

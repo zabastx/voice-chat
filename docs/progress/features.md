@@ -38,7 +38,8 @@ in development — a production build ignores it and logs that it did, because a
 URL and any signature.
 
 Client side (checking on a schedule, consent, waiting out a Voice Channel, the Portable EXE's manual
-path) is still unbuilt — issues #6–#12. Nothing deployed.
+path) is still unbuilt — issues #9–#12; the Native Bridge already supplies the active-call signal
+those need. Nothing deployed.
 
 ## Desktop 0.1.0-alpha.1 — production shell
 
@@ -58,7 +59,48 @@ local logs: at most three 256 KiB files containing only fixed shell events, neve
 cookie or Sign-in data. `desktop:check` verifies the release artifact against a temporary HTTPS
 origin, including runtime-override rejection, broken TLS, initial and later recovery, process
 lifecycle and log bounds.
-Installer, Portable packaging, Native Bridge, notifications and updater remain in issues #6–#12.
+Installer, Portable packaging, notifications and updater remain in issues #7–#12.
+Nothing deployed.
+
+## Desktop 0.1.0-alpha.1 — Native Bridge
+
+Issue #6 is built on `prototype/tauri-windows`, both halves of
+[ADR 0013](../adr/0013-remote-ui-behind-versioned-native-bridge.md)'s contract.
+
+Native half, [desktop/src-tauri/src/bridge.rs](../../desktop/src-tauri/src/bridge.rs): the shell
+freezes `window.voiceChatDesktop` — `{desktopVersion, bridgeVersion: 1, capabilities:
+['voice-lifecycle'], setVoiceActive}` — onto the trusted origin only, through a main-frame
+initialization script gated on `location.origin`, so the bundled error screen and every embed
+subframe get nothing. The reverse channel is a cancelled `voicechat://bridge/<op>?value=…`
+navigation through the existing `on_navigation` handler — the mechanism the error screen's retry and
+exit already use — so the remote origin still gets no Tauri `invoke` and no plugin permission
+(`security.capabilities` stays empty). `chrome.webview.postMessage` was tried first and does not
+work here; the measured reason is in [GOTCHAS 26](../GOTCHAS.md). `read_bridge_navigation` refuses
+anything that is not a registered operation carrying this process's token and a correctly typed
+value, and the arm only fires when the document currently loaded is the trusted origin. Both guards
+are needed: the token is what an embed cannot produce, because wry hooks only top-level
+`NavigationStarting` and a cross-origin frame can still navigate the top frame given user
+activation. The injected descriptor sends only on a change of value, since two `location.href`
+assignments in one tick collapse to the last; a refusal is logged once per process, and
+a voice-state change is logged on transition rather than per message, so a chatty page cannot fill
+the bounded log. Any navigation that replaces the document clears the flag. `Bridge` is
+`app.manage`d for the updater ticket to read.
+
+Web half, [shared/utils/native-bridge.ts](../../shared/utils/native-bridge.ts) behind
+[useNativeDesktop()](../../app/composables/useNativeDesktop.ts): `resolveNativeBridge` validates the
+descriptor and degrades to a browser adapter when it is missing, malformed or unusable, so a plain
+browser and an older client keep chat and voice. Capabilities the Web Release does not know are
+dropped rather than trusted, so a newer shell cannot widen what the page believes it may do. Each
+reverse operation is registered by name with its own capability gate and payload check, and a shell
+failure is swallowed instead of breaking a call. `useVoice` raises the signal after a successful
+LiveKit connect and drops it in `reset()`, which covers leave, disconnect and a failed join.
+
+Only capability of version 1 is the invisible `voice-lifecycle` signal, so no member-visible
+affordance appears or disappears in this Web Release — hence no `package.json` bump and no changelog
+entry. The Cargo/Tauri version stays `0.1.0-alpha.1` too: no `desktop-v*` Release has been published,
+so this shell code is still going into that same first release rather than following one. One set of contract scenarios
+([test/native-bridge-contract.ts](../../test/native-bridge-contract.ts)) runs against the browser
+adapter in `bun test` and against the real Tauri adapter inside WebView2 in `bun run desktop:check`.
 Nothing deployed.
 
 ## v0.25.0 — Windows desktop experiment

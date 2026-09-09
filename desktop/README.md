@@ -8,7 +8,8 @@ Tauri 2 shell открывает серверную Web Release в WebView2. Nux
 Release-сборка принимает только один HTTPS origin, встроенный во время компиляции. Переменная
 `VOICECHAT_DESKTOP_URL` не меняет release EXE. Debug-сборка допускает HTTPS или loopback HTTP.
 Страница другого origin и любое новое окно открываются в системном браузере. Удалённая страница
-не получает Tauri capabilities или общий `invoke`.
+не получает Tauri capabilities или общий `invoke` — только версионированный Native Bridge, описанный
+ниже.
 
 Если сервер недоступен при запуске, shell показывает локальный русский экран. «Повторить» запускает
 проверку сразу, а фоновая проверка повторяется каждые 30 секунд. «Выйти» завершает процесс. Локальной
@@ -85,6 +86,49 @@ powershell -NoProfile -ExecutionPolicy Bypass -File desktop/measure.ps1 -Label c
 Сравнивайте одинаковые данные, размер окна, состав звонка и время ожидания. `privateMiB` соответствует
 метрике в [BENCH.md](../docs/BENCH.md); `workingSetMiB` отдельно включает общие страницы.
 
+## Native Bridge
+
+Удалённая Web Release не получает общий Tauri `invoke` и не имеет permissions к updater, shell,
+filesystem, process или store. Всё нативное проходит через один маленький контракт
+([ADR 0013](../docs/adr/0013-remote-ui-behind-versioned-native-bridge.md)).
+
+На доверенном origin — и только на нём — shell замораживает `window.voiceChatDesktop`:
+
+```js
+{ desktopVersion: '0.1.0-alpha.1', bridgeVersion: 1, capabilities: ['voice-lifecycle'], setVoiceActive }
+```
+
+`bridgeVersion` растёт, когда меняется форма контракта; новая возможность добавляется как
+capability, а Web Release её feature-detect'ит. Web-сторона читает descriptor через
+`useNativeDesktop()` ([app/composables/useNativeDesktop.ts](../app/composables/useNativeDesktop.ts)),
+который проверяет descriptor и при отсутствии, поломке или неизвестной версии отдаёт browser
+adapter. Неизвестные capabilities отбрасываются, поэтому более новый клиент не расширяет права
+страницы. Браузер и старый Desktop Client продолжают работать: пропадает только соответствующий
+native affordance.
+
+Единственная обратная операция первой версии — `setVoiceActive(boolean)`. `useVoice` вызывает её
+при входе в Voice Channel и в `reset()`; shell хранит флаг, чтобы согласованное обновление
+устанавливалось после звонка, а не посреди него. Операции регистрируются поимённо: capability,
+проверка payload и «сбой native не выходит наружу» находятся в
+[shared/utils/native-bridge.ts](../shared/utils/native-bridge.ts), а разбор конверта — в
+[src-tauri/src/bridge.rs](src-tauri/src/bridge.rs).
+
+Обратный канал — отменяемая навигация `voicechat://bridge/<op>?value=...`, тот же механизм, которым
+уже пользуются «Повторить» и «Выйти» на локальном экране ошибки. `chrome.webview.postMessage` здесь
+не подходит: wry регистрирует свой `WebMessageReceived` первым для Tauri IPC и падает на любом
+не-строковом payload, после чего WebView2 не вызывает следующие обработчики; строковый payload
+доходит, но заставляет Tauri писать ошибку разбора в консоль страницы на каждый вызов
+([GOTCHAS](../docs/GOTCHAS.md)).
+
+Операция принимается, только если текущий документ окна — доверенный origin. Неизвестная операция и
+неверное значение отбрасываются и один раз за процесс пишутся в лог; смена voice-состояния пишется
+по переходу, а не по сообщению, поэтому болтливая страница не заполнит ограниченный лог. Любая
+навигация, заменяющая документ, сбрасывает voice-флаг — документ, который его поднял, уже ушёл.
+
+Одни и те же contract scenarios ([test/native-bridge-contract.ts](../test/native-bridge-contract.ts))
+проходят и с browser adapter в `bun test`, и с настоящим Tauri adapter внутри WebView2 в
+`bun run desktop:check`.
+
 ## Update feed
 
 Серверная часть updater уже готова: публичный `GET /api/desktop/update` отдаёт Tauri updater
@@ -115,11 +159,11 @@ downgrade невозможен. Prerelease участвует наравне с�
 его можно править на ходу). Это только для разработки: production-сборка игнорирует переменную и
 пишет об этом в лог, потому что fixture может указать любой URL и любую подпись. Клиентская часть —
 проверка при запуске и каждые шесть часов, согласие, ожидание выхода из Voice Channel и ручной путь
-Portable EXE — относится к tickets #6–#12.
+Portable EXE — относится к tickets #9–#12; сигнал активного звонка для них уже приходит через
+Native Bridge.
 
 ## Оставшиеся ограничения
 
-Installer, updater-клиент, Native Bridge и notification contract реализуются отдельными
-tickets #6–#12.
+Installer, updater-клиент и notification contract реализуются отдельными tickets #7–#12.
 Push-to-talk отложен. Реальные устройства, screen share, сон и пробуждение, embedded players и
 длительный звонок требуют отдельной проверки в WebView2.

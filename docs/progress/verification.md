@@ -58,6 +58,59 @@ Not verified: the production-build branch that ignores `NUXT_DESKTOP_RELEASE_FIX
 a real published `desktop-v*` Release end to end; and anything on the client side — Tauri consuming this manifest, consent, six-hourly checks,
 waiting out a Voice Channel, and the Portable EXE's manual path are issues #6–#12.
 
+## Desktop 0.1.0-alpha.1 — Native Bridge
+
+2026-09-09, local Windows release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66. `bun run desktop:check`
+compiled a temporary HTTPS origin into the release binary and drove the shell through WebView2 CDP;
+`bun test` and `cargo test` cover the two halves separately.
+
+One set of contract scenarios ([test/native-bridge-contract.ts](../../test/native-bridge-contract.ts))
+runs in both environments: `bun test` resolves them against the browser adapter and against a
+candidate shaped like the injected descriptor, and `desktop:check` bundles the same file, evaluates
+it inside the real WebView2 and runs it against the object the shell actually froze onto the page.
+All 11 scenarios passed in both. They cover: descriptor presence matching the environment, a named
+version and integer bridge version, a descriptor page code cannot rewrite, an unknown capability
+never claimed, `supports` agreeing with the descriptor, `setVoiceActive` accepting booleans
+everywhere, a non-boolean payload rejected, a client without the capability keeping voice working,
+a newer bridge exposing only known capabilities, a malformed descriptor read as no Desktop Client,
+and a native failure not escaping into the Web Release.
+
+Also verified in the real client:
+
+- The remote page sees a frozen `{desktopVersion: '0.1.0-alpha.1', bridgeVersion: 1, capabilities:
+['voice-lifecycle']}` with exactly one callable operation, `setVoiceActive`.
+- The bundled error screen, reached through a later failed navigation, has no `voiceChatDesktop` at
+  all — the injection script is gated on the trusted origin.
+- `__TAURI_INTERNALS__` and `__TAURI_EVENT_PLUGIN_INTERNALS__` do exist on the remote page, but
+  `invoke('plugin:opener|open_url', …)` **rejected**: `security.capabilities` is empty, so no plugin
+  command is reachable. `location.href = 'voicechat://exit'` from the remote document was still
+  refused by the shell's own guard.
+- `setVoiceActive(true)` reached the shell: the identifier-scoped log recorded `voice channel
+active`, then `voice channel idle` on the transition back.
+- Four forged navigations written by the page itself, skipping the injected descriptor, produced
+  exactly one `native bridge message rejected` line and no state change, and did not replace the
+  document. They include the shape an embed can reach — the right operation and value, without the
+  per-process token (`setVoiceActive?value=0`) — plus `installUpdate`, `openLogFolder` and a wrongly
+  typed value.
+
+The reverse channel is a cancelled navigation rather than `chrome.webview.postMessage`; the measured
+reason, including the probe run that produced it, is [GOTCHAS 26](../GOTCHAS.md).
+
+Reasoned but **not** driven, and worth knowing before #10 consumes the flag:
+
+- The token guard exists because wry hooks only top-level `NavigationStarting`, so a cross-origin
+  embed with user activation can navigate the top frame and arrive while the main document is still
+  the trusted origin. `cargo test` covers the refusal; nobody has driven a real embed into attempting
+  it.
+- The injected descriptor sends only on a change of value, because two `location.href` assignments
+  in one tick collapse to the last. In this codebase a `false`→`true` transition never shares a tick
+  (an awaited `connect()` sits between them), so no signal has been observed lost — but there is no
+  ack and no resend. A lost `false` would leave the shell believing a call is live, so #10 must not
+  block an update on this flag indefinitely.
+- The signal against a real LiveKit call in the Desktop Client; only the synthetic call in
+  `desktop:bench` exercises voice at all.
+- Any consumer of `Bridge::voice_active` — the updater that reads it is issue #10.
+
 ## Desktop 0.1.0-alpha.1 — production shell
 
 2026-09-09, local Windows release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66.

@@ -54,6 +54,10 @@ export function useVoice() {
 	const toast = useToast()
 	const realtime = useRealtime()
 	const prefs = usePreferences()
+	// Desktop Client only: lets the shell hold a pending update back until the call ends.
+	// In a browser, and in a client whose bridge predates the capability, this is a no-op
+	// and the call behaves exactly the same (adr/0013).
+	const desktop = useNativeDesktop()
 
 	const currentChannelId = useState<string | null>('voice-channel', () => null)
 	const connecting = useState('voice-connecting', () => false)
@@ -74,6 +78,7 @@ export function useVoice() {
 	const micGateActive = useState('voice-mic-gate-active', () => false)
 
 	function reset() {
+		desktop.setVoiceActive(false)
 		currentChannelId.value = null
 		muted.value = false
 		sharing.value = false
@@ -396,6 +401,7 @@ export function useVoice() {
 			await nextRoom.connect(url, token)
 			room = nextRoom
 			currentChannelId.value = channelId
+			desktop.setVoiceActive(true)
 
 			let micOn = false
 			try {

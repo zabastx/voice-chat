@@ -63,6 +63,15 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   Upload proxied through `POST /api/attachments` (25 MB cap); served via short-lived presigned
   GETs behind a session check at `GET /api/attachments/:id`. Objects deleted with their message;
   orphaned uploads swept on boot in [server/plugins/db.ts](server/plugins/db.ts).
+- **Native Bridge** — the only thing the Windows Desktop Client's remote page may reach in the
+  native shell ([ADR 0013](docs/adr/0013-remote-ui-behind-versioned-native-bridge.md)). The shell
+  freezes a `{desktopVersion, bridgeVersion, capabilities}` descriptor onto the trusted origin
+  ([desktop/src-tauri/src/bridge.rs](desktop/src-tauri/src/bridge.rs)); the Web Release reads it
+  through [useNativeDesktop()](app/composables/useNativeDesktop.ts) over
+  [shared/utils/native-bridge.ts](shared/utils/native-bridge.ts), which degrades to a browser
+  adapter when it is missing or older. Reverse operations are registered by name — v1 has one,
+  `setVoiceActive(boolean)` — and ride a cancelled `voicechat://bridge/…` navigation, never a Tauri
+  `invoke` (GOTCHAS 26).
 - **Desktop Update** — public `GET /api/desktop/update` serves the Tauri updater manifest for the
   newest published `desktop-v*` GitHub Release ([ADR 0014](docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)).
   The catalog is behind a two-method interface in [server/utils/desktop-catalog.ts](server/utils/desktop-catalog.ts)

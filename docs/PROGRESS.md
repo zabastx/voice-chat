@@ -77,6 +77,11 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     `GET /api/desktop/update` selects the newest published `desktop-v*` Release and answers the Tauri
     updater, covered by the repo's first test suite (`bun run test`). It has not run against the VPS
     and no `desktop-v*` Release has been published yet, so the feed has never served a real one. The
-    current implementation frontier is
-    [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6), then the installer/updater
-    tickets that consume the feed.
+    [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6) is built: the shell freezes a
+    versioned descriptor onto the trusted origin only, the remote page still gets no Tauri `invoke`,
+    and its one reverse operation — `setVoiceActive(boolean)` — is what the updater ticket will read
+    to wait out a call. One set of contract scenarios runs against the browser adapter in
+    `bun test` and against the real Tauri adapter in `bun run desktop:check`. The current
+    implementation frontier is
+    [#7 installer and Portable EXE](https://github.com/zabastx/voice-chat/issues/7), then the
+    updater tickets that consume the feed.

@@ -19,6 +19,9 @@ pub enum DesktopEvent {
     WaitingForServer,
     ServerReached,
     LogsOpened,
+    VoiceActive,
+    VoiceIdle,
+    BridgeMessageRejected,
 }
 
 impl DesktopEvent {
@@ -32,6 +35,9 @@ impl DesktopEvent {
             Self::WaitingForServer => "waiting for server",
             Self::ServerReached => "server reached",
             Self::LogsOpened => "log directory opened",
+            Self::VoiceActive => "voice channel active",
+            Self::VoiceIdle => "voice channel idle",
+            Self::BridgeMessageRejected => "native bridge message rejected",
         }
     }
 }
