@@ -17,6 +17,7 @@ if (!env.CARGO_HOME && existsSync(join(localCargo, 'bin', 'cargo.exe'))) {
 }
 
 if (action === 'dev') {
+	// Keep this fast runner check aligned with desktop/src-tauri/origin.rs; Rust enforces the artifact.
 	const url = new URL(env.VOICECHAT_DESKTOP_URL ?? 'http://localhost:3000')
 	const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
 	if (

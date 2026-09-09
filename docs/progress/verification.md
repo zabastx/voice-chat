@@ -15,11 +15,14 @@ Verified:
 - The artifact is `voice-chat.exe`; Windows metadata reports product `Voice Chat` and version
   `0.1.0-alpha.1`. The Tauri identifier is `ru.zabastx.voicechat` and supplies the shared profile,
   single-instance identity and `%LOCALAPPDATA%\ru.zabastx.voicechat\logs` path.
-- A live loopback HTTP server planted in `VOICECHAT_DESKTOP_URL` was ignored by the release. With the
-  embedded HTTPS endpoint stopped, the WebView showed the bundled Russian «Повторить» and «Выйти»
-  actions instead of that runtime override or WebView2's error page.
+- A live loopback HTTP server planted in `VOICECHAT_DESKTOP_URL` was ignored by the release. The
+  embedded port was open but deliberately aborted TLS; the WebView still showed the bundled Russian
+  «Повторить» and «Выйти» actions instead of that runtime override or WebView2's error page.
 - Starting the embedded HTTPS endpoint and clicking «Повторить» loaded its marker in the same
   process. No application restart was used.
+- After that successful load, the HTTPS endpoint was stopped and an uncached same-origin navigation
+  was triggered. The same local screen returned; restarting the endpoint and clicking «Повторить»
+  recovered the same process again.
 - `CloseMainWindow()` hid the chat window; a second normal launch restored it; `--tray` hid it;
   another normal launch restored it; the process count stayed exactly one; `--exit` stopped it.
 - The identifier-scoped log directory contained one to three `.log` files, each no larger than

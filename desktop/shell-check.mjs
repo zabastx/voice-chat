@@ -43,6 +43,7 @@ let browser
 let child
 let certificateThumbprint = ''
 let overrideServer
+let brokenProductionServer
 let productionServer
 
 try {
@@ -61,9 +62,9 @@ try {
 		{ VC_PFX: pfx, VC_PFX_PASSWORD: pfxPassword }
 	)
 
+	const productionPort = Number(process.env.VOICECHAT_DESKTOP_CHECK_PORT ?? '39417')
 	const reservation = createNetServer()
-	await listen(reservation)
-	const productionPort = reservation.address().port
+	await listen(reservation, productionPort)
 	await close(reservation)
 	const productionOrigin = `https://127.0.0.1:${productionPort}`
 
@@ -100,10 +101,12 @@ try {
 		(_request, response) => {
 			response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
 			response.end(
-				'<!doctype html><title>Voice Chat test</title><p id="production-app">connected</p>'
+				'<!doctype html><title>Voice Chat test</title><p id="production-app">connected</p><a id="server-stopped" href="/server-stopped">check stopped server</a>'
 			)
 		}
 	)
+	brokenProductionServer = createNetServer((socket) => socket.destroy())
+	await listen(brokenProductionServer, productionPort)
 
 	child = spawn(exe, [], {
 		windowsHide: true,
@@ -132,7 +135,9 @@ try {
 		throw new Error('Release executable accepted VOICECHAT_DESKTOP_URL at runtime')
 	}
 	console.log('PASS origin: release ignores runtime override and shows the local Russian screen')
+	console.log('PASS recovery: an open TCP port with broken TLS falls back to the local screen')
 
+	await close(brokenProductionServer)
 	await listen(productionServer, productionPort)
 	await page.getByRole('button', { name: 'Повторить' }).click()
 	await page.locator('#production-app').waitFor({ timeout: 10_000 })
@@ -140,6 +145,28 @@ try {
 		throw new Error(`Recovery navigated to an unexpected origin: ${page.url()}`)
 	}
 	console.log('PASS recovery: retry loads the embedded HTTPS origin without restarting')
+	await page.evaluate(() => {
+		location.href = 'voicechat://exit'
+	})
+	await sleep(250)
+	if (child.exitCode !== null || (await page.locator('#production-app').count()) !== 1) {
+		throw new Error('Remote content crossed the native shell command boundary')
+	}
+	console.log('PASS boundary: remote content cannot invoke native shell commands')
+
+	productionServer.closeAllConnections?.()
+	await close(productionServer)
+	await page.evaluate(() => document.querySelector('#server-stopped')?.click())
+	await waitFor(
+		async () =>
+			page.url() === 'http://tauri.localhost/index.html' &&
+			(await page.locator('#connection-error').count()) === 1,
+		'local screen after a later failed navigation'
+	)
+	await listen(productionServer, productionPort)
+	await page.evaluate(() => document.querySelector('button')?.click())
+	await page.locator('#production-app').waitFor({ timeout: 10_000 })
+	console.log('PASS recovery: a later failed navigation returns to the local screen')
 
 	const processState = () =>
 		JSON.parse(
@@ -184,6 +211,7 @@ try {
 	await browser?.close().catch(() => {})
 	if (child?.exitCode === null) child.kill()
 	await close(overrideServer)
+	await close(brokenProductionServer)
 	await close(productionServer)
 	if (certificateThumbprint) {
 		powershell(

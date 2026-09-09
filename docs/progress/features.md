@@ -12,12 +12,16 @@ embeds one root HTTPS origin and ignores runtime `VOICECHAT_DESKTOP_URL`; debug 
 loopback HTTP. Cross-origin navigations and all new windows go to the system browser, while remote
 content still has no Tauri capabilities.
 
-If the origin is unreachable at startup, the bundled Russian screen offers «Повторить» and «Выйти»;
-the same worker retries every 30 seconds and navigates the existing WebView after recovery. Close,
+WebView2 navigation results, HTTP status and a 10-second timeout drive the bundled Russian screen
+with «Повторить» and «Выйти»; this covers DNS/TCP/TLS/HTTP failures at startup and later failed
+navigations. A credential-free same-origin `HEAD /` check turns network errors and 5xx responses
+into a fresh navigation while an already loaded page is idle, and the shell handles its result; the
+same worker retries every 30 seconds without restarting the process. Close,
 tray hide/show and single-instance restore share one lifecycle path. The tray also opens bounded
 local logs: at most three 256 KiB files containing only fixed shell events, never page content, URL,
 cookie or Sign-in data. `desktop:check` verifies the release artifact against a temporary HTTPS
-origin, including runtime-override rejection, offline/retry, process lifecycle and log bounds.
+origin, including runtime-override rejection, broken TLS, initial and later recovery, process
+lifecycle and log bounds.
 Installer, Portable packaging, Native Bridge, notifications and updater remain in issues #6–#12.
 Nothing deployed.
 

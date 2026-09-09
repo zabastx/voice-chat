@@ -1,13 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop_log;
+#[path = "../origin.rs"]
+mod origin;
 
 // Keep the web release on the server and the operating-system shell in this binary.
 // The remote page receives no Tauri capabilities or Rust command access.
 use desktop_log::{DesktopEvent, DesktopLog};
 use std::{
-    net::{TcpStream, ToSocketAddrs},
-    sync::{Arc, Condvar, Mutex},
+    sync::{
+        atomic::{AtomicU64, AtomicU8, Ordering},
+        Arc, Condvar, Mutex,
+    },
     time::Duration,
 };
 use tauri::{
@@ -17,28 +21,19 @@ use tauri::{
     Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
+#[cfg(windows)]
+use webview2_com::{
+    CoTaskMemPWSTR, Microsoft::Web::WebView2::Win32::ICoreWebView2NavigationCompletedEventArgs2,
+    NavigationCompletedEventHandler, NavigationStartingEventHandler,
+};
+#[cfg(windows)]
+use windows::core::{Interface, BOOL, PWSTR};
 
 #[cfg(not(debug_assertions))]
 const PRODUCTION_ORIGIN: &str = match option_env!("VOICECHAT_DESKTOP_PRODUCTION_ORIGIN") {
     Some(origin) => origin,
     None => "https://desktop-origin-not-configured.invalid",
 };
-
-fn valid_origin(url: &tauri::Url, allow_loopback_http: bool) -> bool {
-    let loopback = matches!(
-        url.host_str(),
-        Some("localhost" | "127.0.0.1" | "::1" | "[::1]")
-    );
-    let valid_scheme =
-        url.scheme() == "https" || (allow_loopback_http && url.scheme() == "http" && loopback);
-    valid_scheme
-        && !url.cannot_be_a_base()
-        && url.username().is_empty()
-        && url.password().is_none()
-        && url.path() == "/"
-        && url.query().is_none()
-        && url.fragment().is_none()
-}
 
 fn server_url() -> Result<tauri::Url, Box<dyn std::error::Error>> {
     #[cfg(debug_assertions)]
@@ -48,40 +43,12 @@ fn server_url() -> Result<tauri::Url, Box<dyn std::error::Error>> {
     let raw = PRODUCTION_ORIGIN.to_owned();
 
     let url = tauri::Url::parse(&raw)?;
-    if !valid_origin(&url, cfg!(debug_assertions)) {
+    if !origin::valid_origin(&url, cfg!(debug_assertions)) {
         return Err(
             "Адрес Voice Chat должен быть HTTPS origin; debug также разрешает loopback HTTP".into(),
         );
     }
     Ok(url)
-}
-
-#[cfg(test)]
-mod origin_tests {
-    use super::valid_origin;
-
-    fn url(value: &str) -> tauri::Url {
-        tauri::Url::parse(value).expect("valid test URL")
-    }
-
-    #[test]
-    fn release_accepts_only_a_root_https_origin() {
-        assert!(valid_origin(&url("https://chat.example.com"), false));
-        assert!(!valid_origin(&url("http://chat.example.com"), false));
-        assert!(!valid_origin(&url("https://chat.example.com/path"), false));
-        assert!(!valid_origin(
-            &url("https://member:secret@chat.example.com"),
-            false
-        ));
-    }
-
-    #[test]
-    fn debug_additionally_accepts_loopback_http() {
-        assert!(valid_origin(&url("http://localhost:3000"), true));
-        assert!(valid_origin(&url("http://127.0.0.1:3000"), true));
-        assert!(valid_origin(&url("http://[::1]:3000"), true));
-        assert!(!valid_origin(&url("http://chat.example.com"), true));
-    }
 }
 
 fn show_main(app: &tauri::AppHandle) {
@@ -152,19 +119,111 @@ fn open_link(app: &tauri::AppHandle, url: &tauri::Url) {
     }
 }
 
-fn server_reachable(url: &tauri::Url) -> bool {
-    let Some(host) = url.host_str() else {
-        return false;
+const OFFLINE: u8 = 0;
+const CONNECTING: u8 = 1;
+const ONLINE: u8 = 2;
+const LOCAL_ERROR_URL: &str = "http://tauri.localhost/index.html";
+
+#[derive(Default)]
+struct ConnectionState {
+    mode: AtomicU8,
+    attempt: AtomicU64,
+}
+
+impl ConnectionState {
+    fn begin(&self) -> u64 {
+        self.mode.store(CONNECTING, Ordering::SeqCst);
+        self.attempt.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    fn online(&self) {
+        self.mode.store(ONLINE, Ordering::SeqCst);
+        self.attempt.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn offline(&self) -> bool {
+        let previous = self.mode.swap(OFFLINE, Ordering::SeqCst);
+        self.attempt.fetch_add(1, Ordering::SeqCst);
+        previous != OFFLINE
+    }
+
+    fn is_current_attempt(&self, attempt: u64) -> bool {
+        self.mode.load(Ordering::SeqCst) == CONNECTING
+            && self.attempt.load(Ordering::SeqCst) == attempt
+    }
+
+    fn is_offline(&self) -> bool {
+        self.mode.load(Ordering::SeqCst) == OFFLINE
+    }
+
+    fn allows_local_page(&self) -> bool {
+        self.mode.load(Ordering::SeqCst) == OFFLINE
+    }
+}
+
+fn show_offline(app: &tauri::AppHandle, connection: &Arc<ConnectionState>) {
+    if connection.offline() {
+        record(app, DesktopEvent::WaitingForServer);
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        return;
     };
-    let Some(port) = url.port_or_known_default() else {
-        return false;
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(50));
+        let fallback_app = window.app_handle().clone();
+        let _ = fallback_app.run_on_main_thread(move || {
+            let _ = window.with_webview(move |platform| unsafe {
+                if let Ok(webview) = platform.controller().CoreWebView2() {
+                    let url = CoTaskMemPWSTR::from(LOCAL_ERROR_URL);
+                    let _ = webview.Stop();
+                    let _ = webview.Navigate(*url.as_ref().as_pcwstr());
+                }
+            });
+        });
+    });
+}
+
+fn fallback_commands_allowed(
+    connection: &ConnectionState,
+    current_url: Option<&tauri::Url>,
+) -> bool {
+    connection.is_offline() && current_url.is_some_and(|url| url.as_str() == LOCAL_ERROR_URL)
+}
+
+fn is_local_fallback(app: &tauri::AppHandle, connection: &ConnectionState) -> bool {
+    let current_url = app
+        .get_webview_window("main")
+        .and_then(|window| window.url().ok());
+    fallback_commands_allowed(connection, current_url.as_ref())
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::{fallback_commands_allowed, ConnectionState, LOCAL_ERROR_URL};
+
+    #[test]
+    fn remote_document_cannot_use_fallback_commands_during_offline_transition() {
+        let connection = ConnectionState::default();
+        let remote = tauri::Url::parse("https://chat.example.com/").unwrap();
+        let fallback = tauri::Url::parse(LOCAL_ERROR_URL).unwrap();
+
+        assert!(!fallback_commands_allowed(&connection, Some(&remote)));
+        assert!(fallback_commands_allowed(&connection, Some(&fallback)));
+    }
+}
+
+fn navigate_to_server(
+    app: &tauri::AppHandle,
+    target: &tauri::Url,
+    connection: &Arc<ConnectionState>,
+) {
+    let Some(window) = app.get_webview_window("main") else {
+        show_offline(app, connection);
+        return;
     };
-    let Ok(addresses) = (host, port).to_socket_addrs() else {
-        return false;
-    };
-    addresses
-        .into_iter()
-        .any(|address| TcpStream::connect_timeout(&address, Duration::from_secs(2)).is_ok())
+    if window.navigate(target.clone()).is_err() {
+        show_offline(app, connection);
+    }
 }
 
 #[derive(Clone, Default)]
@@ -180,7 +239,12 @@ impl ReconnectSignal {
     }
 }
 
-fn start_reconnect_worker(app: tauri::AppHandle, target: tauri::Url, signal: ReconnectSignal) {
+fn start_reconnect_worker(
+    app: tauri::AppHandle,
+    target: tauri::Url,
+    signal: ReconnectSignal,
+    connection: Arc<ConnectionState>,
+) {
     std::thread::spawn(move || loop {
         let (pending, wake) = &*signal.0;
         let Ok(pending) = pending.lock() else {
@@ -194,18 +258,138 @@ fn start_reconnect_worker(app: tauri::AppHandle, target: tauri::Url, signal: Rec
         *pending = false;
         drop(pending);
 
-        if server_reachable(&target) {
-            record(&app, DesktopEvent::ServerReached);
+        if connection.is_offline() {
             let navigate_app = app.clone();
             let navigate_target = target.clone();
+            let navigate_connection = Arc::clone(&connection);
             let _ = app.run_on_main_thread(move || {
-                if let Some(window) = navigate_app.get_webview_window("main") {
-                    let _ = window.navigate(navigate_target);
-                }
+                navigate_to_server(&navigate_app, &navigate_target, &navigate_connection);
             });
-            return;
         }
     });
+}
+
+fn health_check_script(origin: &tauri::Url) -> String {
+    let origin = origin.origin().ascii_serialization();
+    format!(
+        r#"(() => {{
+            const expectedOrigin = {origin:?};
+            const nativeFetch = globalThis.fetch.bind(globalThis);
+            const nativeSetInterval = globalThis.setInterval.bind(globalThis);
+            nativeSetInterval(async () => {{
+                if (location.origin !== expectedOrigin) return;
+                try {{
+                    const response = await nativeFetch(expectedOrigin, {{
+                        method: 'HEAD', cache: 'no-store', credentials: 'omit', redirect: 'manual'
+                    }});
+                    if (response.status >= 500) {{
+                        location.replace(`${{expectedOrigin}}/?desktop-recovery=${{Date.now()}}`);
+                    }}
+                }} catch {{
+                    location.replace(`${{expectedOrigin}}/?desktop-recovery=${{Date.now()}}`);
+                }}
+            }}, 30000);
+        }})();"#
+    )
+}
+
+#[cfg(windows)]
+fn watch_navigation(
+    window: &tauri::WebviewWindow,
+    target_origin: url::Origin,
+    connection: Arc<ConnectionState>,
+) -> tauri::Result<()> {
+    let target_navigation = Arc::new(AtomicU64::new(0));
+    let starting_window = window.clone();
+    let starting_origin = target_origin.clone();
+    let starting_navigation = Arc::clone(&target_navigation);
+    let starting_connection = Arc::clone(&connection);
+    let callback_window = window.clone();
+    window.with_webview(move |platform| {
+        let controller = platform.controller();
+        let starting_handler =
+            NavigationStartingEventHandler::create(Box::new(move |_sender, args| {
+                let Some(args) = args else {
+                    return Ok(());
+                };
+                let mut uri = PWSTR::null();
+                let mut navigation_id = 0;
+                unsafe {
+                    args.Uri(&mut uri)?;
+                    args.NavigationId(&mut navigation_id)?;
+                }
+                let uri = CoTaskMemPWSTR::from(uri).to_string();
+                let targets_server = url::Url::parse(&uri)
+                    .map(|url| url.origin() == starting_origin)
+                    .unwrap_or(false);
+                if !targets_server {
+                    return Ok(());
+                }
+
+                starting_navigation.store(navigation_id, Ordering::SeqCst);
+                let attempt = starting_connection.begin();
+                let timeout_window = starting_window.clone();
+                let timeout_connection = Arc::clone(&starting_connection);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(10));
+                    if timeout_connection.is_current_attempt(attempt) {
+                        let timeout_app = timeout_window.app_handle().clone();
+                        let fallback_app = timeout_app.clone();
+                        let _ = timeout_app.run_on_main_thread(move || {
+                            show_offline(&fallback_app, &timeout_connection);
+                        });
+                    }
+                });
+                Ok(())
+            }));
+
+        let callback_connection = Arc::clone(&connection);
+        let callback_navigation = Arc::clone(&target_navigation);
+        let handler = NavigationCompletedEventHandler::create(Box::new(move |sender, args| {
+            let (Some(sender), Some(args)) = (sender, args) else {
+                return Ok(());
+            };
+            let mut source = PWSTR::null();
+            let mut success = BOOL::default();
+            let mut navigation_id = 0;
+            unsafe {
+                sender.Source(&mut source)?;
+                args.IsSuccess(&mut success)?;
+                args.NavigationId(&mut navigation_id)?;
+            }
+
+            let source = CoTaskMemPWSTR::from(source).to_string();
+            let source_matches = url::Url::parse(&source)
+                .map(|url| url.origin() == target_origin)
+                .unwrap_or(false);
+            let mut status = 0;
+            if let Ok(args2) = args.cast::<ICoreWebView2NavigationCompletedEventArgs2>() {
+                unsafe { args2.HttpStatusCode(&mut status)? };
+            }
+
+            if callback_navigation.load(Ordering::SeqCst) != navigation_id {
+                return Ok(());
+            }
+
+            if source_matches && success.as_bool() && status < 400 {
+                callback_connection.online();
+                record(callback_window.app_handle(), DesktopEvent::ServerReached);
+            } else if callback_connection.mode.load(Ordering::SeqCst) == CONNECTING
+                && (!success.as_bool() || status >= 400)
+            {
+                show_offline(callback_window.app_handle(), &callback_connection);
+            }
+            Ok(())
+        }));
+        let mut starting_token = 0;
+        let mut completed_token = 0;
+        unsafe {
+            if let Ok(webview) = controller.CoreWebView2() {
+                let _ = webview.add_NavigationStarting(&starting_handler, &mut starting_token);
+                let _ = webview.add_NavigationCompleted(&handler, &mut completed_token);
+            }
+        }
+    })
 }
 
 fn main() {
@@ -226,41 +410,51 @@ fn main() {
             let popup_app = app.handle().clone();
             let reconnect = ReconnectSignal::default();
             let navigation_reconnect = reconnect.clone();
-            let initial_reachable = server_reachable(&url);
-            let initial_url = if initial_reachable {
-                WebviewUrl::External(url.clone())
-            } else {
-                WebviewUrl::App("index.html".into())
-            };
-            let window = WebviewWindowBuilder::new(app, "main", initial_url)
-                .title("Voice Chat")
-                .visible(!std::env::args().any(|arg| arg == "--tray"))
-                .inner_size(1180.0, 780.0)
-                .min_inner_size(720.0, 480.0)
-                .on_navigation(move |destination| {
-                    match (destination.scheme(), destination.host_str()) {
-                        ("voicechat", Some("retry")) => navigation_reconnect.request(),
-                        ("voicechat", Some("exit")) => {
-                            perform_action(&navigation_app, ShellAction::Exit)
+            let connection = Arc::new(ConnectionState::default());
+            let navigation_connection = Arc::clone(&connection);
+            let window =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Voice Chat")
+                    .visible(!std::env::args().any(|arg| arg == "--tray"))
+                    .inner_size(1180.0, 780.0)
+                    .min_inner_size(720.0, 480.0)
+                    .initialization_script(health_check_script(&url))
+                    .on_navigation(move |destination| {
+                        match (destination.scheme(), destination.host_str()) {
+                            ("voicechat", Some("retry"))
+                                if is_local_fallback(&navigation_app, &navigation_connection) =>
+                            {
+                                navigation_reconnect.request()
+                            }
+                            ("voicechat", Some("exit"))
+                                if is_local_fallback(&navigation_app, &navigation_connection) =>
+                            {
+                                perform_action(&navigation_app, ShellAction::Exit)
+                            }
+                            _ if destination.origin() == navigation_origin => return true,
+                            ("tauri", Some("localhost")) | ("http", Some("tauri.localhost"))
+                                if navigation_connection.allows_local_page() =>
+                            {
+                                return true;
+                            }
+                            _ => open_link(&navigation_app, destination),
                         }
-                        _ if destination.origin() == navigation_origin => return true,
-                        ("tauri", Some("localhost")) | ("http", Some("tauri.localhost")) => {
-                            return true;
-                        }
-                        _ => open_link(&navigation_app, destination),
-                    }
-                    false
-                })
-                .on_new_window(move |destination, _| {
-                    open_link(&popup_app, &destination);
-                    NewWindowResponse::Deny
-                })
-                .build()?;
+                        false
+                    })
+                    .on_new_window(move |destination, _| {
+                        open_link(&popup_app, &destination);
+                        NewWindowResponse::Deny
+                    })
+                    .build()?;
 
-            if !initial_reachable {
-                record(app.handle(), DesktopEvent::WaitingForServer);
-                start_reconnect_worker(app.handle().clone(), url, reconnect);
-            }
+            watch_navigation(&window, origin, Arc::clone(&connection))?;
+            start_reconnect_worker(
+                app.handle().clone(),
+                url,
+                reconnect.clone(),
+                Arc::clone(&connection),
+            );
+            reconnect.request();
 
             let show = MenuItem::with_id(app, "show", "Открыть чат", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Свернуть в трей", true, None::<&str>)?;

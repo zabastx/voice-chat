@@ -71,7 +71,7 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     commit**, above the original 100–200 MB optimization goal, which is not a release gate. Real
     devices, screen sharing, embedded players, long calls, and installer/update delivery remain
     unverified or unbuilt. Spec #4 is split into native GitHub sub-issues
-    [#5–#14](https://github.com/zabastx/voice-chat/issues/4); the current implementation frontier is
+    [#5–#14](https://github.com/zabastx/voice-chat/issues/4).
     [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is now built and verified
     locally. The current implementation frontier is
     [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6) and
