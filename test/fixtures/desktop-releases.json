@@ -1,0 +1,28 @@
+{
+	"releases": [
+		{
+			"tag": "desktop-v0.1.0-alpha.1",
+			"draft": false,
+			"prerelease": true,
+			"publishedAt": "2026-09-09T09:00:00Z",
+			"notes": "## Что изменилось\n\nПервая alpha Desktop Client.\n\n## Известные ограничения\n\nСборка без Authenticode — Windows покажет предупреждение SmartScreen.\n\n## Как установить или обновить\n\nЗапустите installer и подтвердите обновление, когда клиент его предложит.",
+			"assets": [
+				{
+					"name": "Voice Chat_0.1.0-alpha.1_x64-setup.exe",
+					"url": "https://github.com/zabastx/voice-chat/releases/download/desktop-v0.1.0-alpha.1/Voice%20Chat_0.1.0-alpha.1_x64-setup.exe"
+				},
+				{
+					"name": "Voice Chat_0.1.0-alpha.1_x64-setup.exe.sig",
+					"url": "https://github.com/zabastx/voice-chat/releases/download/desktop-v0.1.0-alpha.1/Voice%20Chat_0.1.0-alpha.1_x64-setup.exe.sig"
+				},
+				{
+					"name": "Voice Chat_0.1.0-alpha.1_x64-portable.exe",
+					"url": "https://github.com/zabastx/voice-chat/releases/download/desktop-v0.1.0-alpha.1/Voice%20Chat_0.1.0-alpha.1_x64-portable.exe"
+				}
+			]
+		}
+	],
+	"signatures": {
+		"Voice Chat_0.1.0-alpha.1_x64-setup.exe.sig": "PLACEHOLDER — paste the contents of the .sig asset here to drive the feed locally"
+	}
+}

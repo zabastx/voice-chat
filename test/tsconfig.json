@@ -1,0 +1,15 @@
+{
+	// `nuxt typecheck` only covers app/, server/ and shared/, so the tests get
+	// their own project — otherwise a broken test type is invisible until it runs.
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "Preserve",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"verbatimModuleSyntax": true,
+		"types": ["bun"]
+	},
+	"include": ["**/*.ts"]
+}

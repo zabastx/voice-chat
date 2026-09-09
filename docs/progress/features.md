@@ -4,6 +4,42 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop Update feed — server side
+
+Issue #8 is built: `GET /api/desktop/update` answers the Tauri updater with the newest published
+`desktop-v*` GitHub Release. It is public — listed in `isPublic()` in
+[session-member.ts](../../server/middleware/session-member.ts) — because the Desktop Client checks it
+before the remote Web Release, and any session, has loaded.
+
+The GitHub catalog sits behind a two-method interface in
+[desktop-catalog.ts](../../server/utils/desktop-catalog.ts) (`list` + `readSignature`), with a
+fixture adapter over the same interface; the feed itself is in
+[desktop-update.ts](../../server/utils/desktop-update.ts). A Release is offerable only when it is
+published, tagged `desktop-v<semver>`, and carries all three x64 assets ADR 0014's release job
+produces together — the NSIS setup, its `.sig`, and the Portable EXE. A Release missing any of them
+was not built whole and is skipped rather than half-offered; `latest.json` and the SHA-256 checksum
+are not required, since the feed builds the manifest itself and reads neither. Candidates are ranked
+by semver, not publish date, which is what makes re-drafting a bad Release fall back to the previous
+one and forbids an accidental downgrade. Prereleases count: there is one stream. Version algebra
+(prerelease ordering included) is its own module,
+[desktop-version.ts](../../server/utils/desktop-version.ts).
+
+The last successful answer is cached (`NUXT_DESKTOP_UPDATE_CACHE_SECONDS`, default 300) and kept
+indefinitely as the fallback while GitHub fails or rate-limits; a failed refresh also backs off for a
+full TTL, so an outage is not amplified into a request per client. With no cache at all the feed
+answers `503` with a matching `Retry-After`, never a partial manifest. `204` means "nothing to offer"
+— client current or newer, no eligible Release, or a target this line does not build. The minimum
+supported Desktop Release is independent of the offered one and travels in the
+`X-Desktop-Minimum-Version` header, so it is stated on the `204` too; an unparseable configured value
+is dropped rather than echoed. No Postgres tables or migrations were added.
+
+`NUXT_DESKTOP_RELEASE_FIXTURE` serves a local JSON catalog instead of GitHub, and is honoured **only**
+in development — a production build ignores it and logs that it did, because a fixture can name any
+URL and any signature.
+
+Client side (checking on a schedule, consent, waiting out a Voice Channel, the Portable EXE's manual
+path) is still unbuilt — issues #6–#12. Nothing deployed.
+
 ## Desktop 0.1.0-alpha.1 — production shell
 
 Issue #5 is built on `prototype/tauri-windows`: product `Voice Chat`, binary `voice-chat.exe`,

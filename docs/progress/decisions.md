@@ -53,6 +53,27 @@ using Web Notifications when verified and one bounded native bridge operation ot
 tray icon stays static. Updater signing secrets are released only by manual approval in the
 `desktop-release` GitHub Environment and have an encrypted backup outside GitHub.
 
+**Desktop Update feed, 2026-09-09** (issue #8, settled while building it): the feed answers `204`
+for "nothing to offer" and `503` for "cannot tell" — a GitHub outage with a cold cache is not the
+same statement as "you are current", and conflating them would hide an outage behind a silent
+no-update. A Release is offerable only with all three x64 assets the release job produces together —
+the NSIS setup, its `.sig` and the Portable EXE — because a Release missing one was not built whole
+and should not be promoted; `latest.json` and the SHA-256 checksum are excluded because the feed
+builds the manifest itself and reads neither. A failed refresh backs off for a full TTL rather than
+retrying per request, so a GitHub rate limit is not prolonged by the feed's own traffic. Candidates
+are ranked by semver rather than publish date, so re-drafting a bad Release falls back to the
+previous version and re-publishing an old one cannot downgrade anybody. The minimum supported
+Desktop Release travels in the `X-Desktop-Minimum-Version` header rather than in the manifest body:
+it stays independent of the offer, is stated on the `204` where there is no body at all, and cannot
+perturb Tauri's parsing of the manifest. The feed needs no Postgres — the only state is an in-memory
+last-good answer, which a restart simply refetches. The fixture catalog stays a development
+affordance: production ignores `NUXT_DESKTOP_RELEASE_FIXTURE`, because a fixture names its own URLs
+and signatures and one env var should not be able to hand installed clients an unsigned update.
+
+This ticket also added the repo's first test suite (`bun run test`, Bun's runner, no new
+dependency), typechecked by its own `test/tsconfig.json` because `nuxt typecheck` only covers
+`app/`, `server/` and `shared/`.
+
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs

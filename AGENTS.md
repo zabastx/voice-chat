@@ -63,6 +63,12 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   Upload proxied through `POST /api/attachments` (25 MB cap); served via short-lived presigned
   GETs behind a session check at `GET /api/attachments/:id`. Objects deleted with their message;
   orphaned uploads swept on boot in [server/plugins/db.ts](server/plugins/db.ts).
+- **Desktop Update** — public `GET /api/desktop/update` serves the Tauri updater manifest for the
+  newest published `desktop-v*` GitHub Release ([ADR 0014](docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)).
+  The catalog is behind a two-method interface in [server/utils/desktop-catalog.ts](server/utils/desktop-catalog.ts)
+  (GitHub REST + a fixture adapter); selection, caching and the manifest live in
+  [server/utils/desktop-update.ts](server/utils/desktop-update.ts). `204` = nothing to offer,
+  `503` = GitHub is unreachable and nothing was cached — never a partial manifest.
 - **Auth** — nuxt-auth-utils sealed cookies. First account = admin, seeds `#general` + `lounge`.
   Everyone else needs a single-use invite. Roles are hierarchical (`admin` > `moderator` > `member`);
   `requireRole(event, min)` in [server/utils/auth.ts](server/utils/auth.ts) authorizes against the
@@ -80,7 +86,9 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
 - @nuxt/ui v4 components; use the `nuxt-ui` skill and semantic colors (`text-muted`, `bg-elevated`,
   never raw palette). @click handlers that call `overlay.open()` must be wrapped in a void arrow
   (`@click="() => m.open()"`), or vue-tsc rejects the non-void return.
-- Quality gates: `bun run typecheck && bun run lint && bun run fmt`. All must stay green.
+- Quality gates: `bun run typecheck && bun run lint && bun run fmt && bun run test`. All must stay
+  green. Tests are Bun's runner over `test/`, typechecked by their own `test/tsconfig.json` —
+  `nuxt typecheck` only covers `app/`, `server/` and `shared/`.
 - Claiming a change makes the app lighter on RAM? Prove it: `scripts/bench/` measures real
   Chrome per scenario, before and after (see [docs/BENCH.md](docs/BENCH.md)).
 - New UI strings: **Russian**. Dates via `ru-RU` locale (see [app/utils/format.ts](app/utils/format.ts)).
@@ -91,7 +99,9 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   list in [docs/PROGRESS.md](docs/PROGRESS.md).
 - User-facing Web Release changes: bump `version` in [package.json](package.json) and prepend a
   Russian entry to [app/data/changelog.ts](app/data/changelog.ts) (newest first) in the same commit —
-  it powers the "Что нового" badge/modal. Desktop shell-only changes instead bump the independent
+  it powers the "Что нового" badge/modal. A Web Release change a member cannot see — a server-only
+  endpoint, a build or CI change, docs — bumps neither: the changelog is what members read, and an
+  entry nobody can act on is noise. Say so in the progress docs instead. Desktop shell-only changes instead bump the independent
   Tauri/Cargo version and use GitHub Release notes; a Native Bridge change updates each release line
   whose code changed.
 

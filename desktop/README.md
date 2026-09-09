@@ -85,8 +85,41 @@ powershell -NoProfile -ExecutionPolicy Bypass -File desktop/measure.ps1 -Label c
 Сравнивайте одинаковые данные, размер окна, состав звонка и время ожидания. `privateMiB` соответствует
 метрике в [BENCH.md](../docs/BENCH.md); `workingSetMiB` отдельно включает общие страницы.
 
+## Update feed
+
+Серверная часть updater уже готова: публичный `GET /api/desktop/update` отдаёт Tauri updater
+manifest для новейшего опубликованного GitHub Release с тегом `desktop-v*` (см.
+[ADR 0014](../docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)). Endpoint
+доступен до Sign-in, потому что Desktop Client проверяет его до загрузки Web Release.
+
+Tauri подставляет свои переменные в URL:
+
+```
+https://<origin>/api/desktop/update?target={{target}}&arch={{arch}}&version={{current_version}}
+```
+
+Ответы: `200` с manifest, `204` — предлагать нечего (клиент уже новый, подходящего Release нет,
+или target не Windows x64), `503` — GitHub недоступен и в кэше ничего нет. Минимальная
+поддерживаемая версия приходит отдельно от предлагаемой, в заголовке `X-Desktop-Minimum-Version`,
+и присутствует в том числе в `204`.
+
+Release попадает в feed, только если он опубликован (не draft), тег разбирается как
+`desktop-v<semver>` и в нём есть все три x64 asset: NSIS setup, его `.sig` и Portable EXE. Release
+без любого из них собран не полностью и не предлагается никому. `latest.json` и SHA-256 checksum не
+требуются: manifest строит сам сервер и ни один из этих файлов не читает. Кандидаты сравниваются по
+semver, поэтому возврат плохого Release в draft откатывает предложение на предыдущую версию, а
+downgrade невозможен. Prerelease участвует наравне со stable — stream один.
+
+Чтобы прогнать feed локально без публикации Release, укажите
+`NUXT_DESKTOP_RELEASE_FIXTURE=test/fixtures/desktop-releases.json` (файл читается на каждый запрос,
+его можно править на ходу). Это только для разработки: production-сборка игнорирует переменную и
+пишет об этом в лог, потому что fixture может указать любой URL и любую подпись. Клиентская часть —
+проверка при запуске и каждые шесть часов, согласие, ожидание выхода из Voice Channel и ручной путь
+Portable EXE — относится к tickets #6–#12.
+
 ## Оставшиеся ограничения
 
-Installer, updater, Native Bridge и notification contract реализуются отдельными tickets #6–#12.
+Installer, updater-клиент, Native Bridge и notification contract реализуются отдельными
+tickets #6–#12.
 Push-to-talk отложен. Реальные устройства, screen share, сон и пробуждение, embedded players и
 длительный звонок требуют отдельной проверки в WebView2.

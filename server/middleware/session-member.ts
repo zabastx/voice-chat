@@ -17,11 +17,15 @@ import { eq } from 'drizzle-orm'
 // explicitly. Routes that must work with a stale cookie are skipped: all of
 // /api/auth/* plus the public invite-validity check, so a deleted member can
 // re-register with a fresh invite. /api/auth/refresh re-seals a session and so
-// runs the same epoch check itself.
+// runs the same epoch check itself. The Desktop Update feed is skipped for a
+// different reason: it has no member at all. The Desktop Client checks it before
+// the remote Web Release — and therefore any session — has loaded (adr/0014), so
+// it must never be able to fail on one.
 function isPublic(event: { path: string; method: string }) {
 	const path = event.path.split('?')[0]!
 	if (!path.startsWith('/api/')) return true
 	if (path.startsWith('/api/auth/')) return true
+	if (path.startsWith('/api/desktop/')) return true
 	if (event.method === 'GET' && /^\/api\/invites\/[^/]+$/.test(path)) return true
 	return false
 }

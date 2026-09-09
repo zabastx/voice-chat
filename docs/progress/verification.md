@@ -4,6 +4,60 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop Update feed — server side
+
+2026-09-09. This is the repo's first automated test suite: `bun run test` (Bun's runner, wired into
+[ci.yml](../../.github/workflows/ci.yml) after lint and typecheck). 38 tests in
+[test/](../../test/), all green.
+
+`test/desktop-update.test.ts` drives the feed over real HTTP — each case starts a loopback
+`Bun.serve` around `feed.respond` and fetches it — against the fixture catalog, i.e. the same
+interface the production GitHub adapter implements. Covered: a stable Release offered as a Tauri
+manifest (version, notes, `pub_date`, one `windows-x86_64` platform with signature and setup URL);
+a newer prerelease preferred over an older stable; a draft ignored, with and without a publish date;
+non-Desktop tags (`v0.25.0`, `relay-v0.4.0`) ignored; malformed versions (`desktop-vbanana`,
+`desktop-v0.4`) ignored; an arm64-only Release ignored; a Release missing its `.sig`, one missing its
+setup, and one missing its Portable EXE, ignored; nothing eligible → `204`; older client → `200`,
+current and newer clients → `204`; a non-Windows target and a non-x64 arch → `204`; an absent or
+unparseable client version still offered; the `X-Desktop-Minimum-Version` header present on both `200`
+and `204`, absent when unconfigured, and an unparseable configured minimum dropped rather than echoed;
+GitHub failing with a cold cache → `503` + a `Retry-After` matching the feed's own backoff; a
+signature that will not download → `503`, never a manifest without one; a stale-but-complete offer
+still served while GitHub fails; a cache hit within the TTL doing no second read and a refresh after
+it; a failed refresh backing off for a full TTL instead of re-hitting GitHub per request, then
+recovering; "nothing to offer" cached and recovering; five concurrent clients collapsing into one
+catalog read. `test/desktop-version.test.ts` asserts prerelease ordering directly
+(`alpha.1 < alpha.2 < alpha.10 < beta.1 < 0.1.0`) and the versions that must not parse.
+
+`test/desktop-catalog.test.ts` drives the production GitHub adapter against a stubbed fetch carrying
+a real-shaped Releases payload: field mapping (`tag_name`, `published_at`, `body`,
+`browser_download_url`), a draft with a null body and no assets surviving mapping, the token sent only
+when configured, a `403` rate limit raised as an upstream failure, a non-list response rejected, a
+signature trimmed, and empty/oversized/failed signature downloads refused. It also loads the
+committed fixture that `.env.example` and [desktop/README.md](../../desktop/README.md) point at and
+asserts it still yields an offerable Release, so those instructions cannot rot as the eligibility
+rules tighten.
+
+Driven by hand against the real thing, same day:
+
+- `GET /api/desktop/update?target=windows&arch=x86_64&version=0.0.9` on `bun run dev` with
+  `NUXT_DESKTOP_RELEASE_FIXTURE` set returned `200` with the Cyrillic manifest and
+  `x-desktop-minimum-version: 0.1.0-alpha.1`, with no session cookie sent. The same URL at
+  `version=0.1.0-alpha.1`, at `version=9.9.9`, and at `target=darwin&arch=aarch64` each returned
+  `204` with the header intact — so the h3 route really does pass a web `Response` through. The
+  fixture-file catalog was also driven directly: it serves the committed fixture, and a fixture path
+  that does not exist degrades to the feed's `503` rather than a 500.
+- The production GitHub adapter was run against the live API. `zabastx/voice-chat` has no Releases
+  yet, so it listed zero and selected nothing (the feed's `204`). Against `ayangweb/EcoPaste`, a real
+  Tauri project, it listed 30 Releases, selected the newest, matched
+  `EcoPaste_<version>_x64-setup.exe`, and `readSignature` returned its 444-character base64 signature
+  — confirming both the asset naming this feed matches and the size bound it enforces.
+
+Not verified: the production-build branch that ignores `NUXT_DESKTOP_RELEASE_FIXTURE` (it is gated on
+`import.meta.dev`, and only a `nuxt build` would exercise it); the endpoint against the deployed VPS;
+a real published `desktop-v*` Release end to end; and anything on the client side — Tauri consuming this manifest, consent, six-hourly checks,
+waiting out a Voice Channel, and the Portable EXE's manual path are issues #6–#12.
+
 ## Desktop 0.1.0-alpha.1 — production shell
 
 2026-09-09, local Windows release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66.

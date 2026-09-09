@@ -72,7 +72,11 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     devices, screen sharing, embedded players, long calls, and installer/update delivery remain
     unverified or unbuilt. Spec #4 is split into native GitHub sub-issues
     [#5–#14](https://github.com/zabastx/voice-chat/issues/4).
-    [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is now built and verified
-    locally. The current implementation frontier is
-    [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6) and
-    [#8 Update feed](https://github.com/zabastx/voice-chat/issues/8).
+    [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is built and verified
+    locally, and [#8 Update feed](https://github.com/zabastx/voice-chat/issues/8) is built: the public
+    `GET /api/desktop/update` selects the newest published `desktop-v*` Release and answers the Tauri
+    updater, covered by the repo's first test suite (`bun run test`). It has not run against the VPS
+    and no `desktop-v*` Release has been published yet, so the feed has never served a real one. The
+    current implementation frontier is
+    [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6), then the installer/updater
+    tickets that consume the feed.

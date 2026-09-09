@@ -97,6 +97,18 @@ export default defineNuxtConfig({
 		// Работа с API → Callback API, or via groups.getCallbackConfirmationCode.
 		vkConfirmationCode: '',
 		vkCallbackSecret: '',
+		// Desktop Update feed (adr/0014). The feed reads published GitHub Releases
+		// of this repo; no token is needed while it is public, and one only raises
+		// the rate limit. Set the fixture path to serve a local JSON catalog
+		// instead — for driving the feed without publishing a Release.
+		desktopReleaseRepo: 'zabastx/voice-chat',
+		desktopReleaseFixture: '',
+		desktopGithubToken: '',
+		// the minimum supported Desktop Release, tracked independently of the
+		// offered one: raise it only for a security issue or an incompatible
+		// protocol change. Unset = nothing is required.
+		desktopMinimumVersion: '',
+		desktopUpdateCacheSeconds: 300,
 		public: {
 			livekitUrl: 'ws://127.0.0.1:7880',
 			appVersion: pkg.version,
