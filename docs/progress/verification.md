@@ -58,6 +58,43 @@ Not verified: the production-build branch that ignores `NUXT_DESKTOP_RELEASE_FIX
 a real published `desktop-v*` Release end to end; and anything on the client side — Tauri consuming this manifest, consent, six-hourly checks,
 waiting out a Voice Channel, and the Portable EXE's manual path are issues #6–#12.
 
+## Desktop 0.1.0-alpha.1 — NSIS installer and Portable EXE
+
+2026-09-10, local Windows x64, Tauri 2.11.5, WebView2 Runtime 152.0.4191.66.
+`bun run desktop:install-check` ran the actual NSIS setup, installed EXE, Portable EXE and
+uninstaller against a temporary HTTPS origin. The existing development profile was moved to a
+checked `.data` path before the run and restored in `finally`, so the harness began with no Voice
+Chat install or profile and did not consume the real Sign-in.
+
+Verified:
+
+- `desktop:build` produced both expected x64 artifacts: the 8,563,712-byte
+  `Voice Chat_0.1.0-alpha.1_x64-portable.exe` with product/version metadata intact, and
+  `Voice Chat_0.1.0-alpha.1_x64-setup.exe`. The script copied the unbundled binary before Tauri
+  patched the build output for NSIS.
+- Silent NSIS installed `voice-chat.exe` and `uninstall.exe` under
+  `%LOCALAPPDATA%\Voice Chat` without elevation. The committed config fixes the installer mode to
+  `currentUser`, selects Russian strings and states `downloadBootstrapper` explicitly.
+- The installed client received a persistent HttpOnly Sign-in fixture and wrote
+  `voice-chat:prefs`. After the installed process exited, Portable loaded both values from the same
+  identifier-scoped WebView2 profile.
+- With Portable hidden in the tray, launching the installed EXE restored that same process. The
+  process count across both executable paths stayed at one; sending `--exit` through the installed
+  path also stopped the Portable process. The two forms therefore share the single-instance
+  identity rather than merely agreeing on a directory.
+- Silent uninstall removed `%LOCALAPPDATA%\Voice Chat`,
+  `%LOCALAPPDATA%\ru.zabastx.voicechat` and the corresponding Roaming directory. WebView2 released
+  its files shortly after NSIS exited, so the harness waits for the completed removal instead of
+  sampling it mid-cleanup.
+- The system WebView2 Runtime remained registered at version 152.0.4191.66 after uninstall. The
+  cleanup hook names only the application bundle id and skips `/UPDATE`; it contains no EdgeUpdate
+  or WebView2 Runtime path.
+
+`test/desktop-packaging.test.ts` keeps the NSIS mode, asset names and cleanup boundary in the normal
+suite. `ci.yml` also has a `windows-latest` job that runs the destructive acceptance harness on a
+disposable profile. That hosted job has not run from this unpushed branch; issue #13 will record the
+release-candidate run on a truly fresh Windows runner.
+
 ## Desktop 0.1.0-alpha.1 — Native Bridge
 
 2026-09-09, local Windows release EXE, Tauri 2.11.5 / WebView2 152.0.4191.66. `bun run desktop:check`
@@ -139,8 +176,8 @@ Verified:
 The harness generated and removed its CurrentUser test certificate and temporary PFX in the same
 run. Not yet driven against the production host: an actual tray-icon left click, each native tray
 menu item, and a cross-origin link opening the chosen default browser. Their Tauri handlers are in
-place; the prior prototype already proved the underlying left-click/show path. Installer and updater
-delivery remain separate tickets.
+place; the prior prototype already proved the underlying left-click/show path. Installer delivery is
+covered above; updater behavior remains in issues #9, #10 and #12.
 
 ## v0.25.0 — Tauri 2 Windows prototype
 

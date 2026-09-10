@@ -41,6 +41,27 @@ Client side (checking on a schedule, consent, waiting out a Voice Channel, the P
 path) is still unbuilt — issues #9–#12; the Native Bridge already supplies the active-call signal
 those need. Nothing deployed.
 
+## Desktop 0.1.0-alpha.1 — NSIS installer and Portable EXE
+
+Issue #7 is built on `prototype/tauri-windows`. `desktop:build` first compiles an unbundled Windows
+x64 executable and preserves it as `Voice Chat_<version>_x64-portable.exe`, then bundles
+`Voice Chat_<version>_x64-setup.exe`. Keeping the portable copy before `tauri bundle` matters:
+the bundler patches the build output with NSIS mode, while the Portable EXE must remain an
+unbundled executable for issue #9 to select its manual update path.
+
+The Tauri config explicitly selects only NSIS, `currentUser`, Russian installer strings and
+`downloadBootstrapper`. Installed and portable launches keep the existing
+`ru.zabastx.voicechat` identifier, so WebView2 state, local settings, logs and the
+single-instance plugin all use the same `%LOCALAPPDATA%` profile. A post-uninstall NSIS hook removes
+the identifier-scoped Local and Roaming app-data directories on a real uninstall, but skips cleanup
+during `/UPDATE`; it never touches EdgeUpdate or the system WebView2 Runtime.
+
+`desktop:install-check` drives the real setup, installed EXE, Portable EXE and uninstaller against a
+temporary trusted HTTPS origin. It refuses any machine that already has an install or profile.
+The check runs locally and is wired into a clean `windows-latest` job in `ci.yml`; the first hosted
+run remains for the release-candidate work. Issue #7 changes only Desktop delivery, so the Web
+Release version and member-facing changelog stay unchanged. Nothing deployed.
+
 ## Desktop 0.1.0-alpha.1 — production shell
 
 Issue #5 is built on `prototype/tauri-windows`: product `Voice Chat`, binary `voice-chat.exe`,
@@ -59,7 +80,7 @@ local logs: at most three 256 KiB files containing only fixed shell events, neve
 cookie or Sign-in data. `desktop:check` verifies the release artifact against a temporary HTTPS
 origin, including runtime-override rejection, broken TLS, initial and later recovery, process
 lifecycle and log bounds.
-Installer, Portable packaging, notifications and updater remain in issues #7–#12.
+Notifications and updater behavior remain in issues #9–#12.
 Nothing deployed.
 
 ## Desktop 0.1.0-alpha.1 — Native Bridge

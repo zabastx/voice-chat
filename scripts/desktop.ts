@@ -1,12 +1,17 @@
 // Nuxt remains on the server; this process only builds or launches the desktop shell.
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
+
+import { desktopReleaseArtifacts } from './desktop-artifacts'
 
 const root = join(import.meta.dirname, '..')
 const desktop = join(root, 'desktop')
 const action = process.argv[2] ?? 'run'
-if (!['dev', 'build', 'run'].includes(action)) throw new Error('Ожидается dev, build или run')
+if (!['dev', 'compile', 'build', 'run'].includes(action)) {
+	throw new Error('Ожидается dev, compile, build или run')
+}
 
 const env = { ...process.env }
 const localCargo = join(root, '.data', 'tooling', 'cargo')
@@ -52,22 +57,55 @@ if (action === 'build') {
 	env.VOICECHAT_DESKTOP_PRODUCTION_ORIGIN = url.origin
 }
 
-const exe = join(desktop, 'src-tauri', 'target', 'release', 'voice-chat.exe')
-let result
+const tauriRoot = join(desktop, 'src-tauri')
+const exe = join(tauriRoot, 'target', 'release', 'voice-chat.exe')
+const cli = join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
+
+function runTauri(command: string, args: string[] = []) {
+	const result = spawnSync(process.execPath, [cli, command, ...args], {
+		cwd: desktop,
+		env,
+		stdio: 'inherit'
+	})
+	if (result.error) throw result.error
+	if (result.status !== 0) {
+		throw new Error(`Tauri ${command} failed with exit code ${result.status ?? 1}`)
+	}
+}
+
 if (action === 'run') {
 	if (!existsSync(exe)) throw new Error('Сначала выполните bun run desktop:build')
-	result = spawnSync(exe, process.argv.slice(3), { cwd: root, env, stdio: 'inherit' })
+	const result = spawnSync(exe, process.argv.slice(3), { cwd: root, env, stdio: 'inherit' })
+	if (result.error) throw result.error
+	process.exitCode = result.status ?? 1
+} else if (action === 'build') {
+	if (process.platform !== 'win32' || process.arch !== 'x64') {
+		throw new Error('Release-сборка поддерживает только Windows x64')
+	}
+	const config = JSON.parse(readFileSync(join(tauriRoot, 'tauri.conf.json'), 'utf8')) as {
+		version: string
+	}
+	const names = desktopReleaseArtifacts(config.version)
+	const bundleDirectory = join(tauriRoot, 'target', 'release', 'bundle', 'nsis')
+	const portable = join(bundleDirectory, names.portable)
+	const setup = join(bundleDirectory, names.setup)
+	const staging = mkdtempSync(join(tmpdir(), 'voice-chat-portable-'))
+	const stagedPortable = join(staging, names.portable)
+
+	try {
+		// Preserve the unbundled executable before the NSIS bundler stamps its own mode.
+		runTauri('build', ['--no-bundle'])
+		if (!existsSync(exe)) throw new Error(`Release executable is missing: ${exe}`)
+		copyFileSync(exe, stagedPortable)
+
+		runTauri('bundle', ['--bundles', 'nsis'])
+		if (!existsSync(setup)) throw new Error(`NSIS installer is missing: ${setup}`)
+		mkdirSync(bundleDirectory, { recursive: true })
+		copyFileSync(stagedPortable, portable)
+		console.log(`Release artifacts:\n${setup}\n${portable}`)
+	} finally {
+		rmSync(staging, { recursive: true, force: true })
+	}
 } else {
-	const cli = join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
-	result = spawnSync(
-		process.execPath,
-		[cli, action, ...(action === 'build' ? ['--no-bundle'] : [])],
-		{
-			cwd: desktop,
-			env,
-			stdio: 'inherit'
-		}
-	)
+	runTauri(action === 'compile' ? 'build' : action, action === 'compile' ? ['--no-bundle'] : [])
 }
-if (result.error) throw result.error
-process.exitCode = result.status ?? 1

@@ -25,3 +25,22 @@ jobs:
 
       - name: Test
         run: bun run test
+
+  desktop-install:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check NSIS and Portable delivery
+        run: bun run desktop:install-check

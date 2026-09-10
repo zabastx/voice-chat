@@ -69,8 +69,9 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     Login, bidirectional synthetic audio, tray hide/restore, and continued audio
     while hidden are verified. A two-person audio call in the tray measured **239.5 MiB private
     commit**, above the original 100–200 MB optimization goal, which is not a release gate. Real
-    devices, screen sharing, embedded players, long calls, and installer/update delivery remain
-    unverified or unbuilt. Spec #4 is split into native GitHub sub-issues
+    devices, screen sharing, embedded players, long calls, and update delivery remain unverified or
+    unbuilt. The per-user NSIS and Portable EXE are built and passed the local install/profile/
+    single-instance/uninstall harness. Spec #4 is split into native GitHub sub-issues
     [#5–#14](https://github.com/zabastx/voice-chat/issues/4).
     [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is built and verified
     locally, and [#8 Update feed](https://github.com/zabastx/voice-chat/issues/8) is built: the public
@@ -81,7 +82,10 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     versioned descriptor onto the trusted origin only, the remote page still gets no Tauri `invoke`,
     and its one reverse operation — `setVoiceActive(boolean)` — is what the updater ticket will read
     to wait out a call. One set of contract scenarios runs against the browser adapter in
-    `bun test` and against the real Tauri adapter in `bun run desktop:check`. The current
-    implementation frontier is
-    [#7 installer and Portable EXE](https://github.com/zabastx/voice-chat/issues/7), then the
-    updater tickets that consume the feed.
+    `bun test` and against the real Tauri adapter in `bun run desktop:check`.
+    [#7 installer and Portable EXE](https://github.com/zabastx/voice-chat/issues/7) is built:
+    release builds emit Russian x64 NSIS and Portable artifacts, both share the identifier-scoped
+    profile and instance, and uninstall clears app data without removing the system WebView2
+    Runtime. The current implementation frontier is
+    [#9 Portable updates](https://github.com/zabastx/voice-chat/issues/9), followed by the installed
+    updater path.

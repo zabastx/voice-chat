@@ -71,7 +71,7 @@ try {
 	console.log(
 		`Building production shell for local HTTPS acceptance origin on port ${productionPort}`
 	)
-	execFileSync('bun', ['scripts/desktop.ts', 'build'], {
+	execFileSync('bun', ['scripts/desktop.ts', 'compile'], {
 		cwd: root,
 		stdio: 'inherit',
 		env: { ...process.env, VOICECHAT_DESKTOP_PRODUCTION_ORIGIN: productionOrigin }

@@ -1,7 +1,7 @@
 # 0013 — Remote UI behind a versioned Native Bridge
 
 Date: 2026-09-09
-Status: accepted — bridge implemented 2026-09-09, installer and updater pending
+Status: accepted — bridge implemented 2026-09-09, installer implemented 2026-09-10, updater pending
 
 The Windows Desktop Client will continue to load the Web Release from the one production HTTPS
 origin instead of bundling a second copy of the Vue UI. This keeps browser and desktop on the same

@@ -27,9 +27,18 @@ bun run desktop:build
 bun run desktop:run
 ```
 
-Вместо `VOICECHAT_DESKTOP_PRODUCTION_ORIGIN` можно задать `DOMAIN=chat.example.com`. Результат:
-`desktop/src-tauri/target/release/voice-chat.exe`. `desktop:build` пока собирает no-install EXE;
-installer и updater относятся к следующим desktop tickets.
+Вместо `VOICECHAT_DESKTOP_PRODUCTION_ORIGIN` можно задать `DOMAIN=chat.example.com`.
+`desktop:build` сначала сохраняет незапатченный no-install binary, затем собирает русский per-user
+NSIS с `downloadBootstrapper`. Результаты лежат рядом:
+
+- `desktop/src-tauri/target/release/bundle/nsis/Voice Chat_<version>_x64-setup.exe`
+- `desktop/src-tauri/target/release/bundle/nsis/Voice Chat_<version>_x64-portable.exe`
+
+Installer ставит приложение в `%LOCALAPPDATA%\Voice Chat` без elevation. Оба EXE используют
+identifier `ru.zabastx.voicechat`, поэтому делят WebView2 profile, Sign-in, локальные настройки и
+single-instance boundary. Uninstaller удаляет приложение и общий профиль, но не системный WebView2
+Runtime. Если нужен только release binary для shell harness без NSIS, используйте
+`bun run desktop:compile`.
 
 Для разработки против Nuxt на localhost:
 
@@ -64,6 +73,23 @@ bun run desktop:check
 Harness создаёт временный HTTPS endpoint и release EXE с этим встроенным origin. Через WebView2 CDP
 он проверяет отказ от runtime override, локальный экран ошибки, retry без перезапуска, close/hide,
 single-instance restore, явный exit и bounded logs. Временный сертификат удаляется после проверки.
+
+## Проверка installer и Portable EXE
+
+```powershell
+bun run desktop:install-check
+```
+
+Harness собирает оба артефакта, молча устанавливает NSIS, записывает persistent HttpOnly cookie и
+локальную настройку через установленный клиент, затем читает их из Portable EXE. Запуск installed
+EXE восстанавливает уже работающий portable-процесс. После этого harness запускает uninstaller и
+проверяет удаление каталога приложения, общего профиля и логов, а также наличие системного WebView2
+Runtime.
+
+Проверка намеренно отказывается работать, если уже существуют `%LOCALAPPDATA%\Voice Chat`,
+`%LOCALAPPDATA%\ru.zabastx.voicechat` или `%APPDATA%\ru.zabastx.voicechat`. Запускайте её в чистой
+Windows VM или в Windows job из [ci.yml](../.github/workflows/ci.yml), чтобы не затронуть настоящий
+Sign-in.
 
 ## Замер памяти и голоса
 

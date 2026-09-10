@@ -14,6 +14,17 @@
 	},
 	"bundle": {
 		"active": true,
-		"icon": ["icons/icon.ico", "icons/icon.png"]
+		"targets": ["nsis"],
+		"icon": ["icons/icon.ico", "icons/icon.png"],
+		"windows": {
+			"webviewInstallMode": {
+				"type": "downloadBootstrapper"
+			},
+			"nsis": {
+				"installMode": "currentUser",
+				"languages": ["Russian"],
+				"installerHooks": "./windows/installer-hooks.nsh"
+			}
+		}
 	}
 }
