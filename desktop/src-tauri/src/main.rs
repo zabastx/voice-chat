@@ -80,6 +80,10 @@ fn action_from_args(args: &[String]) -> ShellAction {
     }
 }
 
+fn should_exit_on_startup(args: &[String]) -> bool {
+    matches!(action_from_args(args), ShellAction::Exit)
+}
+
 fn perform_action(app: &tauri::AppHandle, action: ShellAction) {
     match action {
         ShellAction::Show => {
@@ -200,7 +204,18 @@ fn is_local_fallback(app: &tauri::AppHandle, connection: &ConnectionState) -> bo
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{fallback_commands_allowed, ConnectionState, LOCAL_ERROR_URL};
+    use super::{
+        fallback_commands_allowed, should_exit_on_startup, ConnectionState, LOCAL_ERROR_URL,
+    };
+
+    #[test]
+    fn exit_argument_stops_a_primary_launch_before_it_builds_the_window() {
+        assert!(should_exit_on_startup(&[
+            "voice-chat.exe".into(),
+            "--exit".into(),
+        ]));
+        assert!(!should_exit_on_startup(&["voice-chat.exe".into()]));
+    }
 
     #[test]
     fn remote_document_cannot_use_fallback_commands_during_offline_transition() {
@@ -403,6 +418,11 @@ fn main() {
             let log = DesktopLog::new(app.path().app_log_dir()?)?;
             app.manage(log);
             record(app.handle(), DesktopEvent::Started);
+            let startup_args = std::env::args().collect::<Vec<_>>();
+            if should_exit_on_startup(&startup_args) {
+                perform_action(app.handle(), ShellAction::Exit);
+                return Ok(());
+            }
             let url = server_url()?;
 
             let origin = url.origin();

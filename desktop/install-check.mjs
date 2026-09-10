@@ -123,7 +123,7 @@ const temp = mkdtempSync(join(tmpdir(), 'voice-chat-install-'))
 const pfx = join(temp, 'localhost.pfx')
 const certificateFile = join(temp, 'localhost.cer')
 const pfxPassword = randomUUID()
-let active
+let activeClient
 let certificateThumbprint = ''
 let server
 try {
@@ -181,22 +181,24 @@ try {
 	}
 	console.log('PASS install: per-user NSIS installed Voice Chat without elevation')
 
-	active = await launch(installed, 9342)
-	await active.page.evaluate(
+	activeClient = await launch(installed, 9342)
+	await activeClient.page.evaluate(
 		(value) => localStorage.setItem('voice-chat:prefs', value),
 		preferenceValue
 	)
-	await active.page.reload({ waitUntil: 'domcontentloaded' })
-	if ((await active.page.locator('#install-check').getAttribute('data-signed-in')) !== 'true') {
+	await activeClient.page.reload({ waitUntil: 'domcontentloaded' })
+	if (
+		(await activeClient.page.locator('#install-check').getAttribute('data-signed-in')) !== 'true'
+	) {
 		throw new Error('Installed client did not persist its Sign-in cookie')
 	}
 	execFileSync(installed, ['--exit'], { windowsHide: true })
-	await waitFor(() => active.child.exitCode !== null, 'installed client exit')
-	await active.browser.close()
-	active = undefined
+	await waitFor(() => activeClient.child.exitCode !== null, 'installed client exit')
+	await activeClient.browser.close()
+	activeClient = undefined
 
-	active = await launch(portable, 9343)
-	const sharedState = await active.page.evaluate(() => ({
+	activeClient = await launch(portable, 9343)
+	const sharedState = await activeClient.page.evaluate(() => ({
 		signedIn: document.querySelector('#install-check')?.getAttribute('data-signed-in'),
 		preferences: localStorage.getItem('voice-chat:prefs')
 	}))
@@ -205,37 +207,51 @@ try {
 	}
 	console.log('PASS profile: installed and Portable clients share Sign-in and settings')
 
-	powershell(`(Get-Process -Id ${active.child.pid}).CloseMainWindow() | Out-Null`)
-	await waitFor(() => !windowIsVisible(active.child.pid), 'Portable window hidden in tray')
+	powershell(`(Get-Process -Id ${activeClient.child.pid}).CloseMainWindow() | Out-Null`)
+	await waitFor(() => !windowIsVisible(activeClient.child.pid), 'Portable window hidden in tray')
 	execFileSync(installed, [], { windowsHide: true })
-	await waitFor(() => windowIsVisible(active.child.pid), 'installed launch restoring Portable')
+	await waitFor(
+		() => windowIsVisible(activeClient.child.pid),
+		'installed launch restoring Portable'
+	)
 	if (candidateProcessCount() !== 1)
 		throw new Error('Installed and Portable clients did not share one instance')
 	console.log('PASS instance: installed launch restores the running Portable client')
 
-	execFileSync(installed, ['--exit'], { windowsHide: true })
-	await waitFor(
-		() => active.child.exitCode !== null,
-		'Portable client exit through installed binary'
-	)
-	await active.browser.close()
-	active = undefined
-	await sleep(500)
-
 	if (!existsSync(localProfile)) throw new Error('The shared LOCALAPPDATA profile was not created')
 	execFileSync(uninstaller, ['/S'], { windowsHide: true, timeout: 60_000 })
+	await waitFor(
+		() => activeClient.child.exitCode !== null,
+		'Portable client exit through the uninstaller'
+	)
+	await activeClient.browser.close().catch(() => {})
+	activeClient = undefined
+	if (candidateProcessCount() !== 0)
+		throw new Error('Uninstaller left an installed or Portable client running')
 	await waitFor(
 		() => !existsSync(installDirectory) && !existsSync(localProfile) && !existsSync(roamingProfile),
 		'application and shared profile removal'
 	)
+
+	execFileSync(setup, ['/S'], { windowsHide: true, timeout: 60_000 })
+	if (!existsSync(uninstaller))
+		throw new Error('Second NSIS install did not create the uninstaller')
+	if (candidateProcessCount() !== 0)
+		throw new Error('Silent install unexpectedly launched a client')
+	execFileSync(uninstaller, ['/S'], { windowsHide: true, timeout: 60_000 })
+	await waitFor(
+		() => !existsSync(installDirectory) && !existsSync(localProfile) && !existsSync(roamingProfile),
+		'stopped-client uninstall cleanup'
+	)
+	console.log('PASS uninstall: completes with both a running Portable and no running client')
 	if (!webviewRuntimeVersion())
 		throw new Error('NSIS uninstall removed the system WebView2 Runtime')
 	console.log(
 		`PASS uninstall: application and shared profile removed; WebView2 remains ${runtimeBefore || 'installed'}`
 	)
 } finally {
-	await active?.browser?.close().catch(() => {})
-	if (active?.child?.exitCode === null) active.child.kill()
+	await activeClient?.browser?.close().catch(() => {})
+	if (activeClient?.child?.exitCode === null) activeClient.child.kill()
 	if (existsSync(uninstaller)) {
 		try {
 			execFileSync(uninstaller, ['/S'], { windowsHide: true, timeout: 60_000 })

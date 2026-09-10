@@ -52,15 +52,18 @@ unbundled executable for issue #9 to select its manual update path.
 The Tauri config explicitly selects only NSIS, `currentUser`, Russian installer strings and
 `downloadBootstrapper`. Installed and portable launches keep the existing
 `ru.zabastx.voicechat` identifier, so WebView2 state, local settings, logs and the
-single-instance plugin all use the same `%LOCALAPPDATA%` profile. A post-uninstall NSIS hook removes
-the identifier-scoped Local and Roaming app-data directories on a real uninstall, but skips cleanup
-during `/UPDATE`; it never touches EdgeUpdate or the system WebView2 Runtime.
+single-instance plugin all use the same `%LOCALAPPDATA%` profile. A pre-uninstall hook routes
+`--exit` through the installed binary so it also stops a renamed or moved Portable owner; the
+post-uninstall hook then removes the identifier-scoped Local and Roaming app-data directories on a
+real uninstall. Both skip `/UPDATE`, and cleanup never touches EdgeUpdate or the system WebView2
+Runtime.
 
 `desktop:install-check` drives the real setup, installed EXE, Portable EXE and uninstaller against a
 temporary trusted HTTPS origin. It refuses any machine that already has an install or profile.
-The check runs locally and is wired into a clean `windows-latest` job in `ci.yml`; the first hosted
-run remains for the release-candidate work. Issue #7 changes only Desktop delivery, so the Web
-Release version and member-facing changelog stay unchanged. Nothing deployed.
+It uninstalls once with Portable still running and once with no client running. The check runs
+locally and is wired into a clean `windows-latest` job in `ci.yml`; the first hosted run remains for
+the release-candidate work. Issue #7 changes only Desktop delivery, so the Web Release version and
+member-facing changelog stay unchanged. Nothing deployed.
 
 ## Desktop 0.1.0-alpha.1 — production shell
 

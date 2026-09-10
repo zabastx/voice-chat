@@ -49,6 +49,8 @@ describe('desktop packaging', () => {
 		expect(config.bundle?.windows?.nsis?.installerHooks).toBe('./windows/installer-hooks.nsh')
 
 		const hooks = await readFile(installerHooksPath, 'utf8')
+		expect(hooks).toContain('NSIS_HOOK_PREUNINSTALL')
+		expect(hooks).toMatch(/ExecWait .*\$INSTDIR.*\$\{MAINBINARYNAME\}\.exe.*--exit/)
 		expect(hooks).toContain('NSIS_HOOK_POSTUNINSTALL')
 		expect(hooks).toContain('$UpdateMode')
 		expect(hooks).toContain('$LOCALAPPDATA\\${BUNDLEID}')

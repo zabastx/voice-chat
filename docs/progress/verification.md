@@ -79,21 +79,25 @@ Verified:
   `voice-chat:prefs`. After the installed process exited, Portable loaded both values from the same
   identifier-scoped WebView2 profile.
 - With Portable hidden in the tray, launching the installed EXE restored that same process. The
-  process count across both executable paths stayed at one; sending `--exit` through the installed
-  path also stopped the Portable process. The two forms therefore share the single-instance
-  identity rather than merely agreeing on a directory.
-- Silent uninstall removed `%LOCALAPPDATA%\Voice Chat`,
+  process count across both executable paths stayed at one. The two forms therefore share the
+  single-instance identity rather than merely agreeing on a directory.
+- Silent uninstall ran while that Portable process was still alive. Its pre-uninstall hook sent
+  `--exit` through the installed binary and stopped the shared instance before removing
+  `%LOCALAPPDATA%\Voice Chat`,
   `%LOCALAPPDATA%\ru.zabastx.voicechat` and the corresponding Roaming directory. WebView2 released
   its files shortly after NSIS exited, so the harness waits for the completed removal instead of
   sampling it mid-cleanup.
+- The harness installed a second time and uninstalled with no client running. The primary
+  `--exit` launch terminated before window creation, so the uninstaller completed instead of
+  waiting on a newly started tray process.
 - The system WebView2 Runtime remained registered at version 152.0.4191.66 after uninstall. The
   cleanup hook names only the application bundle id and skips `/UPDATE`; it contains no EdgeUpdate
   or WebView2 Runtime path.
 
-`test/desktop-packaging.test.ts` keeps the NSIS mode, asset names and cleanup boundary in the normal
-suite. `ci.yml` also has a `windows-latest` job that runs the destructive acceptance harness on a
-disposable profile. That hosted job has not run from this unpushed branch; issue #13 will record the
-release-candidate run on a truly fresh Windows runner.
+`test/desktop-packaging.test.ts` keeps the NSIS mode, asset names, shared-instance stop and cleanup
+boundary in the normal suite. `ci.yml` also has a `windows-latest` job that runs the destructive
+acceptance harness on a disposable profile. That hosted job has not run from this unpushed branch;
+issue #13 will record the release-candidate run on a truly fresh Windows runner.
 
 ## Desktop 0.1.0-alpha.1 — Native Bridge
 

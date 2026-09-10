@@ -82,9 +82,10 @@ bun run desktop:install-check
 
 Harness собирает оба артефакта, молча устанавливает NSIS, записывает persistent HttpOnly cookie и
 локальную настройку через установленный клиент, затем читает их из Portable EXE. Запуск installed
-EXE восстанавливает уже работающий portable-процесс. После этого harness запускает uninstaller и
-проверяет удаление каталога приложения, общего профиля и логов, а также наличие системного WebView2
-Runtime.
+EXE восстанавливает уже работающий portable-процесс. Пока этот Portable остаётся запущенным,
+harness запускает uninstaller и проверяет, что тот завершает общий экземпляр, удаляет каталог
+приложения, общий профиль и логи. Затем проверка повторяет install/uninstall без запущенного
+клиента. Системный WebView2 Runtime остаётся на месте в обоих случаях.
 
 Проверка намеренно отказывается работать, если уже существуют `%LOCALAPPDATA%\Voice Chat`,
 `%LOCALAPPDATA%\ru.zabastx.voicechat` или `%APPDATA%\ru.zabastx.voicechat`. Запускайте её в чистой
@@ -190,6 +191,6 @@ Native Bridge.
 
 ## Оставшиеся ограничения
 
-Installer, updater-клиент и notification contract реализуются отдельными tickets #7–#12.
+Updater-клиент и notification contract реализуются в tickets #9–#12.
 Push-to-talk отложен. Реальные устройства, screen share, сон и пробуждение, embedded players и
 длительный звонок требуют отдельной проверки в WebView2.
