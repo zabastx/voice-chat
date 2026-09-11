@@ -74,6 +74,17 @@ This ticket also added the repo's first test suite (`bun run test`, Bun's runner
 dependency), typechecked by its own `test/tsconfig.json` because `nuxt typecheck` only covers
 `app/`, `server/` and `shared/`.
 
+**Portable Desktop updates, 2026-09-11** (issue #9): the server manifest includes the exact public
+GitHub Release page as `release_url`; Portable opens that page after explicit consent and never
+downloads, installs, or replaces its running executable. The common coordinator owns scheduling,
+SemVer comparison, and overlap suppression behind feed/prompt/action boundaries, while the build
+stamps `portable` or `installed` into the binary. Filename and install-directory heuristics were
+rejected because Portable can be renamed and both forms share one profile. The check starts only at
+Tauri `Ready`, then repeats every six hours; feed and action failures produce fixed local diagnostics
+and do not affect the remote Web Release. `VOICECHAT_DESKTOP_UPDATE_CHECK=1` is a compile-time-only
+test affordance that permits loopback HTTP for the real-EXE fixture harness; normal release builds
+still require a root HTTPS origin and HTTPS Release URL.
+
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs

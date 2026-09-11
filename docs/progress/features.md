@@ -4,6 +4,27 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop 0.1.0-alpha.1 — Portable update offer
+
+Issue #9 is built on `prototype/tauri-windows`. A shared native coordinator starts on Tauri's
+`RunEvent::Ready`, checks again every six hours, and collapses overlapping attempts. It compares
+SemVer precedence locally, so an equal or older feed response never reaches the member. Feed,
+prompt, and action are separate boundaries ready for the installed path in issue #10.
+
+For Portable builds a newer version opens a native Russian dialog with «Открыть выпуск» and
+«Отложить». Accepting opens the exact `release_url` selected by the server in the system browser;
+postponing, closing, or pressing Escape does nothing until the next scheduled check. This path never
+invokes Tauri's updater, an installer, or self-replacement. Feed and opener failures become fixed,
+bounded local log events and cannot delay loading the Web Release. The build stamps `portable` or
+`installed` into the binary, rather than inferring it from a filename that a member may rename;
+installed builds deliberately skip this path until issue #10 supplies their updater action.
+
+`desktop:update-check` builds and drives the real Portable EXE against a loopback fixture, using a
+compile-time test allowance for loopback HTTP while ordinary release builds remain HTTPS-only. It
+verifies both Russian actions, the exact Release URL, process survival, an unchanged EXE hash, and
+the absence of an install. The Windows CI job runs it after the installer harness. No Desktop
+Release has been published and nothing is deployed.
+
 ## Desktop Update feed — server side
 
 Issue #8 is built: `GET /api/desktop/update` answers the Tauri updater with the newest published
@@ -24,7 +45,9 @@ one and forbids an accidental downgrade. Prereleases count: there is one stream.
 (prerelease ordering included) is its own module,
 [desktop-version.ts](../../server/utils/desktop-version.ts).
 
-The last successful answer is cached (`NUXT_DESKTOP_UPDATE_CACHE_SECONDS`, default 300) and kept
+The manifest also carries `release_url`, the public page of the exact selected GitHub Release, for
+the Portable client's manual-download action. The last successful answer is cached
+(`NUXT_DESKTOP_UPDATE_CACHE_SECONDS`, default 300) and kept
 indefinitely as the fallback while GitHub fails or rate-limits; a failed refresh also backs off for a
 full TTL, so an outage is not amplified into a request per client. With no cache at all the feed
 answers `503` with a matching `Retry-After`, never a partial manifest. `204` means "nothing to offer"
@@ -37,8 +60,8 @@ is dropped rather than echoed. No Postgres tables or migrations were added.
 in development — a production build ignores it and logs that it did, because a fixture can name any
 URL and any signature.
 
-Client side (checking on a schedule, consent, waiting out a Voice Channel, the Portable EXE's manual
-path) is still unbuilt — issues #9–#12; the Native Bridge already supplies the active-call signal
+The Portable client side is built in issue #9. Waiting out a Voice Channel and applying a signed
+installed update remain issues #10–#12; the Native Bridge already supplies the active-call signal
 those need. Nothing deployed.
 
 ## Desktop 0.1.0-alpha.1 — NSIS installer and Portable EXE
@@ -83,7 +106,8 @@ local logs: at most three 256 KiB files containing only fixed shell events, neve
 cookie or Sign-in data. `desktop:check` verifies the release artifact against a temporary HTTPS
 origin, including runtime-override rejection, broken TLS, initial and later recovery, process
 lifecycle and log bounds.
-Notifications and updater behavior remain in issues #9–#12.
+The Portable update offer is built in issue #9. Installed updater and notification behavior remain
+in issues #10–#12.
 Nothing deployed.
 
 ## Desktop 0.1.0-alpha.1 — Native Bridge

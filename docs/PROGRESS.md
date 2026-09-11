@@ -63,14 +63,14 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     shape is Windows 10/11 x64 with the server-hosted Web Release behind a versioned Native Bridge
     ([ADR 0013](adr/0013-remote-ui-behind-versioned-native-bridge.md)) and one GitHub-backed update
     stream ([ADR 0014](adr/0014-independent-desktop-releases-with-one-update-stream.md)). First deliver
-    `0.1.0-alpha.1` with an installer, updater, tray, and single-instance behavior; global PTT is
+    `0.1.0-alpha.1` with an installer, Portable update offer, tray, and single-instance behavior; global PTT is
     left for a future plan. Release assets include NSIS and a no-install Portable EXE; both share a
     single profile and instance, while only the installed client applies updates automatically.
     Login, bidirectional synthetic audio, tray hide/restore, and continued audio
     while hidden are verified. A two-person audio call in the tray measured **239.5 MiB private
     commit**, above the original 100–200 MB optimization goal, which is not a release gate. Real
-    devices, screen sharing, embedded players, long calls, and update delivery remain unverified or
-    unbuilt. The per-user NSIS and Portable EXE are built and passed the local install/profile/
+    devices, screen sharing, embedded players, long calls, a published Release, and installed update
+    delivery remain unverified or unbuilt. The per-user NSIS and Portable EXE are built and passed the local install/profile/
     single-instance/uninstall harness. Spec #4 is split into native GitHub sub-issues
     [#5–#14](https://github.com/zabastx/voice-chat/issues/4).
     [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is built and verified
@@ -86,6 +86,8 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     [#7 installer and Portable EXE](https://github.com/zabastx/voice-chat/issues/7) is built:
     release builds emit Russian x64 NSIS and Portable artifacts, both share the identifier-scoped
     profile and instance, and uninstall clears app data without removing the system WebView2
-    Runtime. The current implementation frontier is
-    [#9 Portable updates](https://github.com/zabastx/voice-chat/issues/9), followed by the installed
-    updater path.
+    Runtime. [#9 Portable updates](https://github.com/zabastx/voice-chat/issues/9) is built and
+    verified with the real Portable EXE against a fixture feed: it checks at app readiness and every
+    six hours without overlap, offers Russian «Открыть выпуск» / «Отложить» actions, and opens the
+    exact GitHub Release without installing or replacing itself. The current implementation frontier
+    is [#10 installed updates](https://github.com/zabastx/voice-chat/issues/10).

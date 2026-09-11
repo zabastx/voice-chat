@@ -1,0 +1,11 @@
+{
+	"version": "0.1.0-alpha.2",
+	"notes": "Тестовое обновление Portable EXE.",
+	"release_url": "{{origin}}/releases/tag/desktop-v0.1.0-alpha.2?fixture={{run}}",
+	"platforms": {
+		"windows-x86_64": {
+			"signature": "fixture-signature",
+			"url": "{{origin}}/releases/download/desktop-v0.1.0-alpha.2/Voice%20Chat_0.1.0-alpha.2_x64-setup.exe"
+		}
+	}
+}

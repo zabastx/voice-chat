@@ -4,6 +4,7 @@ mod bridge;
 mod desktop_log;
 #[path = "../origin.rs"]
 mod origin;
+mod update;
 
 // Keep the web release on the server and the operating-system shell in this binary.
 // The remote page receives no Tauri capabilities or Rust command access.
@@ -19,7 +20,7 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     webview::NewWindowResponse,
-    Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
 #[cfg(windows)]
@@ -44,7 +45,9 @@ fn server_url() -> Result<tauri::Url, Box<dyn std::error::Error>> {
     let raw = PRODUCTION_ORIGIN.to_owned();
 
     let url = tauri::Url::parse(&raw)?;
-    if !origin::valid_origin(&url, cfg!(debug_assertions)) {
+    let allow_loopback_http =
+        cfg!(debug_assertions) || option_env!("VOICECHAT_DESKTOP_UPDATE_CHECK") == Some("1");
+    if !origin::valid_origin(&url, allow_loopback_http) {
         return Err(
             "Адрес Voice Chat должен быть HTTPS origin; debug также разрешает loopback HTTP".into(),
         );
@@ -409,10 +412,11 @@ fn watch_navigation(
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             perform_action(app, action_from_args(&args));
         }))
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let log = DesktopLog::new(app.path().app_log_dir()?)?;
@@ -544,6 +548,15 @@ fn main() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Не удалось запустить Voice Chat");
+    app.run(|app, event| {
+        if matches!(event, RunEvent::Ready)
+            && !should_exit_on_startup(&std::env::args().collect::<Vec<_>>())
+        {
+            if let Ok(url) = server_url() {
+                update::start_portable(app.clone(), &url);
+            }
+        }
+    });
 }

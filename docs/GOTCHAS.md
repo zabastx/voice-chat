@@ -265,6 +265,16 @@ Two traps come with that channel:
   frame cannot read it. See `Bridge::script` in
   [bridge.rs](../desktop/src-tauri/src/bridge.rs).
 
+### 27. A native dialog started from Tauri `setup` may return its default before it is visible
+
+`setup` has built windows but the application event loop is not ready yet. Starting an update worker
+there and calling the dialog plugin can make Windows' TaskDialog complete with its default result
+without ever exposing controls to UI Automation. Start member-facing native prompts from
+`RunEvent::Ready`. The acceptance harness must also launch the GUI executable without
+`windowsHide: true`; that Win32 startup flag recreates the same hidden-default behavior. Measured
+2026-09-11 while driving the Portable update offer: moving only the start event and spawn flag made
+the Russian dialog remain open for a ten-second no-input observation.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

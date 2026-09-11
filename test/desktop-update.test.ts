@@ -32,6 +32,7 @@ function release(version: string, extra: Partial<DesktopReleaseRecord> = {}): De
 	const base = `${ASSET_HOST}/desktop-v${version}`
 	return {
 		tag: `desktop-v${version}`,
+		releaseUrl: `https://github.test/zabastx/voice-chat/releases/tag/desktop-v${version}`,
 		draft: false,
 		prerelease: version.includes('-'),
 		publishedAt: '2026-09-01T10:00:00Z',
@@ -95,6 +96,9 @@ describe('GET /api/desktop/update — which Release is offered', () => {
 
 			const manifest = await response.json()
 			expect(manifest.version).toBe('0.2.0')
+			expect(manifest.release_url).toBe(
+				'https://github.test/zabastx/voice-chat/releases/tag/desktop-v0.2.0'
+			)
 			expect(manifest.notes).toContain('Версия 0.2.0')
 			expect(manifest.pub_date).toBe('2026-09-01T10:00:00Z')
 			expect(Object.keys(manifest.platforms)).toEqual(['windows-x86_64'])

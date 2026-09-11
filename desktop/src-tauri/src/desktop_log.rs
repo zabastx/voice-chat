@@ -22,6 +22,9 @@ pub enum DesktopEvent {
     VoiceActive,
     VoiceIdle,
     BridgeMessageRejected,
+    UpdateCheckFailed,
+    UpdatePostponed,
+    UpdateReleaseOpened,
 }
 
 impl DesktopEvent {
@@ -38,6 +41,9 @@ impl DesktopEvent {
             Self::VoiceActive => "voice channel active",
             Self::VoiceIdle => "voice channel idle",
             Self::BridgeMessageRejected => "native bridge message rejected",
+            Self::UpdateCheckFailed => "desktop update check failed",
+            Self::UpdatePostponed => "desktop update postponed",
+            Self::UpdateReleaseOpened => "desktop update release opened",
         }
     }
 }

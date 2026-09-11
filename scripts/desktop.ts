@@ -44,8 +44,10 @@ if (action === 'build') {
 		throw new Error('Задайте VOICECHAT_DESKTOP_PRODUCTION_ORIGIN или DOMAIN для release-сборки')
 	}
 	const url = new URL(configured)
+	const updateCheck = env.VOICECHAT_DESKTOP_UPDATE_CHECK === '1'
+	const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
 	if (
-		url.protocol !== 'https:' ||
+		!(url.protocol === 'https:' || (updateCheck && url.protocol === 'http:' && loopback)) ||
 		url.username ||
 		url.password ||
 		url.pathname !== '/' ||
@@ -56,6 +58,8 @@ if (action === 'build') {
 	}
 	env.VOICECHAT_DESKTOP_PRODUCTION_ORIGIN = url.origin
 }
+
+if (action === 'compile') env.VOICECHAT_DESKTOP_MODE = 'portable'
 
 const tauriRoot = join(desktop, 'src-tauri')
 const exe = join(tauriRoot, 'target', 'release', 'voice-chat.exe')
@@ -94,10 +98,13 @@ if (action === 'run') {
 
 	try {
 		// Preserve the unbundled executable before the NSIS bundler stamps its own mode.
+		env.VOICECHAT_DESKTOP_MODE = 'portable'
 		runTauri('build', ['--no-bundle'])
 		if (!existsSync(exe)) throw new Error(`Release executable is missing: ${exe}`)
 		copyFileSync(exe, stagedPortable)
 
+		env.VOICECHAT_DESKTOP_MODE = 'installed'
+		runTauri('build', ['--no-bundle'])
 		runTauri('bundle', ['--bundles', 'nsis'])
 		if (!existsSync(setup)) throw new Error(`NSIS installer is missing: ${setup}`)
 		mkdirSync(bundleDirectory, { recursive: true })

@@ -11,6 +11,7 @@ import { selectDesktopRelease } from '../server/utils/desktop-update'
 const RELEASES_JSON = [
 	{
 		tag_name: 'desktop-v0.1.0-alpha.1',
+		html_url: 'https://github.test/zabastx/voice-chat/releases/tag/desktop-v0.1.0-alpha.1',
 		name: 'Voice Chat 0.1.0-alpha.1',
 		draft: false,
 		prerelease: true,
@@ -31,6 +32,7 @@ const RELEASES_JSON = [
 	},
 	{
 		tag_name: 'desktop-v0.1.0-alpha.2',
+		html_url: 'https://github.test/zabastx/voice-chat/releases/tag/desktop-v0.1.0-alpha.2',
 		draft: true,
 		prerelease: true,
 		published_at: null,
@@ -63,6 +65,7 @@ describe('githubReleaseCatalog', () => {
 		expect(releases).toHaveLength(2)
 		expect(releases[0]).toEqual({
 			tag: 'desktop-v0.1.0-alpha.1',
+			releaseUrl: 'https://github.test/zabastx/voice-chat/releases/tag/desktop-v0.1.0-alpha.1',
 			draft: false,
 			prerelease: true,
 			publishedAt: '2026-09-09T09:00:00Z',

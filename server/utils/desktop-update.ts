@@ -109,6 +109,7 @@ export function selectDesktopRelease(
 /** What the feed serves, once the signature has actually been read. */
 interface DesktopUpdateOffer {
 	version: DesktopVersion
+	releaseUrl: string
 	notes: string
 	pubDate: string | null
 	url: string
@@ -179,6 +180,7 @@ export function createDesktopUpdateFeed(options: DesktopUpdateFeedOptions): Desk
 		const publishedAt = selected.record.publishedAt
 		return {
 			version: selected.version,
+			releaseUrl: selected.record.releaseUrl,
 			notes: boundedNotes(selected.record.notes),
 			pubDate: publishedAt && !Number.isNaN(Date.parse(publishedAt)) ? publishedAt : null,
 			url: selected.setup.url,
@@ -240,6 +242,7 @@ export function createDesktopUpdateFeed(options: DesktopUpdateFeedOptions): Desk
 			return new Response(
 				JSON.stringify({
 					version: formatDesktopVersion(offer.version),
+					release_url: offer.releaseUrl,
 					notes: offer.notes,
 					...(offer.pubDate ? { pub_date: offer.pubDate } : {}),
 					platforms: {

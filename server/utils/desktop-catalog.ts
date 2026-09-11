@@ -17,6 +17,8 @@ export interface DesktopReleaseAsset {
 export interface DesktopReleaseRecord {
 	/** the git tag, e.g. `desktop-v0.1.0-alpha.1` */
 	tag: string
+	/** public page for this exact GitHub Release */
+	releaseUrl: string
 	draft: boolean
 	prerelease: boolean
 	/** RFC 3339, null while the Release is still a draft */
@@ -42,6 +44,7 @@ const RELEASES_PER_PAGE = 30
 
 interface GithubRelease {
 	tag_name?: unknown
+	html_url?: unknown
 	draft?: unknown
 	prerelease?: unknown
 	published_at?: unknown
@@ -84,6 +87,7 @@ export function githubReleaseCatalog(options: {
 			if (!Array.isArray(body)) throw new Error('GitHub releases response was not a list')
 			return body.map((entry: GithubRelease) => ({
 				tag: asString(entry.tag_name),
+				releaseUrl: asString(entry.html_url),
 				draft: entry.draft === true,
 				prerelease: entry.prerelease === true,
 				publishedAt: typeof entry.published_at === 'string' ? entry.published_at : null,

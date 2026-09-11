@@ -2,6 +2,7 @@
 	"releases": [
 		{
 			"tag": "desktop-v0.1.0-alpha.1",
+			"releaseUrl": "https://github.com/zabastx/voice-chat/releases/tag/desktop-v0.1.0-alpha.1",
 			"draft": false,
 			"prerelease": true,
 			"publishedAt": "2026-09-09T09:00:00Z",

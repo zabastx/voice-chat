@@ -156,9 +156,9 @@ native affordance.
 проходят и с browser adapter в `bun test`, и с настоящим Tauri adapter внутри WebView2 в
 `bun run desktop:check`.
 
-## Update feed
+## Обновления Portable EXE и Update feed
 
-Серверная часть updater уже готова: публичный `GET /api/desktop/update` отдаёт Tauri updater
+Публичный `GET /api/desktop/update` отдаёт Tauri updater
 manifest для новейшего опубликованного GitHub Release с тегом `desktop-v*` (см.
 [ADR 0014](../docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)). Endpoint
 доступен до Sign-in, потому что Desktop Client проверяет его до загрузки Web Release.
@@ -169,7 +169,7 @@ Tauri подставляет свои переменные в URL:
 https://<origin>/api/desktop/update?target={{target}}&arch={{arch}}&version={{current_version}}
 ```
 
-Ответы: `200` с manifest, `204` — предлагать нечего (клиент уже новый, подходящего Release нет,
+Ответы: `200` с manifest, включая точный `release_url`, `204` — предлагать нечего (клиент уже новый, подходящего Release нет,
 или target не Windows x64), `503` — GitHub недоступен и в кэше ничего нет. Минимальная
 поддерживаемая версия приходит отдельно от предлагаемой, в заголовке `X-Desktop-Minimum-Version`,
 и присутствует в том числе в `204`.
@@ -184,13 +184,24 @@ downgrade невозможен. Prerelease участвует наравне с�
 Чтобы прогнать feed локально без публикации Release, укажите
 `NUXT_DESKTOP_RELEASE_FIXTURE=test/fixtures/desktop-releases.json` (файл читается на каждый запрос,
 его можно править на ходу). Это только для разработки: production-сборка игнорирует переменную и
-пишет об этом в лог, потому что fixture может указать любой URL и любую подпись. Клиентская часть —
-проверка при запуске и каждые шесть часов, согласие, ожидание выхода из Voice Channel и ручной путь
-Portable EXE — относится к tickets #9–#12; сигнал активного звонка для них уже приходит через
-Native Bridge.
+пишет об этом в лог, потому что fixture может указать любой URL и любую подпись.
+
+Portable-клиент начинает проверку на событии готовности Tauri и повторяет её каждые шесть часов;
+параллельные проверки схлопываются. Более новая SemVer-версия показывает нативный русский диалог
+«Открыть выпуск» / «Отложить». Первая кнопка открывает ровно `release_url` в системном браузере для
+ручного скачивания и замены EXE, вторая и закрытие диалога ничего не делают. Portable не запускает
+updater, installer и не заменяет собственный файл. Ошибка feed остаётся локальной диагностикой и
+не мешает Web Release.
+
+`bun run desktop:update-check` собирает и запускает настоящий Portable EXE против fixture feed,
+проверяет обе кнопки, точный URL, неизменность EXE и отсутствие установки. Harness компилирует
+одноразовое разрешение только для loopback HTTP; обычная release-сборка и Release URL по-прежнему
+требуют HTTPS. Режим `portable` / `installed` встраивается при сборке, поэтому переименование EXE
+его не меняет. Installed updater, ожидание выхода из Voice Channel и уведомления относятся к
+tickets #10–#12; сигнал активного звонка уже приходит через Native Bridge.
 
 ## Оставшиеся ограничения
 
-Updater-клиент и notification contract реализуются в tickets #9–#12.
+Installed updater и notification contract реализуются в tickets #10–#12.
 Push-to-talk отложен. Реальные устройства, screen share, сон и пробуждение, embedded players и
 длительный звонок требуют отдельной проверки в WebView2.

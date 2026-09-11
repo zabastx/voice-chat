@@ -4,6 +4,34 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop 0.1.0-alpha.1 — Portable update offer
+
+2026-09-11, local Windows x64, real release-mode Portable EXE. `cargo test` passed all 16 native
+tests, and `bun run desktop:update-check` drove the compiled executable against
+[desktop-portable-update.json](../../test/fixtures/desktop-portable-update.json). The harness uses a
+compile-time-only loopback HTTP allowance so it needs no trusted test certificate; ordinary release
+builds still reject non-HTTPS origins and Release URLs.
+
+Verified in the real executable:
+
+- The feed was queried at startup with `target=windows`, `arch=x86_64`, and the binary's current
+  `0.1.0-alpha.1` version. A separate no-input observation left the dialog waiting for ten seconds
+  and made no Release-page request.
+- UI Automation found the native Russian title, body, «Открыть выпуск», and «Отложить». The first
+  run selected «Отложить»: the dialog closed, no Release page opened, and Portable stayed alive.
+- A second launch accepted `0.1.0-alpha.2` and opened the exact unique `release_url` supplied by the
+  fixture in the system browser. Portable stayed alive, its SHA-256 hash was unchanged, and neither
+  the application install directory nor `uninstall.exe` appeared.
+- Coordinator tests cover equal and older versions producing no prompt, SemVer precedence, a cold
+  feed failure producing only a diagnostic, concurrent checks collapsing to one,
+  and the startup/check/wait-six-hours ordering without sleeping for six wall-clock hours.
+- The build embeds `portable` or `installed`; the installed form skips the manual action. This keeps
+  issue #9 from accidentally implementing the signed installed-update path owned by issue #10.
+
+Not yet verified: six real hours or sleep/wake between checks; the deployed VPS feed; a published
+`desktop-v*` GitHub Release; a member manually replacing a renamed Portable EXE; and the installed
+updater/active-call deferral in issue #10.
+
 ## Desktop Update feed — server side
 
 2026-09-09. This is the repo's first automated test suite: `bun run test` (Bun's runner, wired into
@@ -13,7 +41,7 @@ it proved. The last section lists what is still **not** verified. Part of
 `test/desktop-update.test.ts` drives the feed over real HTTP — each case starts a loopback
 `Bun.serve` around `feed.respond` and fetches it — against the fixture catalog, i.e. the same
 interface the production GitHub adapter implements. Covered: a stable Release offered as a Tauri
-manifest (version, notes, `pub_date`, one `windows-x86_64` platform with signature and setup URL);
+manifest (version, notes, `pub_date`, exact `release_url`, one `windows-x86_64` platform with signature and setup URL);
 a newer prerelease preferred over an older stable; a draft ignored, with and without a publish date;
 non-Desktop tags (`v0.25.0`, `relay-v0.4.0`) ignored; malformed versions (`desktop-vbanana`,
 `desktop-v0.4`) ignored; an arm64-only Release ignored; a Release missing its `.sig`, one missing its
@@ -55,8 +83,8 @@ Driven by hand against the real thing, same day:
 
 Not verified: the production-build branch that ignores `NUXT_DESKTOP_RELEASE_FIXTURE` (it is gated on
 `import.meta.dev`, and only a `nuxt build` would exercise it); the endpoint against the deployed VPS;
-a real published `desktop-v*` Release end to end; and anything on the client side — Tauri consuming this manifest, consent, six-hourly checks,
-waiting out a Voice Channel, and the Portable EXE's manual path are issues #6–#12.
+a real published `desktop-v*` Release end to end. The Portable client consumes the manifest in
+issue #9; waiting out a Voice Channel and applying the installed update remain issues #10–#12.
 
 ## Desktop 0.1.0-alpha.1 — NSIS installer and Portable EXE
 

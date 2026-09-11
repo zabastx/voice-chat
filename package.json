@@ -12,6 +12,7 @@
 		"desktop:run": "bun scripts/desktop.ts run",
 		"desktop:check": "node desktop/tray-check.mjs",
 		"desktop:install-check": "bun desktop/install-check.mjs",
+		"desktop:update-check": "bun desktop/update-check.mjs",
 		"desktop:bench": "node desktop/bench.mjs",
 		"test": "bun test",
 		"db:generate": "drizzle-kit generate",
