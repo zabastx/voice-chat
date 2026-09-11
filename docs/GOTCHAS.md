@@ -271,9 +271,27 @@ Two traps come with that channel:
 there and calling the dialog plugin can make Windows' TaskDialog complete with its default result
 without ever exposing controls to UI Automation. Start member-facing native prompts from
 `RunEvent::Ready`. The acceptance harness must also launch the GUI executable without
-`windowsHide: true`; that Win32 startup flag recreates the same hidden-default behavior. Measured
-2026-09-11 while driving the Portable update offer: moving only the start event and spawn flag made
-the Russian dialog remain open for a ten-second no-input observation.
+`windowsHide: true`; that Win32 startup flag recreates the same hidden-default behavior. What is
+verified (2026-09-11, `desktop:update-check`) is the fixed shape: started from `Ready` and spawned
+without the flag, the Russian offer is readable and answerable through UI Automation. Do not try to
+confirm it by leaving a dialog unattended — on this machine something presses it for you (GOTCHAS
+28).
+
+### 28. The update offer is a TaskDialog, and its buttons are panes without patterns
+
+Both `InvokePattern` and `LegacyIAccessiblePattern` fail on «Открыть выпуск» / «Отложить»: rfd
+builds the prompt with `TaskDialogIndirect`, whose custom buttons surface to UI Automation as
+`ControlType.Pane` supporting no pattern at all. They are still real child windows — take
+`AutomationId` (`CommandButton_1000`, `CommandButton_1001`) and `NativeWindowHandle`, then
+`SendMessage(window, BM_CLICK)`, which needs no foreground focus. Read every label out of the tree
+**before** clicking: the click destroys the dialog, and a destroyed element answers every property
+with `$null`. Windows PowerShell 5.1 decodes both a `-Command` line and a BOM-less `.ps1` as ANSI,
+so Russian labels must travel in the environment — a mangled title matches nothing and looks exactly
+like "the dialog never appeared". Finally, this dev machine runs something that presses the first
+button of any modal dialog seconds after it opens (a plain WinForms MessageBox launched from
+anywhere does it too), so an unattended offer can look like it accepted itself;
+[update-check.mjs](../desktop/update-check.mjs) reads and answers the dialog in one pre-warmed
+PowerShell pass to stay ahead of it.
 
 ## Deploy notes worth remembering
 

@@ -9,9 +9,10 @@ fn main() {
             .expect("VOICECHAT_DESKTOP_PRODUCTION_ORIGIN must be set for a release build");
         let origin = url::Url::parse(&origin)
             .expect("VOICECHAT_DESKTOP_PRODUCTION_ORIGIN must be a valid URL");
-        let update_check = std::env::var("VOICECHAT_DESKTOP_UPDATE_CHECK").as_deref() == Ok("1");
+        let allow_loopback_http =
+            std::env::var("VOICECHAT_DESKTOP_UPDATE_CHECK").as_deref() == Ok("1");
         assert!(
-            origin::valid_origin(&origin, update_check),
+            origin::valid_origin(&origin, allow_loopback_http),
             "VOICECHAT_DESKTOP_PRODUCTION_ORIGIN must be a root HTTPS origin without credentials"
         );
         assert!(

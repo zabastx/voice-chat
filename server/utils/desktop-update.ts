@@ -66,6 +66,15 @@ export interface EligibleDesktopRelease {
 	signatureAsset: DesktopReleaseAsset
 }
 
+function isPublicHttpsPage(url: string): boolean {
+	try {
+		const page = new URL(url)
+		return page.protocol === 'https:' && !page.username && !page.password
+	} catch {
+		return false
+	}
+}
+
 /**
  * Picks the Release the feed should offer: the highest `desktop-v<semver>`
  * version among published Releases that carry the full x64 artifact set.
@@ -85,6 +94,9 @@ export function selectDesktopRelease(
 		if (!record.tag.startsWith(TAG_PREFIX)) continue
 		const version = parseDesktopVersion(record.tag.slice(TAG_PREFIX.length))
 		if (!version) continue
+		// the Portable client opens this page in the member's browser, so a
+		// Release whose page is not a plain HTTPS URL is not offerable at all
+		if (!isPublicHttpsPage(record.releaseUrl)) continue
 		const artifacts = findWindowsArtifacts(record)
 		if (!artifacts) continue
 		const candidate: EligibleDesktopRelease = {

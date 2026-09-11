@@ -180,10 +180,7 @@ impl UpdateSource for HttpUpdateSource {
             .and_then(|value| Url::parse(value).map_err(|error| error.to_string()))?;
         let test_loopback_http = option_env!("VOICECHAT_DESKTOP_UPDATE_CHECK") == Some("1")
             && release_url.scheme() == "http"
-            && matches!(
-                release_url.host_str(),
-                Some("localhost" | "127.0.0.1" | "::1" | "[::1]")
-            );
+            && crate::origin::is_loopback(&release_url);
         if release_url.scheme() != "https" && !test_loopback_http {
             return Err("Update release_url must use HTTPS".into());
         }
@@ -263,7 +260,9 @@ fn record_result(app: &tauri::AppHandle, result: CheckResult) {
 }
 
 pub fn start_portable(app: tauri::AppHandle, origin: &Url) {
-    if option_env!("VOICECHAT_DESKTOP_MODE") == Some("installed") {
+    // only a build stamped portable opens a Release page by hand: an installed one
+    // waits for issue #10, and an unstamped dev build is neither
+    if option_env!("VOICECHAT_DESKTOP_MODE") != Some("portable") {
         return;
     }
 

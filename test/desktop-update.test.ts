@@ -149,6 +149,15 @@ describe('GET /api/desktop/update — which Release is offered', () => {
 		})
 	})
 
+	test('ignores a Release without a usable HTTPS page', async () => {
+		for (const releaseUrl of ['', 'not a URL', 'http://github.test/releases/tag/desktop-v0.2.0']) {
+			await withCatalog([release('0.2.0', { releaseUrl })], async (get) => {
+				const response = await get('?target=windows&arch=x86_64&version=0.1.0')
+				expect(response.status).toBe(204)
+			})
+		}
+	})
+
 	test('ignores a Release built for the wrong architecture', async () => {
 		const arm = release('0.3.0')
 		arm.assets = arm.assets.map((asset) => ({

@@ -20,6 +20,12 @@ const localAppData = process.env.LOCALAPPDATA
 if (!localAppData) throw new Error('LOCALAPPDATA is required')
 const installDirectory = join(localAppData, 'Voice Chat')
 const uninstaller = join(installDirectory, 'uninstall.exe')
+const desktopLog = join(localAppData, config.identifier, 'logs', 'voice-chat.log')
+
+const DIALOG_TITLE = 'Обновление Voice Chat'
+const ACCEPT = 'Открыть выпуск'
+const POSTPONE = 'Отложить'
+
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const listen = (server, port = 0) =>
 	new Promise((resolve, reject) => {
@@ -39,45 +45,73 @@ const waitFor = async (predicate, label, attempts = 120) => {
 	}
 	throw new Error(`Timed out waiting for ${label}`)
 }
-const powershell = (command, env = {}, stdio = 'pipe') =>
+const powershell = (command, env = {}) =>
 	execFileSync('powershell.exe', ['-NoProfile', '-Command', command], {
 		encoding: 'utf8',
-		stdio,
 		env: { ...process.env, ...env }
 	})?.trim()
 const hash = (path) => createHash('sha256').update(readFileSync(path)).digest('hex')
+const logEventCount = (event) =>
+	existsSync(desktopLog) ? readFileSync(desktopLog, 'utf8').split(event).length - 1 : 0
 
-function findDialogButton(label, click = false) {
-	try {
-		powershell(
-			[
-				'Add-Type -AssemblyName UIAutomationClient',
-				'$root = [System.Windows.Automation.AutomationElement]::RootElement',
-				'$title = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $env:VC_DIALOG_TITLE)',
-				'$dialog = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $title)',
-				'if ($null -eq $dialog) { exit 2 }',
-				'$name = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $env:VC_BUTTON)',
-				'$button = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $name)',
-				'if ($null -eq $button) { exit 3 }',
-				'if ($env:VC_CLICK -eq "1") {',
-				'  try {',
-				'    $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()',
-				'  } catch {',
-				'    try { $button.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern).DoDefaultAction() } catch { exit 5 }',
-				'  }',
-				'}',
-				'exit 0'
-			].join('; '),
-			{
-				VC_DIALOG_TITLE: 'Обновление Voice Chat',
-				VC_BUTTON: label,
-				VC_CLICK: click ? '1' : '0'
-			},
-			'ignore'
-		)
-		return true
-	} catch {
-		return false
+// The offer is a native task dialog, so there is no DOM to drive: UI Automation reads
+// what the member sees, and the custom buttons are real child windows, which a BM_CLICK
+// presses without having to steal foreground focus. Russian labels travel in the
+// environment because Windows PowerShell decodes a UTF-8 command line as ANSI.
+const dialogScript = [
+	'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+	'Add-Type -AssemblyName UIAutomationClient',
+	'Add-Type -AssemblyName UIAutomationTypes',
+	'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class VcNative { [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr wparam, IntPtr lparam); }\'',
+	'$desktop = [System.Windows.Automation.AutomationElement]::RootElement',
+	'$title = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $env:VC_DIALOG_TITLE)',
+	'$deadline = (Get-Date).AddMilliseconds([int]$env:VC_TIMEOUT_MS)',
+	'$dialog = $null',
+	'while ($null -eq $dialog -and (Get-Date) -lt $deadline) { $dialog = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $title); if ($null -eq $dialog) { Start-Sleep -Milliseconds 50 } }',
+	'if ($null -eq $dialog) { \'{"found":false}\'; exit 0 }',
+	'$elements = $dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)',
+	'$text = ($elements | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Text } | ForEach-Object { $_.Current.Name }) -join "`n"',
+	'$buttons = @($elements | Where-Object { $_.Current.AutomationId -like "CommandButton_*" } | ForEach-Object { @{ label = $_.Current.Name; window = $_.Current.NativeWindowHandle } })',
+	'$clicked = ""',
+	// read the dialog out before pressing anything: the click closes it, and a
+	// destroyed element answers every UI Automation property with $null
+	'if ($env:VC_CLICK) { $target = $buttons | Where-Object { $_.label -eq $env:VC_CLICK } | Select-Object -First 1; if ($null -ne $target) { [void][VcNative]::SendMessageW([IntPtr]$target.window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero); $clicked = $target.label } }',
+	'@{ found = $true; text = $text; buttons = @($buttons | ForEach-Object { $_.label }); clicked = $clicked } | ConvertTo-Json -Compress',
+	'exit 0'
+].join('; ')
+
+/**
+ * Waits for the update offer, reads it the way a member sees it and — when `click`
+ * is given — presses exactly the button carrying that Russian label.
+ */
+function readOffer({ click = '', timeout = 15_000 } = {}) {
+	const answer = JSON.parse(
+		powershell(dialogScript, {
+			VC_DIALOG_TITLE: DIALOG_TITLE,
+			VC_CLICK: click,
+			VC_TIMEOUT_MS: String(timeout)
+		})
+	)
+	return {
+		found: Boolean(answer.found),
+		text: (answer.text ?? '').replaceAll('\r\n', '\n'),
+		buttons: [answer.buttons ?? []].flat(),
+		clicked: answer.clicked ?? ''
+	}
+}
+
+function expectOffer(offer, version, notes) {
+	const message = [
+		`Доступна новая версия Voice Chat ${version}.`,
+		notes,
+		'Открыть страницу выпуска, чтобы скачать и вручную заменить Portable EXE?'
+	].join('\n\n')
+	if (!offer.found) throw new Error('The update offer never appeared')
+	if (offer.text !== message) {
+		throw new Error(`Offer read ${JSON.stringify(offer.text)}, expected ${JSON.stringify(message)}`)
+	}
+	if (offer.buttons.join(' | ') !== `${ACCEPT} | ${POSTPONE}`) {
+		throw new Error(`Offer carried ${JSON.stringify(offer.buttons)}`)
 	}
 }
 
@@ -105,24 +139,36 @@ try {
 			.replaceAll('{{origin}}', origin)
 			.replaceAll('{{run}}', randomUUID())
 	)
+	const releasePath = new URL(fixture.release_url).pathname
+	// what the feed answers next: the newer Release, the running one, or an outage
+	let feed = 'offer'
 	let feedRequests = 0
-	let releaseRequests = 0
+	let pageRequests = 0
+	const releaseRequests = []
 	const feedQueries = []
 	server = createHttpServer((request, response) => {
 		const url = new URL(request.url, origin)
 		if (url.pathname === '/api/desktop/update') {
 			feedRequests += 1
 			feedQueries.push(Object.fromEntries(url.searchParams))
+			if (feed === 'down') {
+				response.writeHead(503, { 'content-type': 'text/plain' })
+				response.end('fixture feed is down')
+				return
+			}
 			response.writeHead(200, { 'content-type': 'application/json' })
-			response.end(JSON.stringify(fixture))
+			response.end(
+				JSON.stringify(feed === 'offer' ? fixture : { ...fixture, version: config.version })
+			)
 			return
 		}
-		if (url.pathname === '/releases/tag/desktop-v0.1.0-alpha.2') {
-			releaseRequests += 1
+		if (url.pathname === releasePath) {
+			releaseRequests.push(url.href)
 			response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
 			response.end('<!doctype html><title>Fixture Desktop Release</title>')
 			return
 		}
+		pageRequests += 1
 		response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
 		response.end('<!doctype html><title>Voice Chat update check</title><main>ready</main>')
 	})
@@ -144,25 +190,82 @@ try {
 	copyFileSync(builtPortable, portable)
 	const originalHash = hash(portable)
 
+	let postponed = logEventCount('desktop update postponed')
 	child = spawn(portable, [], { stdio: 'ignore' })
 	await waitFor(() => feedRequests === 1, 'startup update check')
-	await waitFor(() => findDialogButton('Открыть выпуск'), 'Russian accept button')
-	await waitFor(() => findDialogButton('Отложить'), 'Russian postpone button')
-	await sleep(500)
-	if (releaseRequests !== 0) throw new Error('Update opened without member consent')
-	findDialogButton('Отложить', true)
-	await waitFor(() => !findDialogButton('Отложить'), 'postpone choice to close the update prompt')
-	if (releaseRequests !== 0) throw new Error('Postponing an update opened its Release page')
+	const declined = readOffer({ click: POSTPONE })
+	expectOffer(declined, fixture.version, fixture.notes)
+	if (declined.clicked !== POSTPONE) throw new Error(`Could not press «${POSTPONE}»`)
+	await waitFor(
+		() => logEventCount('desktop update postponed') > postponed,
+		'the postponed offer in the local desktop log'
+	)
+	if (releaseRequests.length !== 0) throw new Error('Postponing an update opened its Release page')
 	if (child.exitCode !== null) throw new Error('Postponing stopped the Portable EXE')
 	console.log('PASS update: postponed offer stays in the Portable EXE')
 	await stop(child)
 
 	child = spawn(portable, [], { stdio: 'ignore' })
 	await waitFor(() => feedRequests === 2, 'second startup update check')
-	await waitFor(() => findDialogButton('Открыть выпуск'), 'Russian accept button')
-	await waitFor(() => findDialogButton('Отложить'), 'Russian postpone button')
-	findDialogButton('Открыть выпуск', true)
-	await waitFor(() => releaseRequests > 0, 'exact fixture Release page in the system browser', 240)
+	const accepted = readOffer({ click: ACCEPT })
+	expectOffer(accepted, fixture.version, fixture.notes)
+	if (accepted.clicked !== ACCEPT) throw new Error(`Could not press «${ACCEPT}»`)
+	await waitFor(
+		() => releaseRequests.length > 0,
+		'exact fixture Release page in the system browser',
+		240
+	)
+	const expectedReleaseUrl = new URL(fixture.release_url).href
+	if (releaseRequests.length !== 1 || releaseRequests[0] !== expectedReleaseUrl) {
+		throw new Error(
+			`Opened ${JSON.stringify(releaseRequests)} instead of ${JSON.stringify(expectedReleaseUrl)}`
+		)
+	}
+	if (child.exitCode !== null) throw new Error('Opening a release stopped the Portable EXE')
+	if (hash(portable) !== originalHash) throw new Error('Portable EXE replaced its running file')
+	if (existsSync(installDirectory) || existsSync(uninstaller)) {
+		throw new Error('Portable update path started an installation')
+	}
+	console.log('PASS update: accepted offer opens the exact fixture Release page')
+	console.log('PASS portable: EXE stays running and performs no install or self-replacement')
+	await stop(child)
+
+	feed = 'running'
+	postponed = logEventCount('desktop update postponed')
+	const opened = logEventCount('desktop update release opened')
+	child = spawn(portable, [], { stdio: 'ignore' })
+	await waitFor(() => feedRequests === 3, 'update check against the running version')
+	const offeredItself = readOffer({ timeout: 5000 })
+	if (offeredItself.found) {
+		throw new Error(`The running version was offered as an update: ${offeredItself.text}`)
+	}
+	if (releaseRequests.length !== 1) throw new Error('The running version opened a Release page')
+	if (logEventCount('desktop update postponed') !== postponed) {
+		throw new Error('The running version produced an offer to postpone')
+	}
+	if (logEventCount('desktop update release opened') !== opened) {
+		throw new Error('The running version opened a Release')
+	}
+	console.log('PASS update: the running version is never offered as an update')
+	await stop(child)
+
+	feed = 'down'
+	const failures = logEventCount('desktop update check failed')
+	const pagesBefore = pageRequests
+	child = spawn(portable, [], { stdio: 'ignore' })
+	await waitFor(() => feedRequests === 4, 'update check against a failing feed')
+	await waitFor(
+		() => logEventCount('desktop update check failed') > failures,
+		'the failed update check in the local desktop log'
+	)
+	const outage = readOffer({ timeout: 3000 })
+	if (outage.found) throw new Error('A failing feed produced an update offer')
+	await waitFor(
+		() => pageRequests > pagesBefore,
+		'the Web Release loading despite the failed check'
+	)
+	if (child.exitCode !== null) throw new Error('A failed update check stopped the Portable EXE')
+	console.log('PASS update: a failing feed stays a local diagnostic')
 
 	if (
 		feedQueries.some(
@@ -172,13 +275,10 @@ try {
 	) {
 		throw new Error(`Unexpected update query: ${JSON.stringify(feedQueries)}`)
 	}
-	if (child.exitCode !== null) throw new Error('Opening a release stopped the Portable EXE')
 	if (hash(portable) !== originalHash) throw new Error('Portable EXE replaced its running file')
 	if (existsSync(installDirectory) || existsSync(uninstaller)) {
 		throw new Error('Portable update path started an installation')
 	}
-	console.log('PASS update: accepted offer opens the exact fixture Release page')
-	console.log('PASS portable: EXE stays running and performs no install or self-replacement')
 } finally {
 	await stop(child).catch(() => child?.kill())
 	await close(server)

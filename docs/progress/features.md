@@ -17,13 +17,16 @@ postponing, closing, or pressing Escape does nothing until the next scheduled ch
 invokes Tauri's updater, an installer, or self-replacement. Feed and opener failures become fixed,
 bounded local log events and cannot delay loading the Web Release. The build stamps `portable` or
 `installed` into the binary, rather than inferring it from a filename that a member may rename;
-installed builds deliberately skip this path until issue #10 supplies their updater action.
+only the `portable` stamp takes this path, so an installed build waits for issue #10 and an
+unstamped development build offers nothing at all.
 
-`desktop:update-check` builds and drives the real Portable EXE against a loopback fixture, using a
-compile-time test allowance for loopback HTTP while ordinary release builds remain HTTPS-only. It
-verifies both Russian actions, the exact Release URL, process survival, an unchanged EXE hash, and
-the absence of an install. The Windows CI job runs it after the installer harness. No Desktop
-Release has been published and nothing is deployed.
+`desktop:update-check` builds and drives the real Portable EXE through four launches against a
+loopback fixture feed, using a compile-time test allowance for loopback HTTP while ordinary release
+builds remain HTTPS-only. It reads the native offer with UI Automation and presses the exact Russian
+label with a `BM_CLICK` (GOTCHAS 28), covering postpone, accept with the exact Release URL, the
+running version drawing no offer at all, and a `503` feed leaving only a log line. Each launch also
+checks process survival, an unchanged EXE hash, and the absence of an install. The Windows CI job
+runs it after the installer harness. No Desktop Release has been published and nothing is deployed.
 
 ## Desktop Update feed — server side
 

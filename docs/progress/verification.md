@@ -7,26 +7,33 @@ it proved. The last section lists what is still **not** verified. Part of
 ## Desktop 0.1.0-alpha.1 — Portable update offer
 
 2026-09-11, local Windows x64, real release-mode Portable EXE. `cargo test` passed all 16 native
-tests, and `bun run desktop:update-check` drove the compiled executable against
-[desktop-portable-update.json](../../test/fixtures/desktop-portable-update.json). The harness uses a
-compile-time-only loopback HTTP allowance so it needs no trusted test certificate; ordinary release
-builds still reject non-HTTPS origins and Release URLs.
+tests, and `bun run desktop:update-check` built the artifact against a loopback fixture feed and
+drove it through four launches, answering the native offer through UI Automation and a `BM_CLICK`
+on the exact Russian label (GOTCHAS 28). The harness uses a compile-time-only loopback HTTP
+allowance so it needs no trusted test certificate; ordinary release builds still reject non-HTTPS
+origins and Release URLs.
 
 Verified in the real executable:
 
-- The feed was queried at startup with `target=windows`, `arch=x86_64`, and the binary's current
-  `0.1.0-alpha.1` version. A separate no-input observation left the dialog waiting for ten seconds
-  and made no Release-page request.
-- UI Automation found the native Russian title, body, «Открыть выпуск», and «Отложить». The first
-  run selected «Отложить»: the dialog closed, no Release page opened, and Portable stayed alive.
-- A second launch accepted `0.1.0-alpha.2` and opened the exact unique `release_url` supplied by the
-  fixture in the system browser. Portable stayed alive, its SHA-256 hash was unchanged, and neither
-  the application install directory nor `uninstall.exe` appeared.
+- Every launch queried the feed once at startup with `target=windows`, `arch=x86_64`, and the
+  binary's own `0.1.0-alpha.1` version.
+- The offer read back exactly the Russian message the shell formats — version, fixture notes, and
+  the manual-replacement question — above «Открыть выпуск» and «Отложить», in that order.
+- Launch 1 pressed «Отложить»: the log recorded `desktop update postponed`, no Release page was
+  requested, and the Portable EXE stayed alive.
+- Launch 2 pressed «Открыть выпуск»: the system browser fetched the exact unique `release_url` the
+  fixture supplied, exactly once. Portable stayed alive, its SHA-256 hash was unchanged, and neither
+  the install directory nor `uninstall.exe` appeared.
+- Launch 3 answered with the running `0.1.0-alpha.1`: no dialog appeared within five seconds, no
+  Release page was opened, and neither update log event was written.
+- Launch 4 answered `503`: the shell logged `desktop update check failed`, showed no dialog, still
+  loaded the Web Release, and kept running.
 - Coordinator tests cover equal and older versions producing no prompt, SemVer precedence, a cold
   feed failure producing only a diagnostic, concurrent checks collapsing to one,
   and the startup/check/wait-six-hours ordering without sleeping for six wall-clock hours.
-- The build embeds `portable` or `installed`; the installed form skips the manual action. This keeps
-  issue #9 from accidentally implementing the signed installed-update path owned by issue #10.
+- The build embeds `portable` or `installed`, and only the `portable` stamp reaches the manual
+  action. This keeps issue #9 from accidentally implementing the signed installed-update path owned
+  by issue #10, and keeps an unstamped development build from offering a manual replacement.
 
 Not yet verified: six real hours or sleep/wake between checks; the deployed VPS feed; a published
 `desktop-v*` GitHub Release; a member manually replacing a renamed Portable EXE; and the installed

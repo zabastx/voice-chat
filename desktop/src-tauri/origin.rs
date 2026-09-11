@@ -1,10 +1,13 @@
-pub fn valid_origin(url: &url::Url, allow_loopback_http: bool) -> bool {
-    let loopback = matches!(
+pub fn is_loopback(url: &url::Url) -> bool {
+    matches!(
         url.host_str(),
         Some("localhost" | "127.0.0.1" | "::1" | "[::1]")
-    );
-    let valid_scheme =
-        url.scheme() == "https" || (allow_loopback_http && url.scheme() == "http" && loopback);
+    )
+}
+
+pub fn valid_origin(url: &url::Url, allow_loopback_http: bool) -> bool {
+    let valid_scheme = url.scheme() == "https"
+        || (allow_loopback_http && url.scheme() == "http" && is_loopback(url));
 
     valid_scheme
         && !url.cannot_be_a_base()

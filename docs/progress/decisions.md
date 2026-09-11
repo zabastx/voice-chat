@@ -83,7 +83,9 @@ rejected because Portable can be renamed and both forms share one profile. The c
 Tauri `Ready`, then repeats every six hours; feed and action failures produce fixed local diagnostics
 and do not affect the remote Web Release. `VOICECHAT_DESKTOP_UPDATE_CHECK=1` is a compile-time-only
 test affordance that permits loopback HTTP for the real-EXE fixture harness; normal release builds
-still require a root HTTPS origin and HTTPS Release URL.
+still require a root HTTPS origin and HTTPS Release URL. The feed applies the same rule from its own
+side: a Release whose page is not a credential-free HTTPS URL is skipped rather than offered, since
+that URL is what a member's browser is sent to.
 
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
