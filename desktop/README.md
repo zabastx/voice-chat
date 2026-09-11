@@ -23,6 +23,7 @@ Release-сборка принимает только один HTTPS origin, вс
 ```powershell
 bun install
 $env:VOICECHAT_DESKTOP_PRODUCTION_ORIGIN = 'https://chat.example.com'
+$env:VOICECHAT_DESKTOP_UPDATER_PUBKEY = '<public half of the release signing key>'
 bun run desktop:build
 bun run desktop:run
 ```
@@ -197,11 +198,19 @@ updater, installer и не заменяет собственный файл. О�
 проверяет обе кнопки, точный URL, неизменность EXE и отсутствие установки. Harness компилирует
 одноразовое разрешение только для loopback HTTP; обычная release-сборка и Release URL по-прежнему
 требуют HTTPS. Режим `portable` / `installed` встраивается при сборке, поэтому переименование EXE
-его не меняет. Installed updater, ожидание выхода из Voice Channel и уведомления относятся к
-tickets #10–#12; сигнал активного звонка уже приходит через Native Bridge.
+его не меняет.
+
+Installed-клиент использует тот же coordinator, но спрашивает «Установить» / «Отложить» и ставит
+обновление через `tauri-plugin-updater`: подпись проверяется против публичного ключа, вшитого при
+сборке, а установка ждёт окончания разговора в голосовом канале. `bun run desktop:installed-update-check`
+собирает два подписанных installer'а из текущего дерева и прогоняет весь путь: отложенное обновление
+ничего не качает, артефакт с чужой подписью отклоняется, согласованная установка ждёт конца звонка,
+а после него клиент перезапускается уже обновлённым и с сохранённым Sign-in. Приватный ключ в
+репозитории не хранится: harness каждый раз создаёт одноразовую пару, а боевой ключ живёт в
+GitHub Environment `desktop-release` (ticket #12). Уведомления остаются ticket #11.
 
 ## Оставшиеся ограничения
 
-Installed updater и notification contract реализуются в tickets #10–#12.
+Notification contract реализуется в ticket #11, подписанный релизный workflow — в #12.
 Push-to-talk отложен. Реальные устройства, screen share, сон и пробуждение, embedded players и
 длительный звонок требуют отдельной проверки в WebView2.

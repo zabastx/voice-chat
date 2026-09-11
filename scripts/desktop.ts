@@ -57,16 +57,41 @@ if (action === 'build') {
 		throw new Error('Production origin должен быть корневым HTTPS origin без credentials')
 	}
 	env.VOICECHAT_DESKTOP_PRODUCTION_ORIGIN = url.origin
+	if (!env.VOICECHAT_DESKTOP_UPDATER_PUBKEY) {
+		throw new Error(
+			'Задайте VOICECHAT_DESKTOP_UPDATER_PUBKEY: артефакт без ключа не сможет проверить обновление'
+		)
+	}
 }
 
-if (action === 'compile') env.VOICECHAT_DESKTOP_MODE = 'portable'
+if (action === 'compile') {
+	env.VOICECHAT_DESKTOP_MODE = 'portable'
+	// A compile exists to drive the shell, not to ship it: the portable path never reaches
+	// the updater, so it carries a value that could not be mistaken for a release key.
+	env.VOICECHAT_DESKTOP_UPDATER_PUBKEY ??= 'compile-only-not-a-release-key'
+}
 
 const tauriRoot = join(desktop, 'src-tauri')
 const exe = join(tauriRoot, 'target', 'release', 'voice-chat.exe')
 const cli = join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
 
+/**
+ * What this build overrides in tauri.conf.json. The updater endpoint and key belong to a
+ * release, not to the repository: the version lets a harness build a second artifact
+ * without touching tracked files, and the loopback allowance exists only for the
+ * real-executable update harness, which has no trusted certificate to serve.
+ */
+function configOverride() {
+	const override: Record<string, unknown> = {}
+	if (env.VOICECHAT_DESKTOP_VERSION) override.version = env.VOICECHAT_DESKTOP_VERSION
+	if (env.VOICECHAT_DESKTOP_UPDATE_CHECK === '1') {
+		override.plugins = { updater: { dangerousInsecureTransportProtocol: true } }
+	}
+	return Object.keys(override).length > 0 ? ['--config', JSON.stringify(override)] : []
+}
+
 function runTauri(command: string, args: string[] = []) {
-	const result = spawnSync(process.execPath, [cli, command, ...args], {
+	const result = spawnSync(process.execPath, [cli, command, ...args, ...configOverride()], {
 		cwd: desktop,
 		env,
 		stdio: 'inherit'
@@ -89,7 +114,7 @@ if (action === 'run') {
 	const config = JSON.parse(readFileSync(join(tauriRoot, 'tauri.conf.json'), 'utf8')) as {
 		version: string
 	}
-	const names = desktopReleaseArtifacts(config.version)
+	const names = desktopReleaseArtifacts(env.VOICECHAT_DESKTOP_VERSION ?? config.version)
 	const bundleDirectory = join(tauriRoot, 'target', 'release', 'bundle', 'nsis')
 	const portable = join(bundleDirectory, names.portable)
 	const setup = join(bundleDirectory, names.setup)

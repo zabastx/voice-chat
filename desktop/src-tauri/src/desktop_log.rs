@@ -25,6 +25,11 @@ pub enum DesktopEvent {
     UpdateCheckFailed,
     UpdatePostponed,
     UpdateReleaseOpened,
+    UpdateReleaseFailed,
+    UpdateWaitingForCall,
+    UpdateInstallStarted,
+    UpdateInstalled,
+    UpdateInstallFailed,
 }
 
 impl DesktopEvent {
@@ -44,6 +49,11 @@ impl DesktopEvent {
             Self::UpdateCheckFailed => "desktop update check failed",
             Self::UpdatePostponed => "desktop update postponed",
             Self::UpdateReleaseOpened => "desktop update release opened",
+            Self::UpdateReleaseFailed => "desktop update release page failed",
+            Self::UpdateWaitingForCall => "desktop update waiting for voice channel",
+            Self::UpdateInstallStarted => "desktop update install started",
+            Self::UpdateInstalled => "desktop update installed",
+            Self::UpdateInstallFailed => "desktop update install failed",
         }
     }
 }

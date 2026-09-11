@@ -87,6 +87,19 @@ still require a root HTTPS origin and HTTPS Release URL. The feed applies the sa
 side: a Release whose page is not a credential-free HTTPS URL is skipped rather than offered, since
 that URL is what a member's browser is sent to.
 
+**Installed Desktop updates, 2026-09-11** (issue #10): the installed client shares the
+coordinator with Portable and differs only in prompt and action. Signature verification is
+`tauri-plugin-updater`'s, against a public key stamped in at build time rather than committed —
+the private half belongs to the `desktop-release` environment (issue #12), so no key material
+lives in this repository and every harness mints its own. An agreed install waits for the Voice
+Channel to end, polling the Native Bridge flag every five seconds, and gives up after four hours
+so the deferral can never outlive the six-hour cadence. The shell asks the plugin to install
+rather than downloading anything itself, and the NSIS installer restarts the client, so the
+action never returns on success. Loopback HTTP for the updater endpoint is a build-time test
+affordance of the real-executable harnesses (`VOICECHAT_DESKTOP_UPDATE_CHECK=1`), which also
+lets a harness build a second versioned artifact through a Tauri config override instead of
+editing tracked files.
+
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs

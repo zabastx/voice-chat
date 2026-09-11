@@ -89,5 +89,11 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     Runtime. [#9 Portable updates](https://github.com/zabastx/voice-chat/issues/9) is built and
     verified with the real Portable EXE against a fixture feed: it checks at app readiness and every
     six hours without overlap, offers Russian «Открыть выпуск» / «Отложить» actions, and opens the
-    exact GitHub Release without installing or replacing itself. The current implementation frontier
-    is [#10 installed updates](https://github.com/zabastx/voice-chat/issues/10).
+    exact GitHub Release without installing or replacing itself.
+    [#10 installed updates](https://github.com/zabastx/voice-chat/issues/10) is built and verified
+    against two real signed installers: the same coordinator asks «Установить» / «Отложить», an
+    agreed install waits out a live Voice Channel, `tauri-plugin-updater` refuses an artifact signed
+    with another key, and the accepted one restarts the client with its Sign-in intact. The updater
+    public key is a build input; the private half belongs to the `desktop-release` environment in
+    #12. The frontier is now [#11 notifications](https://github.com/zabastx/voice-chat/issues/11) and
+    [#12 the signed release workflow](https://github.com/zabastx/voice-chat/issues/12).

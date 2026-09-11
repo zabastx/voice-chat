@@ -293,6 +293,18 @@ anywhere does it too), so an unattended offer can look like it accepted itself;
 [update-check.mjs](../desktop/update-check.mjs) reads and answers the dialog in one pre-warmed
 PowerShell pass to stay ahead of it.
 
+### 29. The updater plugin needs a `pubkey` in the config even when the code sets one
+
+`plugins.updater.pubkey` is a required field of the plugin config, so the key has to be present in
+[tauri.conf.json](../desktop/src-tauri/tauri.conf.json) or the plugin fails to initialise — but the
+release key is a secret, so the committed value is empty and the real one arrives through
+`tauri_plugin_updater::Builder::pubkey`, which overwrites the config at setup. Two more traps in the
+same path: an HTTP endpoint is rejected unless the config also carries
+`dangerousInsecureTransportProtocol` (the real-executable harness gets it through the same
+`--config` override that gives the second artifact its version), and on Windows a successful
+`download_and_install` never returns — it hands the NSIS installer `/P /R` and calls
+`std::process::exit(0)`, so the proof of success is the restarted client, not a return value.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

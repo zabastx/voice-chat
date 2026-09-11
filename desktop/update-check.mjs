@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { desktopReleaseArtifacts } from '../scripts/desktop-artifacts.ts'
+import { generateUpdaterKey } from '../scripts/desktop-signing.ts'
+import { expectOffer, offerMessage, OPEN_RELEASE, POSTPONE, readOffer } from './update-dialog.mjs'
 
 const root = join(import.meta.dirname, '..')
 const tauriRoot = join(import.meta.dirname, 'src-tauri')
@@ -22,9 +24,7 @@ const installDirectory = join(localAppData, 'Voice Chat')
 const uninstaller = join(installDirectory, 'uninstall.exe')
 const desktopLog = join(localAppData, config.identifier, 'logs', 'voice-chat.log')
 
-const DIALOG_TITLE = 'Обновление Voice Chat'
-const ACCEPT = 'Открыть выпуск'
-const POSTPONE = 'Отложить'
+const QUESTION = 'Открыть страницу выпуска, чтобы скачать и вручную заменить Portable EXE?'
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const listen = (server, port = 0) =>
@@ -45,75 +45,9 @@ const waitFor = async (predicate, label, attempts = 120) => {
 	}
 	throw new Error(`Timed out waiting for ${label}`)
 }
-const powershell = (command, env = {}) =>
-	execFileSync('powershell.exe', ['-NoProfile', '-Command', command], {
-		encoding: 'utf8',
-		env: { ...process.env, ...env }
-	})?.trim()
 const hash = (path) => createHash('sha256').update(readFileSync(path)).digest('hex')
 const logEventCount = (event) =>
 	existsSync(desktopLog) ? readFileSync(desktopLog, 'utf8').split(event).length - 1 : 0
-
-// The offer is a native task dialog, so there is no DOM to drive: UI Automation reads
-// what the member sees, and the custom buttons are real child windows, which a BM_CLICK
-// presses without having to steal foreground focus. Russian labels travel in the
-// environment because Windows PowerShell decodes a UTF-8 command line as ANSI.
-const dialogScript = [
-	'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-	'Add-Type -AssemblyName UIAutomationClient',
-	'Add-Type -AssemblyName UIAutomationTypes',
-	'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class VcNative { [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr wparam, IntPtr lparam); }\'',
-	'$desktop = [System.Windows.Automation.AutomationElement]::RootElement',
-	'$title = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $env:VC_DIALOG_TITLE)',
-	'$deadline = (Get-Date).AddMilliseconds([int]$env:VC_TIMEOUT_MS)',
-	'$dialog = $null',
-	'while ($null -eq $dialog -and (Get-Date) -lt $deadline) { $dialog = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $title); if ($null -eq $dialog) { Start-Sleep -Milliseconds 50 } }',
-	'if ($null -eq $dialog) { \'{"found":false}\'; exit 0 }',
-	'$elements = $dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)',
-	'$text = ($elements | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Text } | ForEach-Object { $_.Current.Name }) -join "`n"',
-	'$buttons = @($elements | Where-Object { $_.Current.AutomationId -like "CommandButton_*" } | ForEach-Object { @{ label = $_.Current.Name; window = $_.Current.NativeWindowHandle } })',
-	'$clicked = ""',
-	// read the dialog out before pressing anything: the click closes it, and a
-	// destroyed element answers every UI Automation property with $null
-	'if ($env:VC_CLICK) { $target = $buttons | Where-Object { $_.label -eq $env:VC_CLICK } | Select-Object -First 1; if ($null -ne $target) { [void][VcNative]::SendMessageW([IntPtr]$target.window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero); $clicked = $target.label } }',
-	'@{ found = $true; text = $text; buttons = @($buttons | ForEach-Object { $_.label }); clicked = $clicked } | ConvertTo-Json -Compress',
-	'exit 0'
-].join('; ')
-
-/**
- * Waits for the update offer, reads it the way a member sees it and — when `click`
- * is given — presses exactly the button carrying that Russian label.
- */
-function readOffer({ click = '', timeout = 15_000 } = {}) {
-	const answer = JSON.parse(
-		powershell(dialogScript, {
-			VC_DIALOG_TITLE: DIALOG_TITLE,
-			VC_CLICK: click,
-			VC_TIMEOUT_MS: String(timeout)
-		})
-	)
-	return {
-		found: Boolean(answer.found),
-		text: (answer.text ?? '').replaceAll('\r\n', '\n'),
-		buttons: [answer.buttons ?? []].flat(),
-		clicked: answer.clicked ?? ''
-	}
-}
-
-function expectOffer(offer, version, notes) {
-	const message = [
-		`Доступна новая версия Voice Chat ${version}.`,
-		notes,
-		'Открыть страницу выпуска, чтобы скачать и вручную заменить Portable EXE?'
-	].join('\n\n')
-	if (!offer.found) throw new Error('The update offer never appeared')
-	if (offer.text !== message) {
-		throw new Error(`Offer read ${JSON.stringify(offer.text)}, expected ${JSON.stringify(message)}`)
-	}
-	if (offer.buttons.join(' | ') !== `${ACCEPT} | ${POSTPONE}`) {
-		throw new Error(`Offer carried ${JSON.stringify(offer.buttons)}`)
-	}
-}
 
 async function stop(child) {
 	if (!child || child.exitCode !== null) return
@@ -182,7 +116,8 @@ try {
 			env: {
 				...process.env,
 				VOICECHAT_DESKTOP_PRODUCTION_ORIGIN: origin,
-				VOICECHAT_DESKTOP_UPDATE_CHECK: '1'
+				VOICECHAT_DESKTOP_UPDATE_CHECK: '1',
+				VOICECHAT_DESKTOP_UPDATER_PUBKEY: generateUpdaterKey(temp).publicKey
 			}
 		})
 	}
@@ -194,7 +129,10 @@ try {
 	child = spawn(portable, [], { stdio: 'ignore' })
 	await waitFor(() => feedRequests === 1, 'startup update check')
 	const declined = readOffer({ click: POSTPONE })
-	expectOffer(declined, fixture.version, fixture.notes)
+	expectOffer(declined, {
+		message: offerMessage(fixture.version, fixture.notes, QUESTION),
+		accept: OPEN_RELEASE
+	})
 	if (declined.clicked !== POSTPONE) throw new Error(`Could not press «${POSTPONE}»`)
 	await waitFor(
 		() => logEventCount('desktop update postponed') > postponed,
@@ -207,9 +145,12 @@ try {
 
 	child = spawn(portable, [], { stdio: 'ignore' })
 	await waitFor(() => feedRequests === 2, 'second startup update check')
-	const accepted = readOffer({ click: ACCEPT })
-	expectOffer(accepted, fixture.version, fixture.notes)
-	if (accepted.clicked !== ACCEPT) throw new Error(`Could not press «${ACCEPT}»`)
+	const accepted = readOffer({ click: OPEN_RELEASE })
+	expectOffer(accepted, {
+		message: offerMessage(fixture.version, fixture.notes, QUESTION),
+		accept: OPEN_RELEASE
+	})
+	if (accepted.clicked !== OPEN_RELEASE) throw new Error(`Could not press «${OPEN_RELEASE}»`)
 	await waitFor(
 		() => releaseRequests.length > 0,
 		'exact fixture Release page in the system browser',

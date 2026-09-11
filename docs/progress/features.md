@@ -4,6 +4,38 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop 0.1.0-alpha.1 — installed update
+
+Issue #10 is built on `prototype/tauri-windows`. The installed client runs the same
+coordinator as Portable and differs only in its prompt and its action: «Установить» /
+«Отложить», and an install that waits out a live Voice Channel. The wait reads the Native
+Bridge flag (`setVoiceActive`) and nothing else, polls every five seconds, and gives up
+after four hours — shorter than the six-hour cadence, so a page that never clears the flag
+ends up asking the member again instead of pinning the coordinator.
+
+The install itself is `tauri-plugin-updater`: it re-reads the same manifest and accepts the
+artifact only if its signature matches the public key stamped into the build, then hands the
+NSIS installer `/P /R` and exits, so the client comes back on its own. Reading the manifest a
+second time is deliberate — a Release withdrawn between the offer and the agreement leaves the
+plugin with nothing to install, so the client records `desktop update install failed` and asks
+again at the next check instead of installing what the feed no longer offers, which is exactly
+the recovery [ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md)
+describes. The remote page reaches none of this — the bridge exposes one boolean and no updater
+authority at all ([ADR 0013](../adr/0013-remote-ui-behind-versioned-native-bridge.md)).
+
+The public half of the signing key is a build input (`VOICECHAT_DESKTOP_UPDATER_PUBKEY`),
+asserted by `build.rs` and `scripts/desktop.ts` for every release build, because the private
+half is a secret of the `desktop-release` environment in issue #12 and never lives in this
+repository. `desktop:installed-update-check` therefore mints a throwaway pair per run
+([desktop-signing.ts](../../scripts/desktop-signing.ts)).
+
+`desktop:installed-update-check` builds two real signed installers from this working tree —
+the second one only differs by the version a Tauri config override gives it — then installs
+the first and drives the whole path: a postponed offer downloads nothing, an artifact signed
+with another key is refused, an agreed install waits out a call, and releasing the call
+installs, restarts, and comes back signed in. It uninstalls itself afterwards, so the
+Windows CI job runs it between the installer harness and the Portable one.
+
 ## Desktop 0.1.0-alpha.1 — Portable update offer
 
 Issue #9 is built on `prototype/tauri-windows`. A shared native coordinator starts on Tauri's

@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright-core'
 
 import { desktopReleaseArtifacts } from '../scripts/desktop-artifacts.ts'
+import { generateUpdaterKey } from '../scripts/desktop-signing.ts'
 
 const root = join(import.meta.dirname, '..')
 const tauriRoot = join(import.meta.dirname, 'src-tauri')
@@ -168,7 +169,11 @@ try {
 		execFileSync('bun', ['scripts/desktop.ts', 'build'], {
 			cwd: root,
 			stdio: 'inherit',
-			env: { ...process.env, VOICECHAT_DESKTOP_PRODUCTION_ORIGIN: origin }
+			env: {
+				...process.env,
+				VOICECHAT_DESKTOP_PRODUCTION_ORIGIN: origin,
+				VOICECHAT_DESKTOP_UPDATER_PUBKEY: generateUpdaterKey(temp).publicKey
+			}
 		})
 	}
 	if (!existsSync(setup) || !existsSync(portable)) {

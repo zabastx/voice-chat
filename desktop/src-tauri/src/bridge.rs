@@ -140,9 +140,9 @@ impl Bridge {
     /// a cross-origin embed that navigates the *top* frame with user activation reaches
     /// `handle` while the main document is still the trusted origin. It cannot read this
     /// token, and the token never enters the DOM or a committed URL.
-    pub fn script(&self, origin: &tauri::Url) -> String {
+    pub fn script(&self, origin: &tauri::Url, desktop_version: &str) -> String {
         let expected = json_literal(&origin.origin().ascii_serialization());
-        let desktop_version = json_literal(env!("CARGO_PKG_VERSION"));
+        let desktop_version = json_literal(desktop_version);
         let token = json_literal(&self.token);
         let capabilities = serde_json::to_string(CAPABILITIES).unwrap_or_else(|_| "[]".into());
         format!(
@@ -274,7 +274,10 @@ mod tests {
     #[test]
     fn installs_the_descriptor_on_the_trusted_origin_only() {
         let bridge = Bridge::default();
-        let script = bridge.script(&tauri::Url::parse("https://chat.example.com/").unwrap());
+        let script = bridge.script(
+            &tauri::Url::parse("https://chat.example.com/").unwrap(),
+            "0.1.0-alpha.1",
+        );
         assert!(script.contains(r#""https://chat.example.com""#));
         assert!(script.contains(r#"capabilities: Object.freeze(["voice-lifecycle"])"#));
         assert!(script.contains("bridgeVersion: 1"));
@@ -284,7 +287,10 @@ mod tests {
     #[test]
     fn gives_each_process_its_own_token() {
         let script = |bridge: &Bridge| {
-            bridge.script(&tauri::Url::parse("https://chat.example.com/").unwrap())
+            bridge.script(
+                &tauri::Url::parse("https://chat.example.com/").unwrap(),
+                "0.1.0-alpha.1",
+            )
         };
         assert_ne!(script(&Bridge::default()), script(&Bridge::default()));
     }

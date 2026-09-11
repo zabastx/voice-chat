@@ -45,5 +45,8 @@ jobs:
       - name: Check NSIS and Portable delivery
         run: bun run desktop:install-check
 
+      - name: Check installed update delivery
+        run: bun run desktop:installed-update-check
+
       - name: Check Portable update offer
         run: bun run desktop:update-check

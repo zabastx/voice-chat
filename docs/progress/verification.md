@@ -4,6 +4,41 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop 0.1.0-alpha.1 — installed update
+
+2026-09-11, local Windows x64, two real signed NSIS installers built from this working tree
+(`0.1.0-alpha.1` and `0.1.0-alpha.1.1`, the second one only differing by a Tauri config version
+override). `cargo test` passed all 20 native tests, and `bun run desktop:installed-update-check`
+drove the installed client against a loopback fixture feed with a throwaway updater key pair.
+
+Verified in the real installed client:
+
+- The offer read back exactly the Russian message the shell formats, above «Установить» and
+  «Отложить», in that order.
+- «Отложить» left `desktop update postponed` in the log, requested the installer asset zero times,
+  and left the installed version untouched.
+- The remote page could not reach the updater: `invoke('plugin:updater|check')` answered
+  «Command plugin:updater|check not allowed by ACL», and the bridge descriptor still carried only
+  `desktopVersion`, `bridgeVersion`, `capabilities` and `setVoiceActive`, which refused a
+  non-boolean.
+- An installer signed with a different key was downloaded and then refused:
+  `desktop update install failed`, the installed version unchanged, the client still running.
+- With the page reporting a live Voice Channel, the agreed install logged
+  `desktop update waiting for voice channel` and requested nothing for fifteen seconds — three poll
+  intervals — while the client kept running.
+- Clearing the flag downloaded the signed installer, exited the client, replaced it with
+  `0.1.0-alpha.1.1`, and the restarted client both checked in with its new version and loaded the
+  Web Release carrying the same Sign-in cookie.
+- Uninstalling the updated client removed the application, the shared profile and the roaming
+  profile.
+- Coordinator tests cover the deferral itself without waiting out any clock: a call that ends after
+  three polls installs once, no call installs immediately, and a call that never ends returns the
+  update to the next check rather than installing or holding the coordinator.
+
+Not yet verified: a real published Release fetched over HTTPS (the harness serves loopback HTTP
+through the compile-time allowance), six real hours between checks, sleep/wake across a deferral, an
+update agreed during a real LiveKit call rather than a page-driven flag, and Authenticode signing.
+
 ## Desktop 0.1.0-alpha.1 — Portable update offer
 
 2026-09-11, local Windows x64, real release-mode Portable EXE. `cargo test` passed all 16 native

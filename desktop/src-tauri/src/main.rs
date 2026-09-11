@@ -418,6 +418,14 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // The signing key is a release secret, so the public half is stamped in at build
+        // time rather than committed: a development build simply has no updater key and
+        // never reaches the updater anyway (see `update::start`).
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(option_env!("VOICECHAT_DESKTOP_UPDATER_PUBKEY").unwrap_or_default())
+                .build(),
+        )
         .setup(|app| {
             let log = DesktopLog::new(app.path().app_log_dir()?)?;
             app.manage(log);
@@ -446,7 +454,9 @@ fn main() {
                     .inner_size(1180.0, 780.0)
                     .min_inner_size(720.0, 480.0)
                     .initialization_script(health_check_script(&url))
-                    .initialization_script(bridge.script(&url))
+                    .initialization_script(
+                        bridge.script(&url, &app.package_info().version.to_string()),
+                    )
                     .on_navigation(move |destination| {
                         let loads_document = match (destination.scheme(), destination.host_str()) {
                             // The remote page's only reach into the shell: a cancelled
@@ -555,7 +565,7 @@ fn main() {
             && !should_exit_on_startup(&std::env::args().collect::<Vec<_>>())
         {
             if let Ok(url) = server_url() {
-                update::start_portable(app.clone(), &url);
+                update::start(app.clone(), &url);
             }
         }
     });

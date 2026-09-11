@@ -26,5 +26,11 @@
 				"installerHooks": "./windows/installer-hooks.nsh"
 			}
 		}
+	},
+	"plugins": {
+		"updater": {
+			"pubkey": "",
+			"endpoints": []
+		}
 	}
 }

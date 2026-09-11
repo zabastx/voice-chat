@@ -1,17 +1,25 @@
 use semver::Version;
 use std::{
     cmp::Ordering,
-    sync::atomic::{AtomicBool, Ordering as AtomicOrdering},
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
     time::Duration,
 };
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
-use crate::desktop_log::{DesktopEvent, DesktopLog};
+use crate::{desktop_log::DesktopEvent, record};
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+const VOICE_POLL: Duration = Duration::from_secs(5);
+// shorter than CHECK_INTERVAL on purpose: a page that never clears the flag must end up
+// re-asking the member at the next check, not pin the coordinator for good
+const MAX_DEFERRAL: Duration = Duration::from_secs(4 * 60 * 60);
 
 #[derive(Clone, Debug)]
 struct UpdateOffer {
@@ -32,13 +40,31 @@ trait UpdateAction {
     fn apply(&self, offer: &UpdateOffer) -> Result<(), String>;
 }
 
+/// Whether the remote page currently reports a live Voice Channel. This is the one
+/// reverse operation of the Native Bridge (ADR 0013), read here and nowhere else.
+trait VoiceChannel {
+    fn is_active(&self) -> bool;
+}
+
+/// Sleeping, as a seam: the deferral is measured in hours, which no test can wait out.
+trait Pause {
+    fn pause(&self, duration: Duration);
+}
+
+trait InstallUpdate {
+    fn install(&self) -> Result<(), String>;
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CheckResult {
     Busy,
     NoUpdate,
     Postponed,
     Applied,
-    Failed,
+    /// the feed could not be read — nothing was offered to the member
+    CheckFailed,
+    /// the member agreed and the shell could not carry it out
+    ActionFailed,
 }
 
 struct UpdateCoordinator<S, P, A> {
@@ -78,7 +104,7 @@ where
         let offer = match self.source.check(&self.current_version) {
             Ok(Some(offer)) => offer,
             Ok(None) => return CheckResult::NoUpdate,
-            Err(_) => return CheckResult::Failed,
+            Err(_) => return CheckResult::CheckFailed,
         };
         if offer.version.cmp_precedence(&self.current_version) != Ordering::Greater {
             return CheckResult::NoUpdate;
@@ -88,7 +114,7 @@ where
         }
         match self.action.apply(&offer) {
             Ok(()) => CheckResult::Applied,
-            Err(_) => CheckResult::Failed,
+            Err(_) => CheckResult::ActionFailed,
         }
     }
 
@@ -198,32 +224,52 @@ impl UpdateSource for HttpUpdateSource {
     }
 }
 
+/// Both forms say the same thing about the Release and differ only in what they ask for.
+fn offer_message(offer: &UpdateOffer, question: &str) -> String {
+    let head = format!("Доступна новая версия Voice Chat {}.", offer.version);
+    let notes = offer.notes.trim();
+    if notes.is_empty() {
+        format!("{head}\n\n{question}")
+    } else {
+        format!("{head}\n\n{notes}\n\n{question}")
+    }
+}
+
+fn ask(app: &tauri::AppHandle, message: String, accept: &str) -> bool {
+    app.dialog()
+        .message(message)
+        .title("Обновление Voice Chat")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            accept.to_owned(),
+            "Отложить".into(),
+        ))
+        .blocking_show()
+}
+
 struct PortablePrompt(tauri::AppHandle);
 
 impl UpdatePrompt for PortablePrompt {
     fn accept(&self, offer: &UpdateOffer) -> bool {
-        let notes = offer.notes.trim();
-        let message = if notes.is_empty() {
-            format!(
-                "Доступна новая версия Voice Chat {}.\n\nОткрыть страницу выпуска, чтобы скачать и вручную заменить Portable EXE?",
-                offer.version
-            )
-        } else {
-            format!(
-                "Доступна новая версия Voice Chat {}.\n\n{}\n\nОткрыть страницу выпуска, чтобы скачать и вручную заменить Portable EXE?",
-                offer.version, notes
-            )
-        };
-        self.0
-            .dialog()
-            .message(message)
-            .title("Обновление Voice Chat")
-            .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "Открыть выпуск".into(),
-                "Отложить".into(),
-            ))
-            .blocking_show()
+        let message = offer_message(
+            offer,
+            "Открыть страницу выпуска, чтобы скачать и вручную заменить Portable EXE?",
+        );
+        ask(&self.0, message, "Открыть выпуск")
+    }
+}
+
+/// The installed client asks for something else: it replaces itself and comes back, and
+/// it will not do that in the middle of a call.
+struct InstalledPrompt(tauri::AppHandle);
+
+impl UpdatePrompt for InstalledPrompt {
+    fn accept(&self, offer: &UpdateOffer) -> bool {
+        let message = offer_message(
+            offer,
+            "Установить обновление? Клиент перезапустится, а если идёт разговор в голосовом канале, установка дождётся его окончания.",
+        );
+        ask(&self.0, message, "Установить")
     }
 }
 
@@ -238,6 +284,94 @@ impl UpdateAction for OpenPortableRelease {
     }
 }
 
+/// Blocks while the member is in a Voice Channel, so an agreed update installs after the
+/// call instead of cutting its RTP. It gives up before the next scheduled check: a page
+/// that never clears the flag must end up asking again, not holding the coordinator.
+fn wait_for_quiet_voice(
+    voice: &impl VoiceChannel,
+    pause: &impl Pause,
+    on_wait: impl FnOnce(),
+) -> Result<(), String> {
+    if !voice.is_active() {
+        return Ok(());
+    }
+    on_wait();
+    let mut waited = Duration::ZERO;
+    while voice.is_active() {
+        if waited >= MAX_DEFERRAL {
+            return Err("Voice Channel is still live".to_owned());
+        }
+        pause.pause(VOICE_POLL);
+        waited += VOICE_POLL;
+    }
+    Ok(())
+}
+
+struct BridgeVoice(tauri::AppHandle);
+
+impl VoiceChannel for BridgeVoice {
+    fn is_active(&self) -> bool {
+        self.0
+            .try_state::<Arc<crate::bridge::Bridge>>()
+            .is_some_and(|bridge| bridge.voice_active())
+    }
+}
+
+struct SleepPause;
+
+impl Pause for SleepPause {
+    fn pause(&self, duration: Duration) {
+        std::thread::sleep(duration);
+    }
+}
+
+struct PluginInstall {
+    app: tauri::AppHandle,
+    endpoint: Url,
+}
+
+impl InstallUpdate for PluginInstall {
+    fn install(&self) -> Result<(), String> {
+        // The plugin reads the same feed again and accepts the artifact only if its
+        // signature matches the public key baked into this build. Nothing else in the
+        // shell installs anything, and the remote page cannot reach this at all.
+        let updater = self
+            .app
+            .updater_builder()
+            .endpoints(vec![self.endpoint.clone()])
+            .map_err(|error| error.to_string())?
+            .build()
+            .map_err(|error| error.to_string())?;
+        let update = tauri::async_runtime::block_on(updater.check())
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "The updater found nothing to install".to_owned())?;
+        record(&self.app, DesktopEvent::UpdateInstallStarted);
+        // on Windows this hands the signed installer /P /R and exits the process, so a
+        // successful install never returns here — the next proof is the restarted client
+        tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {}))
+            .map_err(|error| error.to_string())
+    }
+}
+
+struct DeferredInstall<V, P, I> {
+    voice: V,
+    pause: P,
+    installer: I,
+    on_wait: Box<dyn Fn() + Send + Sync>,
+}
+
+impl<V, P, I> UpdateAction for DeferredInstall<V, P, I>
+where
+    V: VoiceChannel,
+    P: Pause,
+    I: InstallUpdate,
+{
+    fn apply(&self, _offer: &UpdateOffer) -> Result<(), String> {
+        wait_for_quiet_voice(&self.voice, &self.pause, || (self.on_wait)())?;
+        self.installer.install()
+    }
+}
+
 struct SixHourCadence;
 
 impl CheckCadence for SixHourCadence {
@@ -247,31 +381,77 @@ impl CheckCadence for SixHourCadence {
     }
 }
 
-fn record_result(app: &tauri::AppHandle, result: CheckResult) {
+/// What a finished check leaves in the local log. Both forms share the coordinator but
+/// not the outcome: one opened a page, the other replaced the client.
+#[derive(Clone, Copy)]
+struct ResultEvents {
+    applied: DesktopEvent,
+    action_failed: DesktopEvent,
+}
+
+const PORTABLE_EVENTS: ResultEvents = ResultEvents {
+    applied: DesktopEvent::UpdateReleaseOpened,
+    action_failed: DesktopEvent::UpdateReleaseFailed,
+};
+
+const INSTALLED_EVENTS: ResultEvents = ResultEvents {
+    applied: DesktopEvent::UpdateInstalled,
+    action_failed: DesktopEvent::UpdateInstallFailed,
+};
+
+fn record_result(app: &tauri::AppHandle, result: CheckResult, events: ResultEvents) {
     let event = match result {
-        CheckResult::Failed => Some(DesktopEvent::UpdateCheckFailed),
+        CheckResult::CheckFailed => Some(DesktopEvent::UpdateCheckFailed),
+        CheckResult::ActionFailed => Some(events.action_failed),
         CheckResult::Postponed => Some(DesktopEvent::UpdatePostponed),
-        CheckResult::Applied => Some(DesktopEvent::UpdateReleaseOpened),
+        CheckResult::Applied => Some(events.applied),
         CheckResult::Busy | CheckResult::NoUpdate => None,
     };
-    if let (Some(event), Some(log)) = (event, app.try_state::<DesktopLog>()) {
-        log.event(event);
+    if let Some(event) = event {
+        record(app, event);
     }
 }
 
-pub fn start_portable(app: tauri::AppHandle, origin: &Url) {
-    // only a build stamped portable opens a Release page by hand: an installed one
-    // waits for issue #10, and an unstamped dev build is neither
-    if option_env!("VOICECHAT_DESKTOP_MODE") != Some("portable") {
-        return;
+/// The feed this build talks to, and the version it is talking about. The version comes
+/// from the Tauri package info, which is what the bundle and its artifacts carry.
+fn source_and_version(app: &tauri::AppHandle, origin: &Url) -> Option<(HttpUpdateSource, Version)> {
+    match HttpUpdateSource::new(origin) {
+        Ok(source) => Some((source, app.package_info().version.clone())),
+        Err(_) => {
+            record(app, DesktopEvent::UpdateCheckFailed);
+            None
+        }
     }
+}
 
-    let Ok(source) = HttpUpdateSource::new(origin) else {
-        record_result(&app, CheckResult::Failed);
-        return;
-    };
-    let Ok(current_version) = Version::parse(env!("CARGO_PKG_VERSION")) else {
-        record_result(&app, CheckResult::Failed);
+fn spawn_schedule<S, P, A>(
+    app: tauri::AppHandle,
+    coordinator: UpdateCoordinator<S, P, A>,
+    events: ResultEvents,
+) where
+    S: UpdateSource + Send + 'static,
+    P: UpdatePrompt + Send + 'static,
+    A: UpdateAction + Send + 'static,
+{
+    std::thread::spawn(move || {
+        run_schedule(&coordinator, &SixHourCadence, |result| {
+            record_result(&app, result, events)
+        });
+    });
+}
+
+/// Starts the update stream this build belongs to. A build that was never stamped is a
+/// development build — neither form — and offers the member nothing.
+pub fn start(app: tauri::AppHandle, origin: &Url) {
+    match option_env!("VOICECHAT_DESKTOP_MODE") {
+        Some("portable") => start_portable(app, origin),
+        Some("installed") => start_installed(app, origin),
+        _ => {}
+    }
+}
+
+fn start_portable(app: tauri::AppHandle, origin: &Url) {
+    let Some((source, current_version)) = source_and_version(&app, origin) else {
         return;
     };
     let coordinator = UpdateCoordinator::new(
@@ -280,11 +460,37 @@ pub fn start_portable(app: tauri::AppHandle, origin: &Url) {
         PortablePrompt(app.clone()),
         OpenPortableRelease(app.clone()),
     );
-    std::thread::spawn(move || {
-        run_schedule(&coordinator, &SixHourCadence, |result| {
-            record_result(&app, result)
-        });
-    });
+    spawn_schedule(app, coordinator, PORTABLE_EVENTS);
+}
+
+fn start_installed(app: tauri::AppHandle, origin: &Url) {
+    let Some((source, current_version)) = source_and_version(&app, origin) else {
+        return;
+    };
+    let Ok(mut endpoint) = origin.join("/api/desktop/update") else {
+        record(&app, DesktopEvent::UpdateCheckFailed);
+        return;
+    };
+    // the plugin fills these in from its own build target and package version
+    endpoint.set_query(Some(
+        "target={{target}}&arch={{arch}}&version={{current_version}}",
+    ));
+    let waiting = app.clone();
+    let coordinator = UpdateCoordinator::new(
+        current_version,
+        source,
+        InstalledPrompt(app.clone()),
+        DeferredInstall {
+            voice: BridgeVoice(app.clone()),
+            pause: SleepPause,
+            installer: PluginInstall {
+                app: app.clone(),
+                endpoint,
+            },
+            on_wait: Box::new(move || record(&waiting, DesktopEvent::UpdateWaitingForCall)),
+        },
+    );
+    spawn_schedule(app, coordinator, INSTALLED_EVENTS);
 }
 
 #[cfg(test)]
@@ -401,10 +607,109 @@ mod tests {
     }
 
     #[test]
+    fn the_offer_reads_as_one_paragraph_per_thing_it_says() {
+        let offered = offer("0.1.0-alpha.2");
+        assert_eq!(
+            offer_message(&offered, "Установить обновление?"),
+            "Доступна новая версия Voice Chat 0.1.0-alpha.2.\n\nИсправлена доставка обновлений.\n\nУстановить обновление?"
+        );
+
+        let mut silent = offered.clone();
+        silent.notes = "   ".to_owned();
+        assert_eq!(
+            offer_message(&silent, "Установить обновление?"),
+            "Доступна новая версия Voice Chat 0.1.0-alpha.2.\n\nУстановить обновление?"
+        );
+    }
+
+    struct FixedVoice(Mutex<Vec<bool>>);
+
+    impl VoiceChannel for FixedVoice {
+        fn is_active(&self) -> bool {
+            let mut answers = self.0.lock().unwrap();
+            if answers.len() == 1 {
+                answers[0]
+            } else {
+                answers.remove(0)
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct CountingPause(Mutex<Duration>);
+
+    impl Pause for CountingPause {
+        fn pause(&self, duration: Duration) {
+            *self.0.lock().unwrap() += duration;
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingInstall(Mutex<usize>);
+
+    impl InstallUpdate for RecordingInstall {
+        fn install(&self) -> Result<(), String> {
+            *self.0.lock().unwrap() += 1;
+            Ok(())
+        }
+    }
+
+    fn deferred(
+        voice: Vec<bool>,
+    ) -> (
+        DeferredInstall<FixedVoice, CountingPause, RecordingInstall>,
+        Arc<Mutex<usize>>,
+    ) {
+        let waits = Arc::new(Mutex::new(0));
+        let counted = Arc::clone(&waits);
+        (
+            DeferredInstall {
+                voice: FixedVoice(Mutex::new(voice)),
+                pause: CountingPause::default(),
+                installer: RecordingInstall::default(),
+                on_wait: Box::new(move || *counted.lock().unwrap() += 1),
+            },
+            waits,
+        )
+    }
+
+    #[test]
+    fn an_agreed_install_waits_for_the_voice_channel_to_end() {
+        let (action, waits) = deferred(vec![true, true, true, false]);
+
+        assert_eq!(action.apply(&offer("0.1.0-alpha.2")), Ok(()));
+        assert_eq!(*action.installer.0.lock().unwrap(), 1);
+        // one log line per deferral, however long the call runs
+        assert_eq!(*waits.lock().unwrap(), 1);
+        assert_eq!(*action.pause.0.lock().unwrap(), VOICE_POLL * 2);
+    }
+
+    #[test]
+    fn an_install_outside_a_call_does_not_wait_at_all() {
+        let (action, waits) = deferred(vec![false]);
+
+        assert_eq!(action.apply(&offer("0.1.0-alpha.2")), Ok(()));
+        assert_eq!(*action.installer.0.lock().unwrap(), 1);
+        assert_eq!(*waits.lock().unwrap(), 0);
+        assert_eq!(*action.pause.0.lock().unwrap(), Duration::ZERO);
+    }
+
+    #[test]
+    fn a_call_that_never_ends_gives_the_update_back_to_the_next_check() {
+        let (action, waits) = deferred(vec![true]);
+
+        assert!(action.apply(&offer("0.1.0-alpha.2")).is_err());
+        // nothing was downloaded or installed behind the member's back
+        assert_eq!(*action.installer.0.lock().unwrap(), 0);
+        assert_eq!(*waits.lock().unwrap(), 1);
+        assert!(*action.pause.0.lock().unwrap() < CHECK_INTERVAL);
+    }
+
+    #[test]
     fn feed_failure_stays_a_diagnostic_and_does_not_block_the_app() {
         let (coordinator, shown) = coordinator(Err("feed unavailable".into()), true);
 
-        assert_eq!(coordinator.check_now(), CheckResult::Failed);
+        assert_eq!(coordinator.check_now(), CheckResult::CheckFailed);
         assert!(shown.lock().unwrap().is_empty());
         assert!(coordinator.action().0.lock().unwrap().is_empty());
     }
