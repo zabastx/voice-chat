@@ -13,7 +13,7 @@ function signer(args: string[]) {
 	// option, which collides with the `--private-key-path` we pass explicitly and
 	// fails with "cannot be used with". The arguments here are the only source of
 	// truth, so the ambient signing variables are dropped for the call.
-	const env = { ...process.env, CI: '1' }
+	const env: NodeJS.ProcessEnv = { ...process.env, CI: '1' }
 	delete env.TAURI_SIGNING_PRIVATE_KEY
 	delete env.TAURI_SIGNING_PRIVATE_KEY_PATH
 	return execFileSync(process.execPath, [cli, 'signer', ...args], {
