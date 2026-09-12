@@ -4,6 +4,28 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Voice Chat Desktop epic (issue #4) — gate re-run and closure
+
+2026-09-13, local Windows x64, `master` at `66d27b7fb845`. Issue #4 was closed as built-with-gaps
+after re-running every quality gate on the current tree:
+
+- `bun run test` — 70 pass, 0 fail (6 files, 214 `expect()` calls).
+- `bun run typecheck` (`nuxt typecheck && tsc --noEmit -p test`) — clean.
+- `bun run lint` (`oxlint`) and `bun run fmt:check` (`oxfmt --check`, 255 files) — clean.
+- `cargo fmt --check` — clean, and `cargo test` — 26 native tests pass, in
+  [desktop/src-tauri](../../desktop/src-tauri).
+
+The Rust run first hit missing build-script outputs under the checked-out `target/` (`serde_core`,
+`selectors`, …); `cargo clean` then `cargo test` rebuilt and passed. That was a stale local build
+cache, not a repository defect — `desktop/src-tauri/target` is untracked.
+
+**Closed as built, not as fully verified.** The gaps the sub-issues closed over are human-only and
+still owed: real microphone and headphones, a 30-minute tray call, sleep/wake, screen share, real
+DM/mention toasts, a fresh-Windows install/portable run, and the second of the two alpha-to-alpha
+updates stable requires. They stay listed here and in the standing list below. One reserved code item
+is also deliberately unbuilt: the client ignores `X-Desktop-Minimum-Version`, so a mandatory
+security/incompatibility update can be advertised but not enforced.
+
 ## Desktop 0.1.0-alpha.2 — the first live alpha-to-alpha update (issue #14)
 
 2026-09-12, real production feed and a real Windows x64 machine with the seeded local profile. The
@@ -1216,6 +1238,10 @@ list below.
   `restartTrack`, never driven; the **hidden-tab** case, which is the entire reason the gate is an
   AudioWorklet and cannot be shown to work by a foreground browser test; and **Safari/iOS**, where
   `createMediaStreamSource` has history and the `AudioContext` needs a user gesture
+- **Desktop Client human acceptance (#4/#13)** — real microphone and headphones, a 30-minute tray
+  call, sleep/wake, screen share, real DM/mention toasts, a fresh-Windows install/portable/uninstall
+  run, and the second alpha-to-alpha update stable requires. The machine-driven evidence for these
+  Desktop areas lives in the sections above; what is owed here is a person with the hardware.
 - Real NAT traversal — voice from two different networks (phone hotspot vs home Wi-Fi)
 - Mobile browsers (esp. iOS Safari voice) — for Watch Together specifically, that `playsinline`
   actually keeps the video in the filmstrip layout instead of forcing fullscreen

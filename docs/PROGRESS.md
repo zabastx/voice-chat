@@ -135,3 +135,9 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     alpha-to-alpha updates stable requires is done; the #13 real-hardware gaps (real mic/headphones, a
     30-minute tray call, sleep/wake, screen share, real toasts) and a fresh-machine run are still owed
     by a human.
+    **The parent spec [#4](https://github.com/zabastx/voice-chat/issues/4) is now closed**
+    (2026-09-13) as built-with-gaps: every sub-issue is done and the gates re-run green on `master`,
+    leaving only the human acceptance checks above plus the second alpha-to-alpha update stable
+    requires. One code item is deliberately reserved, not built: no Desktop Release reads
+    `X-Desktop-Minimum-Version` yet, so a mandatory security/incompatibility update is advertised but
+    not enforced.

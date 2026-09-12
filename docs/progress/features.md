@@ -4,6 +4,23 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Voice Chat Desktop epic (issue #4) — closed
+
+The parent spec [#4](https://github.com/zabastx/voice-chat/issues/4) is closed: every sub-issue it was
+split into, [#5–#14](https://github.com/zabastx/voice-chat/issues/4), is built, published and recorded
+in the sections below. On 2026-09-13 the gates were re-run on `master` and are green — `bun test` 70,
+`bun run typecheck`, `bun run lint`, `bun run fmt:check`, and `cargo test` / `cargo fmt --check` in
+[desktop/src-tauri](../../desktop/src-tauri) (26 native tests) — so the tree still matches the
+evidence the docs claim.
+
+It is closed **as built-with-gaps, not as fully verified**: the human acceptance items — real
+microphone and headphones, a 30-minute tray call, sleep/wake, screen share, real DM/mention toasts,
+and a fresh-Windows install/portable run — remain owed and are listed in
+[verification.md](verification.md). The one code item the spec reserves but the alpha does not
+implement is a client-side blocking response to `X-Desktop-Minimum-Version`: the feed emits the header
+([desktop-update.ts](../../server/utils/desktop-update.ts)) but no Desktop Release reads it yet, so a
+mandatory security/incompatibility update is not enforced in the client.
+
 ## Desktop 0.1.0-alpha.2 — first live alpha-to-alpha update
 
 Issue #14 is closed: `desktop-v0.1.0-alpha.2` is published (2026-09-12) and is the release that proved
