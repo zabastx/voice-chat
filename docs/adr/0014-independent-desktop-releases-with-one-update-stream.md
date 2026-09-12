@@ -2,7 +2,7 @@
 
 Date: 2026-09-09
 Status: accepted — feed, installer, both update paths, and the release workflow are implemented; the
-first real draft run is pending the `desktop-release` environment
+first real draft run happened on 2026-09-12 (issue #13) and left an unpublished draft
 
 The `Voice Chat` Desktop Client has a release line independent from the Web Release. Desktop tags
 use `desktop-v<version>`, beginning with `desktop-v0.1.0-alpha.1`; Native Bridge compatibility uses
@@ -21,6 +21,13 @@ minimal repository write permission. Publishing it after a clean-machine smoke t
 it: the server endpoint selects the newest published `desktop-v*` Release, including prereleases,
 and ignores drafts. Moving a bad Release back to draft stops new offers; recovery then moves forward
 to a higher patch version, without automatic downgrade.
+
+The tag-from-`master` rule governs Releases, not rehearsals. The workflow also accepts a manual
+`workflow_dispatch` with the tag as an input, which skips the ancestry check, still waits on the
+protected environment, and still only ever creates a draft — so the pipeline can be exercised from a
+feature branch without publishing anything. Because it cannot publish, it cannot route around this
+ADR's one rule about which code becomes a Release: a draft built from a branch is never promoted;
+the promoted artifact is the one a `desktop-v<version>` tag on `master` produces.
 
 The Web Release feature-detects individual Native Bridge capabilities, so an older Desktop Client
 loses only the native affordance it lacks while chat and voice continue to work. The server tracks a
