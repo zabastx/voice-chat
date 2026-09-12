@@ -1,3 +1,4 @@
+import { windowsReleaseAssets } from '../../shared/utils/desktop-release-assets'
 import type {
 	DesktopReleaseAsset,
 	DesktopReleaseCatalog,
@@ -30,34 +31,6 @@ export const MINIMUM_VERSION_HEADER = 'x-desktop-minimum-version'
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000
 /** Release notes reach an updater dialog, so they are bounded before they leave. */
 const MAX_NOTES_LENGTH = 4096
-
-/**
- * The x64 artifacts a Release must carry to be offerable. ADR 0014 has the
- * release job produce all of them together, so a Release missing one was not
- * built or uploaded whole and must not be promoted to anybody:
- *
- *   * the per-user NSIS setup — what the updater downloads,
- *   * its detached `.sig` — what the updater verifies it against,
- *   * the Portable EXE — a supported release asset, not a CI leftover, and the
- *     only thing a portable client can be sent to.
- *
- * `latest.json` and the SHA-256 checksum are deliberately not required: this
- * feed builds the manifest itself and never reads either.
- */
-function findWindowsArtifacts(record: DesktopReleaseRecord) {
-	const x64 = record.assets.filter((asset) => /x64/i.test(asset.name))
-	const setup = x64.find((asset) => /-setup\.exe$/i.test(asset.name))
-	if (!setup) return null
-	const signature = x64.find(
-		(asset) => asset.name.toLowerCase() === `${setup.name.toLowerCase()}.sig`
-	)
-	if (!signature) return null
-	const portable = x64.find(
-		(asset) => /\.exe$/i.test(asset.name) && !/-setup\.exe$/i.test(asset.name)
-	)
-	if (!portable) return null
-	return { setup, signature }
-}
 
 export interface EligibleDesktopRelease {
 	record: DesktopReleaseRecord
@@ -97,7 +70,7 @@ export function selectDesktopRelease(
 		// the Portable client opens this page in the member's browser, so a
 		// Release whose page is not a plain HTTPS URL is not offerable at all
 		if (!isPublicHttpsPage(record.releaseUrl)) continue
-		const artifacts = findWindowsArtifacts(record)
+		const artifacts = windowsReleaseAssets(record.assets)
 		if (!artifacts) continue
 		const candidate: EligibleDesktopRelease = {
 			record,

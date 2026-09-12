@@ -9,13 +9,17 @@ import {
 	assembleDesktopRelease,
 	assertReleaseNotes,
 	checksumFile,
+	type PublishedReleaseAsset,
 	RELEASE_NOTES_SECTIONS,
 	releaseManifest,
+	selectPublishedWindowsAssets,
 	sha256
 } from '../scripts/desktop-release'
+import { windowsReleaseAssets } from '../shared/utils/desktop-release-assets'
 
 const workflowPath = new URL('../.github/workflows/desktop-release.yml', import.meta.url)
 const VERSION = '0.1.0-alpha.1'
+const TAG = `desktop-v${VERSION}`
 const NOTES = `# Voice Chat ${VERSION}
 
 ## Что изменилось
@@ -31,6 +35,31 @@ const NOTES = `# Voice Chat ${VERSION}
 - Запустите installer или Portable EXE.
 `
 
+/**
+ * GitHub renames uploaded assets (spaces become dots), so these are the names a
+ * Release actually serves — deliberately different from the local file names.
+ */
+const PUBLISHED = desktopReleaseArtifacts(VERSION)
+const publishedSetup = `Voice.Chat_${VERSION}_x64-setup.exe`
+const publishedSignature = `${publishedSetup}.sig`
+const publishedPortable = `Voice.Chat_${VERSION}_x64-portable.exe`
+
+function published(name: string, size?: number): PublishedReleaseAsset {
+	return {
+		name,
+		browser_download_url: `https://github.com/zabastx/voice-chat/releases/download/${TAG}/${name}`,
+		size
+	}
+}
+
+function publishedSet(): ReturnType<typeof selectPublishedWindowsAssets> {
+	return selectPublishedWindowsAssets([
+		published(publishedPortable, 'portable-bytes'.length),
+		published(publishedSignature, 'signature-value\n'.length),
+		published(publishedSetup, 'installer-bytes'.length)
+	])
+}
+
 interface WorkflowStep {
 	name?: string
 	uses?: string
@@ -43,6 +72,7 @@ interface WorkflowJob {
 	environment?: string
 	permissions?: Record<string, string>
 	'runs-on'?: string
+	env?: Record<string, unknown>
 	steps?: WorkflowStep[]
 }
 
@@ -60,15 +90,30 @@ function jobScript(workflow: Workflow, job: string): string {
 	return (workflow.jobs?.[job]?.steps ?? []).map((step) => step.run ?? '').join('\n')
 }
 
-describe('desktop release assembly', () => {
+describe('desktop release assets', () => {
 	test('names every published asset once', () => {
-		expect(desktopReleaseArtifacts(VERSION)).toEqual({
+		expect(PUBLISHED).toEqual({
 			setup: 'Voice Chat_0.1.0-alpha.1_x64-setup.exe',
 			signature: 'Voice Chat_0.1.0-alpha.1_x64-setup.exe.sig',
 			portable: 'Voice Chat_0.1.0-alpha.1_x64-portable.exe',
 			manifest: 'latest.json',
 			checksum: 'SHA256SUMS.txt'
 		})
+	})
+
+	test('the feed and the release assembly agree on a complete x64 set', () => {
+		const complete = [
+			published(publishedSetup),
+			published(publishedSignature),
+			published(publishedPortable)
+		]
+		expect(windowsReleaseAssets(complete)?.setup.name).toBe(publishedSetup)
+		expect(windowsReleaseAssets(complete)?.portable.name).toBe(publishedPortable)
+		for (const missing of [publishedSetup, publishedSignature, publishedPortable]) {
+			const partial = complete.filter((asset) => asset.name !== missing)
+			expect(windowsReleaseAssets(partial)).toBeNull()
+			expect(() => selectPublishedWindowsAssets(partial)).toThrow('missing')
+		}
 	})
 
 	test('requires the Russian sections and the SmartScreen warning for a prerelease', () => {
@@ -83,15 +128,13 @@ describe('desktop release assembly', () => {
 		expect(() => assertReleaseNotes(NOTES, VERSION)).not.toThrow()
 	})
 
-	test('points the manifest at the setup asset under its own tag', () => {
+	test('points the manifest at the URL GitHub serves the setup under', () => {
 		const manifest = releaseManifest({
 			version: VERSION,
 			notes: NOTES,
 			pubDate: '2026-09-12T00:00:00.000Z',
 			signature: 'signature-value',
-			setupName: desktopReleaseArtifacts(VERSION).setup,
-			repo: 'zabastx/voice-chat',
-			tag: `desktop-v${VERSION}`
+			setupUrl: published(publishedSetup).browser_download_url
 		})
 
 		expect(manifest).toEqual({
@@ -101,49 +144,75 @@ describe('desktop release assembly', () => {
 			platforms: {
 				'windows-x86_64': {
 					signature: 'signature-value',
-					url: `https://github.com/zabastx/voice-chat/releases/download/desktop-v${VERSION}/Voice%20Chat_${VERSION}_x64-setup.exe`
+					url: `https://github.com/zabastx/voice-chat/releases/download/${TAG}/${publishedSetup}`
 				}
 			}
 		})
 	})
+})
 
-	test('collects the signed setup, Portable EXE, manifest and checksum', () => {
+describe('desktop release assembly', () => {
+	test('checksums the published names against the built bytes', () => {
 		const directory = mkdtempSync(join(tmpdir(), 'voice-chat-release-'))
 		try {
-			const names = desktopReleaseArtifacts(VERSION)
-			writeFileSync(join(directory, names.setup), 'installer-bytes')
-			writeFileSync(join(directory, names.signature), 'signature-value\n')
-			writeFileSync(join(directory, names.portable), 'portable-bytes')
+			writeFileSync(join(directory, PUBLISHED.setup), 'installer-bytes')
+			writeFileSync(join(directory, PUBLISHED.signature), 'signature-value\n')
+			writeFileSync(join(directory, PUBLISHED.portable), 'portable-bytes')
 
-			const assembled = assembleDesktopRelease({
+			const metadata = assembleDesktopRelease({
 				version: VERSION,
-				tag: `desktop-v${VERSION}`,
-				repo: 'zabastx/voice-chat',
-				artifactsDirectory: directory,
 				notes: NOTES,
+				artifactsDirectory: directory,
+				published: publishedSet(),
 				pubDate: '2026-09-12T00:00:00.000Z'
 			})
 
-			expect(assembled.assets).toHaveLength(5)
-			for (const asset of assembled.assets) expect(existsSync(asset)).toBe(true)
-
-			const manifest = JSON.parse(readFileSync(join(directory, names.manifest), 'utf8')) as {
+			expect(existsSync(metadata.manifestPath)).toBe(true)
+			expect(existsSync(metadata.checksumPath)).toBe(true)
+			const manifest = JSON.parse(readFileSync(metadata.manifestPath, 'utf8')) as {
 				version: string
 				platforms: { 'windows-x86_64': { signature: string; url: string } }
 			}
 			expect(manifest.version).toBe(VERSION)
-			expect(manifest.platforms['windows-x86_64'].signature).toBe('signature-value')
-			expect(manifest.platforms['windows-x86_64'].url).toEndWith(encodeURIComponent(names.setup))
+			expect(manifest.platforms['windows-x86_64']).toEqual({
+				signature: 'signature-value',
+				url: published(publishedSetup).browser_download_url
+			})
 
-			const setupDigest = sha256(join(directory, names.setup))
-			const checksum = readFileSync(join(directory, names.checksum), 'utf8')
-			expect(checksum).toBe(
+			const setupDigest = sha256(join(directory, PUBLISHED.setup))
+			expect(metadata.checksum).toBe(
 				checksumFile([
-					{ name: names.setup, digest: setupDigest },
-					{ name: names.portable, digest: sha256(join(directory, names.portable)) }
+					{ name: publishedSetup, digest: setupDigest },
+					{ name: publishedPortable, digest: sha256(join(directory, PUBLISHED.portable)) }
 				])
 			)
-			expect(checksum).toContain(`${setupDigest}  ${names.setup}`)
+			// the checksum names the file a member downloads, not the local one
+			expect(metadata.checksum).toContain(`${setupDigest}  ${publishedSetup}`)
+		} finally {
+			rmSync(directory, { recursive: true, force: true })
+		}
+	})
+
+	test('refuses a published asset that is not the artifact that was built', () => {
+		const directory = mkdtempSync(join(tmpdir(), 'voice-chat-release-'))
+		try {
+			writeFileSync(join(directory, PUBLISHED.setup), 'installer-bytes')
+			writeFileSync(join(directory, PUBLISHED.signature), 'signature-value\n')
+			writeFileSync(join(directory, PUBLISHED.portable), 'portable-bytes')
+			const stored = selectPublishedWindowsAssets([
+				published(publishedSetup, 999_999),
+				published(publishedSignature),
+				published(publishedPortable)
+			])
+
+			expect(() =>
+				assembleDesktopRelease({
+					version: VERSION,
+					notes: NOTES,
+					artifactsDirectory: directory,
+					published: stored
+				})
+			).toThrow('does not match')
 		} finally {
 			rmSync(directory, { recursive: true, force: true })
 		}
@@ -152,17 +221,15 @@ describe('desktop release assembly', () => {
 	test('refuses a Release whose setup was never signed', () => {
 		const directory = mkdtempSync(join(tmpdir(), 'voice-chat-release-'))
 		try {
-			const names = desktopReleaseArtifacts(VERSION)
-			writeFileSync(join(directory, names.setup), 'installer-bytes')
-			writeFileSync(join(directory, names.portable), 'portable-bytes')
+			writeFileSync(join(directory, PUBLISHED.setup), 'installer-bytes')
+			writeFileSync(join(directory, PUBLISHED.portable), 'portable-bytes')
 
 			expect(() =>
 				assembleDesktopRelease({
 					version: VERSION,
-					tag: `desktop-v${VERSION}`,
-					repo: 'zabastx/voice-chat',
+					notes: NOTES,
 					artifactsDirectory: directory,
-					notes: NOTES
+					published: publishedSet()
 				})
 			).toThrow('signature')
 		} finally {
@@ -208,31 +275,35 @@ describe('desktop release workflow', () => {
 		expect(JSON.stringify(workflow.jobs?.quality)).not.toContain('TAURI_SIGNING_PRIVATE_KEY')
 	})
 
-	test('gates the updater key behind the protected desktop-release environment', async () => {
+	test('gates the updater key behind the protected environment and one signing step', async () => {
 		const workflow = await loadWorkflow()
 		const release = workflow.jobs?.release
 		expect(release?.environment).toBe('desktop-release')
 		expect(release?.permissions).toEqual({ contents: 'write' })
-
-		const releaseJson = JSON.stringify(release)
-		expect(releaseJson).toContain('secrets.TAURI_SIGNING_PRIVATE_KEY')
-		expect(releaseJson).toContain('secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD')
-		expect(releaseJson).toContain('vars.DESKTOP_UPDATER_PUBKEY')
+		expect(release?.env?.RELEASE_NOTES).toContain('release-notes')
 
 		for (const [name, job] of Object.entries(workflow.jobs ?? {})) {
 			if (name === 'release') continue
 			expect(JSON.stringify(job)).not.toContain('TAURI_SIGNING_PRIVATE_KEY')
 		}
+		const signingSteps = (release?.steps ?? []).filter((step) =>
+			JSON.stringify(step.env ?? {}).includes('TAURI_SIGNING_PRIVATE_KEY')
+		)
+		expect(signingSteps).toHaveLength(1)
+		expect(signingSteps[0]?.run).toContain('desktop-release.ts sign')
 	})
 
-	test('assembles and publishes a draft with the signed asset set', async () => {
+	test('publishes a draft, then derives the metadata from the stored assets', async () => {
 		const script = jobScript(await loadWorkflow(), 'release')
 		expect(script).toContain('bun run desktop:build')
-		expect(script).toContain('bun scripts/desktop-release.ts')
-		expect(script).toContain('release-notes')
+		expect(script).toContain('desktop-release.ts sign')
 		expect(script).toContain('gh release create')
 		expect(script).toContain('--draft')
 		expect(script).toContain('--notes-file')
-		expect(script).toContain('mapfile -t assets')
+		expect(script).toContain('mapfile -t binaries')
+		expect(script).toContain('releases/tags/$GITHUB_REF_NAME')
+		expect(script).toContain('desktop-release.ts manifest')
+		expect(script).toContain('mapfile -t metadata')
+		expect(script).toContain('gh release upload')
 	})
 })

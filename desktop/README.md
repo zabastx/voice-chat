@@ -256,14 +256,15 @@ reviewers, кладёт в него два secret'а, а публичную по
 - `DESKTOP_UPDATER_PUBKEY` — публичная половина ключа из `tauri signer generate`, вшивается в сборку.
 - `DESKTOP_PRODUCTION_ORIGIN` — единственный production HTTPS origin.
 
-`bun run desktop:build` собирает NSIS и Portable EXE, затем `bun run desktop:release` (то же, что
-`bun scripts/desktop-release.ts`) подписывает setup и выводит пути пяти asset'ов: setup, его `.sig`,
-Portable EXE, `latest.json` и `SHA256SUMS.txt`. Manifest и checksum выводятся из файлов на диске, поэтому
-URL указывает на существующий подписанный installer, а checksum — на реально собранные байты. Русские
-Release notes лежат в `desktop/release-notes/<version>.md` и обязаны содержать «Что изменилось»,
-«Известные ограничения» и «Как установить или обновить»; prerelease обязан упомянуть SmartScreen. Workflow
-загружает asset'ы в **draft** GitHub Release и никогда не публикует его сам — публикация является
-продвижением в Update stream
+`bun run desktop:build` собирает NSIS и Portable EXE. Дальше
+`bun scripts/desktop-release.ts` работает в два прохода: `sign` подписывает setup и печатает пути setup,
+его `.sig` и Portable EXE, которые уходят в draft; после этого `manifest` читает draft обратно через
+`gh api` и строит `latest.json` из настоящего `browser_download_url` и `SHA256SUMS.txt` из имён, под
+которыми GitHub сохранил файлы (пробелы он заменяет точками, поэтому угаданный URL ведёт в никуда), — и
+оба файла загружаются в релиз. Русские Release notes лежат в `desktop/release-notes/<version>.md` и
+обязаны содержать «Что изменилось», «Известные ограничения» и «Как установить или обновить»; prerelease
+обязан упомянуть SmartScreen. Workflow загружает asset'ы в **draft** GitHub Release и никогда не публикует
+его сам — публикация является продвижением в Update stream
 ([ADR 0014](../docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)).
 
 ## Оставшиеся ограничения

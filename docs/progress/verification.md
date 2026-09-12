@@ -6,29 +6,34 @@ it proved. The last section lists what is still **not** verified. Part of
 
 ## Desktop 0.1.0-alpha.1 — signed release workflow
 
-2026-09-12, local Windows x64. `bun test` ran 65 tests green across 6 files, `bun run typecheck` and
-`bun run lint` clean. The assembly was also driven by hand with a throwaway Tauri updater key: it signed
-a stand-in setup, wrote `latest.json` and `SHA256SUMS.txt`, `sha256sum -c` verified both checksum lines,
-and the manifest URL and signature round-tripped from the files on disk.
+2026-09-12, local Windows x64. `bun test` ran 67 tests green across 6 files, `bun run typecheck` and
+`bun run lint` clean. Both CLI passes were also driven by hand with a throwaway Tauri updater key: `sign`
+signed a stand-in setup, and `manifest` read a release JSON carrying GitHub's renamed assets and wrote
+`latest.json` and `SHA256SUMS.txt`, whose lines `sha256sum -c` then verified. The manifest URL came out as
+`…/Voice.Chat_<version>_x64-setup.exe` — the dot-renamed name GitHub actually stores.
 
 What the checks pin:
 
-- `test/desktop-release.test.ts` asserts `latest.json` points at
-  `…/releases/download/desktop-v<version>/Voice%20Chat_<version>_x64-setup.exe`, that its signature is
-  exactly the content of the `.sig` the signer wrote, and that the checksum file equals the SHA-256 of
-  the setup and the Portable EXE. An assembly whose setup was never signed is refused.
+- The feed and the assembly share `windowsReleaseAssets()`; a direct test asserts both accept exactly the
+  setup + `.sig` + Portable EXE set and reject a Release missing any one of them.
+- `test/desktop-release.test.ts` asserts `latest.json` points at the setup's own published
+  `browser_download_url` (a dot-renamed name, not the local spaced one), that its signature is exactly the
+  content of the `.sig` the signer wrote, that `SHA256SUMS.txt` names the **published** files against the
+  built bytes, and that a published asset whose size does not match the built one is refused. An assembly
+  whose setup was never signed is refused too.
 - The same test parses `.github/workflows/desktop-release.yml`: the only trigger is `desktop-v*`; `guard`
   runs `git merge-base --is-ancestor` against `origin/master`; `quality` needs `guard` and runs every gate
   with `bun install --frozen-lockfile`, with no `TAURI_SIGNING_PRIVATE_KEY` anywhere in the job; `release`
-  needs `quality`, names the `desktop-release` environment, holds `contents: write`, and its only signing
-  references are the two environment-scoped secrets; the draft upload is `gh release create --draft`
-  driven by the script's asset list.
+  needs `quality`, names the `desktop-release` environment, holds `contents: write`, and exactly one step
+  (the `sign` step) sees the two environment-scoped secrets; the draft is `gh release create --draft`, then
+  `gh api` reads the stored assets back and `gh release upload` adds the derived manifest and checksum.
 
 Not verified: **the real draft run.** `zabastx/voice-chat` has no `desktop-release` environment and no
 updater key secrets, so no run has entered the environment, signed a real artifact, or created a draft.
 The Windows runner steps themselves are the ones the existing `desktop:install-check` /
 `desktop:installed-update-check` jobs already exercise. Also undriven: the `guard` rejecting a non-master
-tag against a real push event, and GitHub's manual-approval gate.
+tag against a real push event, GitHub's manual-approval gate, and the real API response shape `gh api`
+returns for a draft's assets.
 
 ## Desktop 0.1.0-alpha.1 + v0.26.0 — desktop notifications from the tray
 

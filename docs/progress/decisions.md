@@ -121,14 +121,16 @@ the alpha.
 reachable from `master` is the only trigger. `quality` runs the Bun and Cargo gates on Windows with no
 signing material, and only the `release` job enters the protected `desktop-release` GitHub Environment,
 so required reviewers gate the updater key before it is read; the private key and password are exposed to
-the one signing step, not the workflow, and only that job holds `contents: write`.
-[scripts/desktop-release.ts](../../scripts/desktop-release.ts) derives `latest.json` and
-`SHA256SUMS.txt` from the files on disk — the manifest's signature is read back from the `.sig` the
-signer wrote and its URL is built from the setup's own name under the tag — so a Release can never point
-at an unsigned or missing asset. Asset names stay owned by
-[desktop-artifacts.ts](../../scripts/desktop-artifacts.ts) and reach `gh release create` as the script's
-stdout, which is also where the `--draft` lives: publishing the draft is the promotion step the feed
-recognises ([ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md)).
+the one `sign` step, not the workflow, and only that job holds `contents: write`.
+[scripts/desktop-release.ts](../../scripts/desktop-release.ts) works in two passes because GitHub renames
+uploaded assets — spaces become dots — so a locally constructed URL would 404. After `gh release create
+--draft` carries the signed setup, its `.sig` and the Portable EXE, `gh api` reads the draft back and the
+`manifest` pass builds `latest.json` from the setup's real `browser_download_url` and `SHA256SUMS.txt`
+from the stored names, so the metadata can only point at an asset that exists. The feed and the assembly
+share one `windowsReleaseAssets()` matcher
+([desktop-release-assets.ts](../../shared/utils/desktop-release-assets.ts)), so both agree on what a
+complete x64 Release is. Publishing the draft is the promotion step the feed recognises
+([ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md)).
 
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device

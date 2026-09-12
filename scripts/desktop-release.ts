@@ -1,15 +1,21 @@
 // Assembles the assets a Desktop Release publishes. Building is
-// `scripts/desktop.ts`'s job; this reads the two artifacts it produced, signs the
-// NSIS setup with the updater key from the environment, and writes the updater
-// manifest and the SHA-256 checksum beside them. Everything it emits is derived
-// from the files on disk, so a checksum can never name a missing installer and
-// `latest.json` can never carry a signature the setup does not have.
+// `scripts/desktop.ts`'s job. This signs the NSIS setup with the updater key from
+// the environment, and — after the draft exists on GitHub — derives `latest.json`
+// and the SHA-256 checksum from the assets GitHub actually stored. GitHub renames
+// uploaded filenames (spaces become dots), so the published name and download URL
+// are read back rather than guessed: the manifest can only point at a real,
+// signed asset, and the checksum can only name the installer a member downloads.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { desktopReleaseArtifacts, type DesktopReleaseArtifacts } from './desktop-artifacts'
+import {
+	type NamedReleaseAsset,
+	type WindowsReleaseAssets,
+	windowsReleaseAssets
+} from '../shared/utils/desktop-release-assets'
+import { desktopReleaseArtifacts } from './desktop-artifacts'
 import { signArtifact, type UpdaterKeyPair } from './desktop-signing'
 
 const root = join(import.meta.dirname, '..')
@@ -31,16 +37,33 @@ export const RELEASE_NOTES_SECTIONS = [
 ] as const
 
 /** Windows' warning is the honest first-run experience while alpha is unsigned. */
-const PRERELEASE_SMARTSREEN = /smartscreen/i
+const PRERELEASE_SMARTSCREEN = /smartscreen/i
 
 export function assertReleaseNotes(notes: string, version: string): void {
 	const missing = RELEASE_NOTES_SECTIONS.filter((section) => !notes.includes(section))
 	if (missing.length > 0) throw new Error(`Release notes miss: ${missing.join(', ')}`)
 	// Authenticode is deferred for the private-group alpha, so a prerelease has to
 	// say so; a later signed prerelease would drop the requirement with the note.
-	if (version.includes('-') && !PRERELEASE_SMARTSREEN.test(notes)) {
+	if (version.includes('-') && !PRERELEASE_SMARTSCREEN.test(notes)) {
 		throw new Error('Unsigned prerelease notes must call out the SmartScreen warning')
 	}
+}
+
+/** A Release asset as GitHub's REST API reports it, after any renaming. */
+export interface PublishedReleaseAsset extends NamedReleaseAsset {
+	browser_download_url: string
+	/** GitHub's byte count for the uploaded asset, when the response carries it. */
+	size?: number
+}
+
+export function selectPublishedWindowsAssets(
+	assets: readonly PublishedReleaseAsset[]
+): WindowsReleaseAssets<PublishedReleaseAsset> {
+	const selected = windowsReleaseAssets(assets)
+	if (!selected) {
+		throw new Error('The published Release is missing its x64 setup, .sig or Portable EXE')
+	}
+	return selected
 }
 
 export interface DesktopReleaseManifest {
@@ -60,17 +83,15 @@ export function releaseManifest(options: {
 	notes: string
 	pubDate: string
 	signature: string
-	setupName: string
-	repo: string
-	tag: string
+	setupUrl: string
 }): DesktopReleaseManifest {
-	const host = `https://github.com/${options.repo}/releases/download`
-	const url = `${host}/${encodeURIComponent(options.tag)}/${encodeURIComponent(options.setupName)}`
 	return {
 		version: options.version,
 		notes: options.notes,
 		pub_date: options.pubDate,
-		platforms: { 'windows-x86_64': { signature: options.signature, url } }
+		platforms: {
+			'windows-x86_64': { signature: options.signature, url: options.setupUrl }
+		}
 	}
 }
 
@@ -83,26 +104,25 @@ export function checksumFile(entries: { name: string; digest: string }[]): strin
 	return `${entries.map((entry) => `${entry.digest}  ${entry.name}`).join('\n')}\n`
 }
 
-export interface AssembledDesktopRelease {
-	names: DesktopReleaseArtifacts
+export interface DesktopReleaseMetadata {
 	manifest: DesktopReleaseManifest
 	checksum: string
-	/** Absolute paths, in upload order: setup, signature, portable, manifest, checksum. */
-	assets: string[]
+	manifestPath: string
+	checksumPath: string
 }
 
 export interface AssembleDesktopReleaseOptions {
 	version: string
-	tag: string
-	repo: string
-	artifactsDirectory?: string
 	notes: string
 	pubDate?: string
+	artifactsDirectory?: string
+	/** what GitHub actually stored for this Release */
+	published: WindowsReleaseAssets<PublishedReleaseAsset>
 }
 
 export function assembleDesktopRelease(
 	options: AssembleDesktopReleaseOptions
-): AssembledDesktopRelease {
+): DesktopReleaseMetadata {
 	const directory = options.artifactsDirectory ?? defaultArtifactsDirectory
 	const names = desktopReleaseArtifacts(options.version)
 	const setupPath = join(directory, names.setup)
@@ -114,6 +134,17 @@ export function assembleDesktopRelease(
 	if (!existsSync(signaturePath)) throw new Error(`Missing updater signature: ${signaturePath}`)
 	assertReleaseNotes(options.notes, options.version)
 
+	// The uploaded bytes have to be the ones we built and signed; the size is the
+	// cheap check here, and the updater's own signature is the authoritative one.
+	for (const [path, published] of [
+		[setupPath, options.published.setup],
+		[portablePath, options.published.portable]
+	] as const) {
+		if (typeof published.size === 'number' && statSync(path).size !== published.size) {
+			throw new Error(`Published ${published.name} does not match the built artifact: ${path}`)
+		}
+	}
+
 	const signature = readFileSync(signaturePath, 'utf8').trim()
 	if (!signature) throw new Error(`Empty updater signature: ${signaturePath}`)
 
@@ -122,26 +153,18 @@ export function assembleDesktopRelease(
 		notes: options.notes,
 		pubDate: options.pubDate ?? new Date().toISOString(),
 		signature,
-		setupName: names.setup,
-		repo: options.repo,
-		tag: options.tag
+		setupUrl: options.published.setup.browser_download_url
 	})
 	const checksum = checksumFile([
-		{ name: names.setup, digest: sha256(setupPath) },
-		{ name: names.portable, digest: sha256(portablePath) }
+		{ name: options.published.setup.name, digest: sha256(setupPath) },
+		{ name: options.published.portable.name, digest: sha256(portablePath) }
 	])
 
 	const manifestPath = join(directory, names.manifest)
 	const checksumPath = join(directory, names.checksum)
 	writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 	writeFileSync(checksumPath, checksum)
-
-	return {
-		names,
-		manifest,
-		checksum,
-		assets: [setupPath, signaturePath, portablePath, manifestPath, checksumPath]
-	}
+	return { manifest, checksum, manifestPath, checksumPath }
 }
 
 /** The updater key, from the protected environment: a path or the key's contents. */
@@ -165,20 +188,24 @@ export function updaterKeyFromEnvironment(
 }
 
 interface CliOptions {
+	command: 'sign' | 'manifest'
 	version: string
-	tag: string
-	repo: string
 	artifactsDirectory: string
 	notesPath: string
+	releasePath?: string
 	pubDate?: string
 }
 
 function parseCli(argv: string[]): CliOptions {
+	const [command, ...rest] = argv
+	if (command !== 'sign' && command !== 'manifest') {
+		throw new Error('Expected `sign` or `manifest`')
+	}
 	const flags = new Map<string, string>()
-	for (let index = 0; index < argv.length; index += 1) {
-		const argument = argv[index]
+	for (let index = 0; index < rest.length; index += 1) {
+		const argument = rest[index]
 		if (!argument?.startsWith('--')) throw new Error(`Unexpected argument: ${argument}`)
-		const value = argv[index + 1]
+		const value = rest[index + 1]
 		if (value === undefined || value.startsWith('--')) {
 			throw new Error(`Missing value for ${argument}`)
 		}
@@ -188,19 +215,62 @@ function parseCli(argv: string[]): CliOptions {
 
 	const version = flags.get('version') ?? process.env.VOICECHAT_DESKTOP_VERSION
 	if (!version) throw new Error('Set --version or VOICECHAT_DESKTOP_VERSION')
-	const tag = flags.get('tag') ?? process.env.GITHUB_REF_NAME ?? `desktop-v${version}`
-	const repo = flags.get('repo') ?? process.env.GITHUB_REPOSITORY
-	if (!repo) throw new Error('Set --repo or GITHUB_REPOSITORY')
 	const notesPath = flags.get('notes')
 	if (!notesPath) throw new Error('Set --notes to the Russian release notes file')
 	return {
+		command,
 		version,
-		tag,
-		repo,
 		artifactsDirectory: flags.get('artifacts') ?? defaultArtifactsDirectory,
 		notesPath,
+		releasePath: flags.get('release'),
 		pubDate: flags.get('pub-date')
 	}
+}
+
+function printAssets(paths: string[]): void {
+	// stdout is the upload contract: one absolute path per line, nothing else.
+	for (const path of paths) console.log(path)
+}
+
+function commandSign(options: CliOptions, notes: string): void {
+	assertReleaseNotes(notes, options.version)
+	const names = desktopReleaseArtifacts(options.version)
+	const setupPath = join(options.artifactsDirectory, names.setup)
+	if (!existsSync(setupPath)) throw new Error(`Missing release artifact: ${setupPath}`)
+	const { key, dispose } = updaterKeyFromEnvironment()
+	try {
+		console.error(`Signing ${setupPath}`)
+		signArtifact(key, setupPath, process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '')
+	} finally {
+		dispose()
+	}
+	// what the draft carries first; the manifest and checksum follow once GitHub
+	// has told us the names it stored them under
+	printAssets([
+		setupPath,
+		join(options.artifactsDirectory, names.signature),
+		join(options.artifactsDirectory, names.portable)
+	])
+}
+
+function commandManifest(options: CliOptions, notes: string): void {
+	if (!options.releasePath) throw new Error('Set --release to the published Release JSON')
+	if (!existsSync(options.releasePath)) {
+		throw new Error(`Published Release JSON is missing: ${options.releasePath}`)
+	}
+	const release = JSON.parse(readFileSync(options.releasePath, 'utf8')) as
+		| { assets?: PublishedReleaseAsset[] }
+		| PublishedReleaseAsset[]
+	const assets = Array.isArray(release) ? release : (release.assets ?? [])
+	const metadata = assembleDesktopRelease({
+		...options,
+		notes,
+		published: selectPublishedWindowsAssets(assets)
+	})
+	console.error(
+		`Assembled ${metadata.manifestPath} and ${metadata.checksumPath} for the published assets`
+	)
+	printAssets([metadata.manifestPath, metadata.checksumPath])
 }
 
 function main(): void {
@@ -209,22 +279,8 @@ function main(): void {
 		throw new Error(`Release notes are missing: ${options.notesPath}`)
 	}
 	const notes = readFileSync(options.notesPath, 'utf8')
-	const setupPath = join(options.artifactsDirectory, desktopReleaseArtifacts(options.version).setup)
-
-	const { key, dispose } = updaterKeyFromEnvironment()
-	try {
-		console.error(`Signing ${setupPath}`)
-		signArtifact(key, setupPath, process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '')
-	} finally {
-		dispose()
-	}
-
-	const assembled = assembleDesktopRelease({ ...options, notes })
-	console.error(
-		`Assembled ${assembled.names.manifest} and ${assembled.names.checksum} in ${options.artifactsDirectory}`
-	)
-	// stdout is the upload contract: one absolute path per line, nothing else.
-	for (const asset of assembled.assets) console.log(asset)
+	if (options.command === 'sign') commandSign(options, notes)
+	else commandManifest(options, notes)
 }
 
 if (import.meta.main) main()
