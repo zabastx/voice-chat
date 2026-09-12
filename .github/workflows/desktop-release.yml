@@ -171,7 +171,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+          # A draft whose tag has never been pushed has no git ref, so
+          # `releases/tags/<tag>` answers 404. Find it in the release list and
+          # read it back by id instead.
+          release_id="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+              --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft) | .id" \
+              | head -n 1
+          )"
+          if [ -z "$release_id" ]; then
+            echo "::error::No draft Release found for $RELEASE_TAG"
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" \
             > "$RUNNER_TEMP/desktop-release.json"
           bun scripts/desktop-release.ts manifest \
             --release "$RUNNER_TEMP/desktop-release.json" \

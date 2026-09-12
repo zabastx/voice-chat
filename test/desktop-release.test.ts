@@ -345,7 +345,11 @@ describe('desktop release workflow', () => {
 		expect(script).toContain('--draft')
 		expect(script).toContain('--notes-file')
 		expect(script).toContain('mapfile -t binaries')
-		expect(script).toContain('releases/tags/$RELEASE_TAG')
+		// a draft's tag has no git ref, so it is found in the release list by id
+		expect(script).toContain('--paginate')
+		expect(script).toContain('.tag_name ==')
+		expect(script).toContain('.draft')
+		expect(script).toContain('releases/$release_id')
 		expect(script).toContain('desktop-release.ts manifest')
 		expect(script).toContain('mapfile -t metadata')
 		expect(script).toContain('gh release upload')
