@@ -4,6 +4,70 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop 0.1.0-alpha.1 — the real draft release run (issue #13)
+
+2026-09-12, GitHub Actions `windows-latest`, run
+[34700318269](https://github.com/zabastx/voice-chat/actions/runs/34700318269) — the full workflow passed
+end to end against the real `desktop-release` environment, the real signing secret and the real
+repository variables. This is the run issue #12 could only static-check.
+
+It was driven through the new `workflow_dispatch` path from `test/desktop-release-dispatch` (the desktop
+commits plus the integration fixes below), with `tag=desktop-v0.1.0-alpha.1`. `guard` accepted the input
+tag without the master-ancestry check, `quality` passed every gate (Formatting, Lint, Typecheck, Tests,
+Rust formatting, Rust checks, Rust tests) with no signing material, and `release` waited in the protected
+environment until approved, then built, signed and uploaded the draft.
+
+What the run produced, read back from the GitHub API:
+
+- A **draft** Release `desktop-v0.1.0-alpha.1` (id 387608522, `draft: true`), not published.
+- All five assets: `Voice.Chat_0.1.0-alpha.1_x64-setup.exe` (3 745 552 B), its `.sig` (432 B),
+  `Voice.Chat_0.1.0-alpha.1_x64-portable.exe` (14 433 792 B), `latest.json` and `SHA256SUMS.txt`. GitHub
+  renamed the spaced local names to dotted ones, and the manifest and checksum name the stored names.
+- `latest.json` carries the exact Russian release notes, `version: 0.1.0-alpha.1`, and the signature from
+  the signed setup.
+- Downloaded the setup from the draft and checked it independently: its SHA-256 is
+  `4357113dae0236d693e324722ad1f81fd95f1fcd183e2d8d531070d972360f13`, byte-for-byte the line
+  `SHA256SUMS.txt` names. The `.sig` decodes to a minisign signature whose key id
+  (`e77eb0323a4a5d1f`) matches the repository variable `DESKTOP_UPDATER_PUBKEY`, and the Ed25519
+  signature verifies over the BLAKE2b-512 prehash of the setup — i.e. the artifact was signed by the
+  private half whose public half the Desktop Client embeds.
+
+Four defects surfaced only when the workflow actually ran; all are fixed:
+
+1. **CRLF failed every formatting check on Windows.** `core.autocrlf` checked the whole tree out as CRLF
+   on `windows-latest`, so `oxfmt --check` reported all 254 files. Added a repo-wide
+   [`.gitattributes`](../../.gitattributes) (`* text=auto eol=lf`, binaries unchanged); a fresh clone on
+   Windows now passes `fmt:check`.
+2. **The shell was never `cargo fmt`'d.** `cargo fmt --check` failed on `bridge.rs`, `main.rs` and
+   `notify.rs`. Formatted; 26 Rust tests still pass.
+3. **The signing step could not run with the key in the environment.** The Tauri CLI folds
+   `TAURI_SIGNING_PRIVATE_KEY` into its own `--private-key`, which collided with the
+   `--private-key-path` the script passes and failed every time. The signer call now drops the ambient
+   signing variables; its arguments are the only source of truth. Pinned by a test that signs an
+   artifact with the variable set.
+4. **The manifest step could not read its own draft.** `releases/tags/<tag>` answers 404 while the tag
+   has no git ref, so the step that derives `latest.json` and `SHA256SUMS.txt` failed after the draft was
+   already created. It now finds the draft in the releases list and fetches it by id.
+
+The draft was created twice and deleted once while iterating; the deleted one is gone. The surviving
+draft is **not published**, so the Update feed still offers nothing.
+
+Also confirmed by the same run and the API: the environment's `required_reviewers` genuinely gate the
+signing job — the run sat at `pending_deployments` until approved, and `current_user_can_approve` was the
+owner.
+
+### What this does **not** prove
+
+- **No tag was pushed and nothing was published.** The draft's assets are served from an `untagged-*`
+  URL because a draft's tag is not a git ref; a real Release (a pushed `desktop-v*` tag, then publishing
+  the draft) is the only way the feed sees it, and that still has to happen from `master`.
+- **The real-hardware smoke test is undriven by this run** — see the standing list at the bottom of this
+  file. Real microphone and headphones, a 30-minute call in the tray, sleep/wake, screen share, DM and
+  mention toasts on a real desktop, and the Portable-vs-installed profile behaviours still need a human
+  with the devices, per issue #13's acceptance criteria.
+- **The portable/installed manual acceptance on a clean Windows machine** is still the earlier harness
+  evidence, not a fresh-machine run of this draft's artifacts.
+
 ## Desktop 0.1.0-alpha.1 — signed release workflow
 
 2026-09-12, local Windows x64. `bun test` ran 67 tests green across 6 files, `bun run typecheck` and

@@ -102,11 +102,20 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     a mention raises exactly one toast from the tray, read back from Windows' own Action Center in
     `desktop:check`; nobody has yet watched a real one land for a real message, and clicking a toast
     is wired to nothing.
-    [#12 the signed release workflow](https://github.com/zabastx/voice-chat/issues/12) is built: a
-    `desktop-v<semver>` tag from `master` runs the Bun and Cargo quality gates with no signing material,
-    then enters the protected `desktop-release` Environment for manual approval before it signs the NSIS
-    setup and uploads a draft Release with the Portable EXE, `latest.json`, its `.sig` and
-    `SHA256SUMS.txt`. The assembly and the workflow are pinned by static tests; the one real draft run
-    still needs the environment, the secrets and a Windows runner. The frontier is now
-    [#13 verify and publish 0.1.0-alpha.1](https://github.com/zabastx/voice-chat/issues/13), blocked by
-    the un-run draft.
+    [#12 the signed release workflow](https://github.com/zabastx/voice-chat/issues/12) is built, and its
+    first real draft run has now happened as part of
+    [#13](https://github.com/zabastx/voice-chat/issues/13): a `desktop-v<semver>` tag from `master` runs
+    the Bun and Cargo quality gates with no signing material, then enters the protected `desktop-release`
+    Environment for manual approval before it signs the NSIS setup and uploads a draft Release with the
+    Portable EXE, `latest.json`, its `.sig` and `SHA256SUMS.txt`. A `workflow_dispatch` path builds the
+    same draft from any branch and skips the master-ancestry rule, so the workflow could be rehearsed
+    before the release commit reached `master`; the whole pipeline then passed on a Windows runner and
+    left a verified, unsigned draft (all five assets, a setup whose SHA-256 and Ed25519 signature both
+    check out against the repository's public key). That rehearsal found and fixed four defects the static
+    tests could not: a missing `.gitattributes` that made every Windows formatting check fail, unformatted
+    Rust sources, a signing step that collided with `TAURI_SIGNING_PRIVATE_KEY`, and a manifest step that
+    could not read back its own draft by tag. What remains for #13 is the human half — real
+    microphone/headphones and a 30-minute tray call, sleep/wake and screen share, notifications on a real
+    desktop — and then publishing the draft, which is the promotion step that puts it in the Update feed.
+    After that the frontier is [#14](https://github.com/zabastx/voice-chat/issues/14), proving the live
+    update on the next alpha.

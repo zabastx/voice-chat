@@ -6,7 +6,7 @@ What is built, what is deployed, and what still needs verifying — one row per 
 
 ## Desktop 0.1.0-alpha.1 — signed release workflow
 
-Issue #12 is built on `prototype/tauri-windows`. A `desktop-v<semver>` tag now drives
+Issue #12 is built, and its real draft run has now happened (issue #13). A `desktop-v<semver>` tag drives
 [desktop-release.yml](../../.github/workflows/desktop-release.yml). The `guard` job rejects anything that
 is not a `desktop-v<semver>` tag and proves its commit is an ancestor of `origin/master`
 (`git merge-base --is-ancestor`), then `quality` runs the repository gates
@@ -17,13 +17,19 @@ environment setting, so the updater key is withheld until a human approves — a
 `contents: write`. The private key and password are passed to the single signing step, never set at
 workflow level.
 
+The workflow also has a `workflow_dispatch` test path: it takes the tag as an input, skips the
+master-ancestry rule, and builds the same draft from any branch. It still needs the environment approval
+and still only creates a draft, so it is a rehearsal for issue #13, not a second way to publish.
+
 [scripts/desktop-release.ts](../../scripts/desktop-release.ts) is the assembly seam, and it runs in two
 passes because GitHub does not keep the names it is handed. `sign` signs the NSIS setup with the
 environment key and lists the setup, its `.sig` and the Portable EXE; the workflow uploads those three
 with `gh release create --draft`. `manifest` then reads the draft back with `gh api` and derives
 `latest.json` and `SHA256SUMS.txt` from GitHub's own `browser_download_url` and stored names — spaces
-become dots on upload, so a guessed URL would 404 — and the workflow uploads those two. The feed and the
-assembly share one `windowsReleaseAssets()` matcher
+become dots on upload, so a guessed URL would 404 — and the workflow uploads those two. Because a draft's
+tag has no git ref, the draft is found in the releases list and fetched by id rather than through
+`releases/tags/<tag>` (which answers 404 until the tag is pushed). The feed and the assembly share one
+`windowsReleaseAssets()` matcher
 ([shared/utils/desktop-release-assets.ts](../../shared/utils/desktop-release-assets.ts)), so both agree on
 what a complete x64 Release is. The three Russian sections of `desktop/release-notes/<version>.md` are
 asserted, and a prerelease has to name the SmartScreen warning, so a Release cannot ship without honest
@@ -33,10 +39,15 @@ publishes.
 
 Static checks live in [test/desktop-release.test.ts](../../test/desktop-release.test.ts): they drive the
 assembly over a temporary directory (published URL, signature round-trip, checksum against the stored
-names, a size mismatch refused) and parse the workflow YAML directly to pin the tag guard, the
-`quality → release` ordering, the protected environment, the single signing step, and the draft-then-metadata
-upload. The one real draft run — a Windows runner, the environment's approval, the signing secrets — still
-has to happen against the repository; see [verification.md](verification.md).
+names, a size mismatch refused), sign an artifact with `TAURI_SIGNING_PRIVATE_KEY` set (the release job's
+condition, which used to collide with `--private-key-path`), and parse the workflow YAML directly to pin
+the tag guard, the dispatch path, the `quality → release` ordering, the protected environment, the single
+signing step, and the draft-then-metadata upload. The real draft run has been exercised — see
+[verification.md](verification.md).
+
+The Windows `quality` gate depends on a repo-wide `.gitattributes` (`* text=auto eol=lf`): without it,
+`core.autocrlf` rewrote every checked-out file to CRLF on `windows-latest` and `oxfmt --check` failed all
+254 of them.
 
 ## Desktop 0.1.0-alpha.1 + v0.26.0 — desktop notifications from the tray
 
