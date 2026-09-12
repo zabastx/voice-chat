@@ -73,7 +73,9 @@ bun run desktop:check
 
 Harness создаёт временный HTTPS endpoint и release EXE с этим встроенным origin. Через WebView2 CDP
 он проверяет отказ от runtime override, локальный экран ошибки, retry без перезапуска, close/hide,
-single-instance restore, явный exit и bounded logs. Временный сертификат удаляется после проверки.
+single-instance restore, явный exit, bounded logs и desktop-уведомление при скрытом окне. Проверка
+показывает настоящие toast'ы и очищает свою историю уведомлений до и после себя. Временный
+сертификат удаляется после проверки.
 
 ## Проверка installer и Portable EXE
 
@@ -123,7 +125,12 @@ filesystem, process или store. Всё нативное проходит че�
 На доверенном origin — и только на нём — shell замораживает `window.voiceChatDesktop`:
 
 ```js
-{ desktopVersion: '0.1.0-alpha.1', bridgeVersion: 1, capabilities: ['voice-lifecycle'], setVoiceActive }
+{
+  desktopVersion: '0.1.0-alpha.1',
+  bridgeVersion: 1,
+  capabilities: ['voice-lifecycle', 'notifications', 'window-focus'],
+  setVoiceActive, showNotification, isForeground, onForegroundChange
+}
 ```
 
 `bridgeVersion` растёт, когда меняется форма контракта; новая возможность добавляется как
@@ -134,12 +141,35 @@ adapter. Неизвестные capabilities отбрасываются, поэ�
 страницы. Браузер и старый Desktop Client продолжают работать: пропадает только соответствующий
 native affordance.
 
-Единственная обратная операция первой версии — `setVoiceActive(boolean)`. `useVoice` вызывает её
-при входе в Voice Channel и в `reset()`; shell хранит флаг, чтобы согласованное обновление
-устанавливалось после звонка, а не посреди него. Операции регистрируются поимённо: capability,
-проверка payload и «сбой native не выходит наружу» находятся в
-[shared/utils/native-bridge.ts](../shared/utils/native-bridge.ts), а разбор конверта — в
-[src-tauri/src/bridge.rs](src-tauri/src/bridge.rs).
+Обратных операций две. `setVoiceActive(boolean)` — `useVoice` вызывает её при входе в Voice Channel
+и в `reset()`; shell хранит флаг, чтобы согласованное обновление устанавливалось после звонка, а не
+посреди него. `showNotification({title, body})` — весь словарь desktop-уведомления: две короткие
+строки обычного текста, без tag, icon, кнопки, action и URL. Длину проверяют обе стороны, а лишние
+параметры конверта отбрасываются, поэтому удалённый origin не может навести клик на рабочем столе
+члена. Shell ограничивает частоту, так что зациклившаяся страница не завалит desktop, и никогда не
+пишет текст уведомления в лог.
+
+`window-focus` — не операция, а событие в обратную сторону: shell сам сообщает странице, видит ли
+член окно. Без этого уведомления были бы невозможны — скрытый в трее клиент по-прежнему отвечает
+своей странице `document.hasFocus() === true` ([GOTCHAS 30](../docs/GOTCHAS.md)). Страница читает
+ответ через [useAppFocus()](../app/composables/useAppFocus.ts), который в браузере просто берёт
+`document.hasFocus()`.
+
+Операции регистрируются поимённо: capability, проверка payload и «сбой native не выходит наружу»
+находятся в [shared/utils/native-bridge.ts](../shared/utils/native-bridge.ts), а разбор конверта — в
+[src-tauri/src/bridge.rs](src-tauri/src/bridge.rs). Выбор транспорта уведомления живёт в
+[useDesktopNotifications()](../app/composables/useDesktopNotifications.ts): в браузере это Web
+Notification API, в Desktop Client — только bridge, ровно один из двух.
+
+Web Notification API внутри Desktop Client не работает и включить его нельзя: WebView2 отвечает на
+`Notification.requestPermission()` значением `denied` без запроса, а созданное уведомление сразу даёт
+`error` ([GOTCHAS 31](../docs/GOTCHAS.md)). Toast показывает сам shell через
+[src-tauri/src/notify.rs](src-tauri/src/notify.rs). Windows показывает его от имени Application User
+Model ID, а у Portable-копии нет ярлыка, который бы его нёс, — клиент регистрирует свой в
+`HKCU\Software\Classes\AppUserModelId\ru.zabastx.voicechat` перед первым уведомлением, а
+uninstaller удаляет ключ. Клик по toast'у пока не делает ничего: URL в контракте нет, и окно
+открывается из трея. По той же причине нет и tag, поэтому второе сообщение из того же разговора
+показывает второй toast, а не заменяет первый, — в браузере оно заменяет.
 
 Обратный канал — отменяемая навигация `voicechat://bridge/<op>?value=...`, тот же механизм, которым
 уже пользуются «Повторить» и «Выйти» на локальном экране ошибки. `chrome.webview.postMessage` здесь
@@ -155,7 +185,9 @@ native affordance.
 
 Одни и те же contract scenarios ([test/native-bridge-contract.ts](../test/native-bridge-contract.ts))
 проходят и с browser adapter в `bun test`, и с настоящим Tauri adapter внутри WebView2 в
-`bun run desktop:check`.
+`bun run desktop:check`. Там же проверяется уведомление при скрытом окне: harness ждёт, пока
+страница узнает от shell, что она в трее, шлёт уведомление и читает результат из Windows Action
+Center, а не из собственного лога клиента.
 
 ## Обновления Portable EXE и Update feed
 

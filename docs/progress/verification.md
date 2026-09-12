@@ -4,6 +4,82 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop 0.1.0-alpha.1 + v0.26.0 — desktop notifications from the tray
+
+2026-09-12, local Windows x64. Three passes: the two premises measured from inside a real WebView2,
+`bun run desktop:check` against a release shell, and the app itself driven in Chromium over both
+transports. `cargo test` passed all 26 native tests and `bun test` all 55.
+
+Measured first, because the issue was written on an assumption that did not hold. Both readings come
+from the page reporting to a local server on a timer — no debugger attached, so neither is an
+artefact of the harness:
+
+- **The Web Notification API is dead in WebView2.** `'Notification' in window` is `true`, then
+  `requestPermission()` resolved to `denied` with no prompt and a constructed notification fired
+  `error` rather than `show`. Identical with the window visible and hidden. An earlier reading
+  through CDP agreed, and was re-taken without it in case Playwright's focus emulation had coloured
+  it ([GOTCHAS 31](../GOTCHAS.md)).
+- **A hidden client still claims focus.** With the window hidden to the tray,
+  `document.hasFocus()` was `true`, `document.visibilityState` `'visible'` and `document.hidden`
+  `false` ([GOTCHAS 30](../GOTCHAS.md)).
+- **Nothing is throttled while hidden.** The WebSocket stayed open and delivered 12 round trips in
+  six seconds, a 1000 ms timer fired at 1014 ms, and eight chained `setTimeout(…, 0)` drained in
+  15 ms — so the realtime connection the issue asked about survives the tray, and so does the
+  bridge's dispatch queue.
+
+In the release shell (`bun run desktop:check`, 21 contract scenarios against the real Tauri adapter,
+every earlier assertion still green):
+
+- The frozen descriptor carries `voice-lifecycle,notifications,window-focus` and exactly four
+  operations, and the remote origin still has no usable Tauri `invoke`.
+- A notification of exactly the size the Web Release believes is legal was accepted, which is what
+  pins the TypeScript and Rust bounds to each other.
+- With the client hidden in the tray, the page waited to learn it from the shell, sent one
+  notification, and it arrived in **Windows' own Action Center** — read back from
+  `ToastNotificationManager.History`, not from the client's log. The AUMID the client registers for
+  itself is what makes that work for a Portable copy with no shortcut.
+- The log recorded that notifications happened and not a word of what they said, and no notification
+  failed or hit the rate limit.
+
+In the app itself — `bun run notify:check` ([scripts/notify-check.ts](../../scripts/notify-check.ts),
+two signed-in accounts in Chromium against a running dev server, both transports replaced by
+recorders so nothing reaches a real desktop, and every scenario blocked on the message actually
+arriving over the reader's own WebSocket first, because a silent zero otherwise proves nothing. The
+harness signs in over the API with a session cached under `.data/notify`, so a repeat run spends
+neither the login rate limit nor a wait for the login form to hydrate):
+
+| Scenario                                                     | Result                                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------- |
+| browser, conversation open on screen                         | no notification                                             |
+| browser, DM with the window blurred                          | exactly one, over the Web Notification API                  |
+| browser, setting off                                         | no notification                                             |
+| browser, permission already refused                          | no notification, and `requestPermission` never called again |
+| Desktop Client, conversation open and window visible         | no notification                                             |
+| Desktop Client hidden in the tray, DM                        | exactly one, over the bridge and only the bridge            |
+| Desktop Client hidden in the tray, mention in a text channel | exactly one, over the bridge                                |
+| Desktop Client restored from the tray                        | back to silent on the open conversation                     |
+
+The hidden-client rows are the ones worth reading twice: `document.hasFocus()` was still `true`
+throughout them — the check asserts it — and the notification fired anyway, because the page took
+the shell's answer instead.
+
+### Not verified
+
+- **Nobody has watched a real toast for a real message.** The Action Center assertion proves Windows
+  accepted and displayed the notification, but a human has not seen a DM from a second member raise
+  one on their own desktop, nor checked how the Russian text reads at real length in a real toast.
+- **Clicking the toast does nothing.** The contract carries no URL by design, and restoring the
+  window on activation is not wired up; in a browser the same notification still opens its channel.
+- **The rate limit has never actually tripped in a real client** — only in Rust unit tests against
+  the clock.
+- **The `--tray` cold start** (client launched straight into the tray, before the first document
+  loads) is covered by `push_foreground` after navigation but was not driven end to end.
+- **`notify:check` is not in CI** — it needs a running dev server and the seeded dev accounts, so it
+  is a command someone runs, not a gate that runs itself.
+- **The `showNotification` queue overflow** (32 pending operations) is unreachable in practice and
+  was never driven; what it protects — `setVoiceActive` recording a value the queue dropped — is
+  covered by reading the code, not by a test.
+
 ## Desktop 0.1.0-alpha.1 — installed update
 
 2026-09-11, local Windows x64, two real signed NSIS installers built from this working tree

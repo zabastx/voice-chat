@@ -1,6 +1,6 @@
 {
 	"name": "voice-chat",
-	"version": "0.25.0",
+	"version": "0.26.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -15,6 +15,7 @@
 		"desktop:update-check": "bun desktop/update-check.mjs",
 		"desktop:installed-update-check": "bun desktop/installed-update-check.mjs",
 		"desktop:bench": "node desktop/bench.mjs",
+		"notify:check": "bun scripts/notify-check.ts",
 		"test": "bun test",
 		"db:generate": "drizzle-kit generate",
 		"preview": "nuxt preview",

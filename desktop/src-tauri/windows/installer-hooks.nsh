@@ -15,5 +15,9 @@
   SetShellVarContext current
   RMDir /r "$APPDATA\${BUNDLEID}"
   RMDir /r "$LOCALAPPDATA\${BUNDLEID}"
+  ; Windows shows a toast on behalf of an Application User Model ID, and a Portable copy
+  ; has no shortcut to carry one, so the client registers its own before the first
+  ; notification. It goes with the app.
+  DeleteRegKey HKCU "Software\Classes\AppUserModelId\${BUNDLEID}"
   voice_chat_cleanup_done:
 !macroend

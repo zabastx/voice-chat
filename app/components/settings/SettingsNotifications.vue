@@ -10,14 +10,15 @@
 			/>
 
 			<USwitch
+				:description="desktopDescription"
+				:disabled="notifications.unsupported.value"
 				:model-value="prefs.desktopNotifications"
-				description="Показывать уведомление, когда окно не в фокусе."
 				label="Уведомления на рабочем столе"
 				@update:model-value="onDesktopToggle"
 			/>
 
 			<UAlert
-				v-if="blocked"
+				v-if="notifications.blocked.value"
 				color="warning"
 				description="Разрешите уведомления для этого сайта в настройках браузера."
 				icon="i-lucide-bell-off"
@@ -39,24 +40,27 @@ import { NOTIFICATION_TRANSPORTS } from '~~/shared/utils/notification-transports
 
 const toast = useToast()
 const prefs = usePreferences()
+const notifications = useDesktopNotifications()
 
-const blocked = ref(
-	import.meta.client && 'Notification' in window && Notification.permission === 'denied'
+// A Desktop Client shows these itself, so there is no site permission to explain — and
+// no «не в фокусе», since the window it is not in front of may be hidden in the tray.
+const desktopDescription = computed(() =>
+	notifications.transport.value === 'native'
+		? 'Показывать уведомление, когда окно свёрнуто в трей или не в фокусе.'
+		: 'Показывать уведомление, когда окно не в фокусе.'
 )
 
 async function onDesktopToggle(enabled: boolean) {
 	if (!enabled) {
-		prefs.value.desktopNotifications = false
+		notifications.disable()
 		return
 	}
-	if (!('Notification' in window)) {
+	if (await notifications.enable()) return
+	if (notifications.unsupported.value) {
 		toast.add({ title: 'Браузер не поддерживает уведомления', color: 'warning' })
-		return
 	}
-	const permission = await Notification.requestPermission()
-	blocked.value = permission === 'denied'
-	if (permission !== 'granted') return
-	prefs.value.desktopNotifications = true
+	// A refusal is not a toast: the «Уведомления заблокированы» alert below says it, and
+	// stays said, instead of appearing once and scrolling away.
 }
 
 // Each card loads its own status and hides itself when its messenger is not

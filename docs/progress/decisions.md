@@ -100,6 +100,23 @@ affordance of the real-executable harnesses (`VOICECHAT_DESKTOP_UPDATE_CHECK=1`)
 lets a harness build a second versioned artifact through a Tauri config override instead of
 editing tracked files.
 
+**Desktop notifications go through the bridge, not the page (#11, 2026-09-12).** Settled after
+measuring, not by preference: the Web Notification API is refused outright inside WebView2
+([GOTCHAS 31](../GOTCHAS.md)), so the page hands the shell a bounded title/body and the shell raises
+the Windows toast. The toast crate is `tauri-winrt-notification` rather than
+`tauri-plugin-notification`, because the plugin registers JS commands and the remote origin is not
+meant to reach a Tauri command at all. The shell also owns the answer to "can the member see the
+window", since a hidden client still tells its page it has focus
+([GOTCHAS 30](../GOTCHAS.md)) — but only the page knows which conversation is on screen, so the two
+each answer the half they can see rather than one deciding alone. Reasoning in
+[ADR 0013](../adr/0013-remote-ui-behind-versioned-native-bridge.md).
+
+**Deferred from #11, deliberately:** a toast click does nothing — carrying a destination is exactly
+the authority the bridge refuses, and wiring activation to "restore the window" (which needs no
+destination from the page) is a later Desktop Release. For the same reason the native toast has no
+tag, so a second message about one conversation stacks where a browser would replace. Neither blocks
+the alpha.
+
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs

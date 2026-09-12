@@ -55,6 +55,9 @@ describe('desktop packaging', () => {
 		expect(hooks).toContain('$UpdateMode')
 		expect(hooks).toContain('$LOCALAPPDATA\\${BUNDLEID}')
 		expect(hooks).toContain('$APPDATA\\${BUNDLEID}')
+		// The notification Application User Model ID the client registers for itself (#11)
+		// is app data too, so it leaves with the app.
+		expect(hooks).toContain('DeleteRegKey HKCU "Software\\Classes\\AppUserModelId\\${BUNDLEID}"')
 		expect(hooks).not.toMatch(/EdgeUpdate|WEBVIEW2APPGUID|MicrosoftEdgeWebView/i)
 	})
 })

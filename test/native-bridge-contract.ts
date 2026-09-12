@@ -3,9 +3,12 @@
 // desktop/shell-check.mjs. Keeping them here — rather than in shared/ — keeps the
 // contract out of the Web Release bundle; the shell check bundles this file itself.
 import {
+	NOTIFICATION_BODY_LIMIT,
+	NOTIFICATION_TITLE_LIMIT,
 	resolveNativeBridge,
 	type NativeCapability,
-	type NativeBridge
+	type NativeBridge,
+	type NativeNotification
 } from '../shared/utils/native-bridge'
 
 export interface ContractResult {
@@ -103,6 +106,149 @@ export function runNativeBridgeContract(candidate: unknown, expected: Expected):
 			if (!throws(() => bridge.setVoiceActive(value as boolean))) return `принял ${String(value)}`
 		}
 		return true
+	})
+
+	check('showNotification отклоняет payload, который не {title, body}', () => {
+		const bad: unknown[] = [
+			undefined,
+			null,
+			'заголовок',
+			42,
+			{},
+			{ title: 'Данил' },
+			{ title: 1, body: '' },
+			{ title: 'Данил', body: 1 },
+			{ title: '   ', body: 'привет' }
+		]
+		for (const value of bad) {
+			if (!throws(() => bridge.showNotification(value as NativeNotification))) {
+				return `принял ${JSON.stringify(value) ?? String(value)}`
+			}
+		}
+		return true
+	})
+
+	check('showNotification принимает обычное сообщение в любом окружении', () => {
+		const took = bridge.showNotification({ title: 'Данил', body: 'привет' })
+		if (typeof took !== 'boolean') return `вернул ${String(took)}`
+		// Only a Desktop Client that declared the capability can have taken it; a browser
+		// says `false`, which is how "shell has it" stays distinct from "nothing happened".
+		return took === bridge.supports('notifications') ? true : `took=${took}`
+	})
+
+	check('длинное сообщение обрезается, а не отклоняется', () => {
+		const long = {
+			title: 'Д'.repeat(NOTIFICATION_TITLE_LIMIT * 2),
+			body: 'п'.repeat(NOTIFICATION_BODY_LIMIT * 2)
+		}
+		bridge.showNotification(long)
+		// The shell measures the same bounds again and would refuse an over-long payload,
+		// so an accepted call proves the page trimmed it first.
+		return true
+	})
+
+	check('уведомление не несёт ни действия, ни адреса', () => {
+		const forwarded: Record<string, unknown>[] = []
+		const spy = resolveNativeBridge({
+			desktopVersion: '1.0.0',
+			bridgeVersion: 1,
+			capabilities: ['notifications'],
+			showNotification: (notification: Record<string, unknown>) => forwarded.push(notification)
+		})
+		spy.showNotification({
+			title: 'Данил',
+			body: 'привет',
+			tag: 'channel-1',
+			icon: 'https://example.invalid/avatar.png',
+			actions: [{ action: 'open', title: 'Открыть' }],
+			data: { url: 'https://example.invalid' }
+		} as NativeNotification)
+		const sent = forwarded[0]
+		if (!sent) return 'операция не дошла до shell'
+		const keys = Object.keys(sent).sort().join(',')
+		return keys === 'body,title' ? true : `shell получил ${keys}`
+	})
+
+	check('многострочное сообщение приходит одной строкой', () => {
+		const forwarded: NativeNotification[] = []
+		const spy = resolveNativeBridge({
+			desktopVersion: '1.0.0',
+			bridgeVersion: 1,
+			capabilities: ['notifications'],
+			showNotification: (notification: NativeNotification) => forwarded.push(notification)
+		})
+		spy.showNotification({ title: ' Данил ', body: 'первая\nстрока\tи   вторая' })
+		const sent = forwarded[0]
+		if (!sent) return 'операция не дошла до shell'
+		if (sent.title !== 'Данил') return `title=${sent.title}`
+		return sent.body === 'первая строка и вторая' ? true : `body=${sent.body}`
+	})
+
+	check('клиент без notifications capability не показывает ничего молча', () => {
+		let calls = 0
+		const older = resolveNativeBridge({
+			desktopVersion: '0.0.9',
+			bridgeVersion: 1,
+			capabilities: [],
+			showNotification: () => {
+				calls += 1
+			}
+		})
+		const took = older.showNotification({ title: 'Данил', body: 'привет' })
+		if (took) return 'объявил доставку без capability'
+		return calls === 0 ? true : 'вызвал операцию без capability'
+	})
+
+	check('isForeground отвечает true, пока shell не сказал иначе', () => {
+		if (typeof bridge.isForeground() !== 'boolean') return 'не boolean'
+		// Без capability страница решает сама — мост не должен притворяться, что знает.
+		return bridge.supports('window-focus') || bridge.isForeground() === true
+			? true
+			: 'браузерный адаптер соврал про фокус'
+	})
+
+	check('onForegroundChange возвращает отписку и переживает её дважды', () => {
+		const unsubscribe = bridge.onForegroundChange(() => {})
+		if (typeof unsubscribe !== 'function') return 'вернул не функцию'
+		unsubscribe()
+		unsubscribe()
+		return true
+	})
+
+	check('onForegroundChange отклоняет слушателя, который не функция', () => {
+		const bad: unknown[] = [undefined, null, 'listener', 42, {}]
+		for (const value of bad) {
+			if (!throws(() => bridge.onForegroundChange(value as () => void))) {
+				return `принял ${String(value)}`
+			}
+		}
+		return true
+	})
+
+	check('shell двигает фокус, и подписчик слышит это ровно один раз', () => {
+		let listener: ((foreground: boolean) => void) | null = null
+		let foreground = true
+		const spy = resolveNativeBridge({
+			desktopVersion: '1.0.0',
+			bridgeVersion: 1,
+			capabilities: ['window-focus'],
+			isForeground: () => foreground,
+			onForegroundChange: (next: (foreground: boolean) => void) => {
+				listener = next
+				return () => {
+					listener = null
+				}
+			}
+		})
+		const seen: boolean[] = []
+		const unsubscribe = spy.onForegroundChange((value) => seen.push(value))
+		if (!listener) return 'shell не получил слушателя'
+		foreground = false
+		;(listener as (foreground: boolean) => void)(false)
+		unsubscribe()
+		if (listener !== null) return 'отписка не дошла до shell'
+		if (spy.isForeground() !== false) return 'isForeground разошёлся с shell'
+		return seen.length === 1 && seen[0] === false ? true : `получено ${seen.join(',')}`
 	})
 
 	check('клиент без voice capability сохраняет голос рабочим', () => {

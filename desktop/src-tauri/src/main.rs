@@ -2,6 +2,7 @@
 
 mod bridge;
 mod desktop_log;
+mod notify;
 #[path = "../origin.rs"]
 mod origin;
 mod update;
@@ -92,12 +93,14 @@ fn perform_action(app: &tauri::AppHandle, action: ShellAction) {
         ShellAction::Show => {
             show_main(app);
             record(app, DesktopEvent::WindowShown);
+            report_foreground(app, true);
         }
         ShellAction::Hide => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
             }
             record(app, DesktopEvent::WindowHidden);
+            report_foreground(app, false);
         }
         ShellAction::OpenLogs => {
             if let Ok(directory) = app.path().app_log_dir() {
@@ -111,6 +114,14 @@ fn perform_action(app: &tauri::AppHandle, action: ShellAction) {
             record(app, DesktopEvent::ExitRequested);
             app.exit(0);
         }
+    }
+}
+
+/// Whether the member can see the window is the shell's to know: a hidden WebView2 still
+/// tells its own page that it has focus (GOTCHAS 30), so the page waits to be told.
+fn report_foreground(app: &tauri::AppHandle, foreground: bool) {
+    if let Some(bridge) = app.try_state::<Arc<bridge::Bridge>>() {
+        bridge.report_foreground(app, foreground);
     }
 }
 
@@ -317,6 +328,7 @@ fn watch_navigation(
     window: &tauri::WebviewWindow,
     target_origin: url::Origin,
     connection: Arc<ConnectionState>,
+    bridge: Arc<bridge::Bridge>,
 ) -> tauri::Result<()> {
     let target_navigation = Arc::new(AtomicU64::new(0));
     let starting_window = window.clone();
@@ -393,6 +405,9 @@ fn watch_navigation(
             if source_matches && success.as_bool() && status < 400 {
                 callback_connection.online();
                 record(callback_window.app_handle(), DesktopEvent::ServerReached);
+                // The freshly injected descriptor assumes the member is looking; correct
+                // it before the new document can decide anything on that assumption.
+                bridge.push_foreground(callback_window.app_handle());
             } else if callback_connection.mode.load(Ordering::SeqCst) == CONNECTING
                 && (!success.as_bool() || status >= 400)
             {
@@ -447,10 +462,12 @@ fn main() {
             let navigation_connection = Arc::clone(&connection);
             let bridge = Arc::new(bridge::Bridge::default());
             let navigation_bridge = Arc::clone(&bridge);
+            let starts_visible = !std::env::args().any(|arg| arg == "--tray");
+            bridge.report_foreground(app.handle(), starts_visible);
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                     .title("Voice Chat")
-                    .visible(!std::env::args().any(|arg| arg == "--tray"))
+                    .visible(starts_visible)
                     .inner_size(1180.0, 780.0)
                     .min_inner_size(720.0, 480.0)
                     .initialization_script(health_check_script(&url))
@@ -506,8 +523,9 @@ fn main() {
                     })
                     .build()?;
 
-            watch_navigation(&window, origin, Arc::clone(&connection))?;
-            // Kept for the updater ticket: an agreed update waits for the call to end.
+            watch_navigation(&window, origin, Arc::clone(&connection), Arc::clone(&bridge))?;
+            // Read by the updater, so an agreed update waits for the call to end, and by
+            // `report_foreground`, so the page learns it is sitting in the tray.
             app.manage(bridge);
             start_reconnect_worker(
                 app.handle().clone(),
@@ -548,13 +566,20 @@ fn main() {
 
             // Install after tray creation: if setup fails, never strand a hidden window.
             let close_window = window.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
+            window.on_window_event(move |event| match event {
+                WindowEvent::CloseRequested { api, .. } => {
                     if close_window.hide().is_ok() {
                         record(close_window.app_handle(), DesktopEvent::WindowHidden);
+                        report_foreground(close_window.app_handle(), false);
                         api.prevent_close();
                     }
                 }
+                // Alt-tabbing away is the browser's `blur` by another name, and the page
+                // decides the same way it does in a tab it cannot see.
+                WindowEvent::Focused(focused) => {
+                    report_foreground(close_window.app_handle(), *focused);
+                }
+                _ => {}
             });
             Ok(())
         })

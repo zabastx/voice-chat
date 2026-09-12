@@ -77,6 +77,9 @@ const { channelsOpen, channelsHidden } = usePanels()
 const realtime = useRealtime()
 const voice = useVoice()
 const prefs = usePreferences()
+const notifications = useDesktopNotifications()
+// Not `document.hasFocus()`: a Desktop Client in the tray still claims to have it.
+const focused = useAppFocus()
 const { user, fetch: fetchSession } = useUserSession()
 const { currentVersion, hasUnseen, markSeen } = useChangelog()
 
@@ -127,7 +130,7 @@ realtime.onEvent((event) => {
 		const isDm = dmStore.isDm(event.message.channelId)
 		const mentionsMe =
 			Boolean(user.value) && mentionedIds(event.message.content).includes(user.value!.id)
-		const away = !document.hasFocus() || store.activeChannelId.value !== event.message.channelId
+		const away = !focused.value || store.activeChannelId.value !== event.message.channelId
 		// a DM or a mention pings even when another channel is focused; a DM stays
 		// quiet only while you're actually looking at that conversation
 		if (prefs.value.messageSound) {
@@ -141,27 +144,15 @@ realtime.onEvent((event) => {
 })
 
 function notifyDesktop(message: MessageDto) {
-	if (
-		document.hasFocus() ||
-		!prefs.value.desktopNotifications ||
-		!('Notification' in window) ||
-		Notification.permission !== 'granted'
-	) {
-		return
-	}
+	if (focused.value) return
 	const author = membersStore.profile(message.authorId)
 	const body = decodeMentions(message.content, Object.values(membersStore.members.value))
-	const notification = new Notification(author?.displayName ?? message.authorName, {
-		body: body.slice(0, 120) || 'Вложение',
-		// one notification per channel — repeats replace instead of stacking
-		tag: message.channelId,
-		icon: author?.avatarUrl ?? undefined
+	notifications.notify({
+		title: author?.displayName ?? message.authorName,
+		body: body || 'Вложение',
+		channelId: message.channelId,
+		avatarUrl: author?.avatarUrl ?? undefined
 	})
-	notification.onclick = () => {
-		window.focus()
-		void navigateTo(`/channels/${message.channelId}`)
-		notification.close()
-	}
 }
 
 // join/leave sounds for whoever enters/exits my current voice channel
@@ -185,21 +176,19 @@ watch(realtime.voice, (rooms) => {
 	roomMemberIds = ids
 })
 
-function onFocus() {
+// Coming back to the app marks what you are looking at as read — including a Desktop
+// Client restored from the tray, which raises no window `focus` event of its own.
+watch(focused, (isFocused) => {
+	if (!isFocused) return
 	const active = store.activeChannel.value
 	if (active && store.isUnread(active)) store.markRead(active.id)
 	const dmConvo = dmStore.conversation(dmStore.activeChannelId.value)
 	if (dmConvo && dmStore.isUnread(dmConvo)) dmStore.markRead(dmConvo.channelId)
-}
+})
 
 onMounted(() => {
 	realtime.start()
-	window.addEventListener('focus', onFocus)
 	// sessions sealed before the role column existed carry no role
 	if (user.value && !user.value.role) void refreshSession()
-})
-
-onUnmounted(() => {
-	window.removeEventListener('focus', onFocus)
 })
 </script>

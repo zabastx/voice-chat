@@ -95,5 +95,11 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     agreed install waits out a live Voice Channel, `tauri-plugin-updater` refuses an artifact signed
     with another key, and the accepted one restarts the client with its Sign-in intact. The updater
     public key is a build input; the private half belongs to the `desktop-release` environment in
-    #12. The frontier is now [#11 notifications](https://github.com/zabastx/voice-chat/issues/11) and
+    #12. [#11 notifications](https://github.com/zabastx/voice-chat/issues/11) is built and verified:
+    the Web Notification API turned out to be refused outright inside WebView2, and a client hidden
+    in the tray still tells its page it has focus, so the bridge took ADR 0013's reserved fallback —
+    a bounded `showNotification({title, body})` plus a `window-focus` event the shell pushes. A DM or
+    a mention raises exactly one toast from the tray, read back from Windows' own Action Center in
+    `desktop:check`; nobody has yet watched a real one land for a real message, and clicking a toast
+    is wired to nothing. The frontier is now
     [#12 the signed release workflow](https://github.com/zabastx/voice-chat/issues/12).

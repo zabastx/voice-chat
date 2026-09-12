@@ -31,6 +31,25 @@ const close = (server) =>
 		if (!server?.listening) return resolve()
 		server.close(resolve)
 	})
+// What Windows itself did with a notification, rather than what the shell believes it did.
+// A toast that was shown lands in this history under the client's Application User Model
+// ID; the marker travels in an environment variable so no console codepage can mangle it.
+const toastHistory = `[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime] | Out-Null
+$history = [Windows.UI.Notifications.ToastNotificationManager]::History`
+const shownToasts = (marker) =>
+	Number(
+		powershell(
+			`${toastHistory}
+@($history.GetHistory('ru.zabastx.voicechat') | Where-Object {
+  ($_.Content.GetElementsByTagName('text') | ForEach-Object { $_.InnerText }) -contains $env:VC_TOAST
+}).Count`,
+			{ VC_TOAST: marker }
+		)
+	)
+const clearToasts = () =>
+	powershell(`${toastHistory}
+$history.Clear('ru.zabastx.voicechat')`)
+
 const waitFor = async (predicate, label) => {
 	for (let attempt = 0; attempt < 60; attempt += 1) {
 		if (await predicate()) return
@@ -182,8 +201,9 @@ try {
 		descriptor?.desktopVersion !== version.ProductVersion ||
 		descriptor.bridgeVersion !== 1 ||
 		descriptor.frozen !== true ||
-		descriptor.capabilities.join(',') !== 'voice-lifecycle' ||
-		descriptor.operations.join(',') !== 'setVoiceActive'
+		descriptor.capabilities.join(',') !== 'voice-lifecycle,notifications,window-focus' ||
+		descriptor.operations.join(',') !==
+			'setVoiceActive,showNotification,isForeground,onForegroundChange'
 	) {
 		throw new Error(`Unexpected Native Bridge descriptor: ${JSON.stringify(descriptor)}`)
 	}
@@ -203,6 +223,31 @@ try {
 	console.log(
 		`PASS bridge: ${contract.length} contract scenarios pass against the real Tauri adapter`
 	)
+
+	// The Web Release and the shell each bound a notification, in TypeScript and in Rust.
+	// A notification of exactly the size the page believes is legal has to arrive: if the
+	// shell measured anything smaller, the two copies would have drifted apart.
+	const logDirectory = join(process.env.LOCALAPPDATA, 'ru.zabastx.voicechat', 'logs')
+	const readLogs = () =>
+		readdirSync(logDirectory)
+			.filter((name) => name.endsWith('.log'))
+			.map((name) => readFileSync(join(logDirectory, name), 'utf8'))
+			.join('')
+	const shownCount = () => (readLogs().match(/notification shown/g) ?? []).length
+
+	// Anything this check raises is a real toast on a real desktop, so it starts and ends
+	// with an empty Action Center rather than leaving four of them behind.
+	clearToasts()
+	const beforeLimits = shownCount()
+	await page.evaluate(() => {
+		const limits = globalThis.__voiceChatNotificationLimits
+		globalThis.voiceChatDesktop.showNotification({
+			title: 'Д'.repeat(limits.title),
+			body: 'п'.repeat(limits.body)
+		})
+	})
+	await waitFor(() => shownCount() > beforeLimits, 'a notification at the contract bounds')
+	console.log('PASS notifications: the page and the shell bound a notification the same way')
 
 	const authority = await page.evaluate(async () => {
 		const report = { invoke: 'unavailable', globals: [] }
@@ -273,6 +318,12 @@ try {
 	await page.locator('#production-app').waitFor({ timeout: 10_000 })
 	console.log('PASS recovery: a later failed navigation returns to the local screen')
 
+	// #11 wants a notification proved where it actually matters: with the window hidden.
+	// The page cannot even tell that it is hidden — WebView2 keeps answering
+	// `document.hasFocus()` with `true` (GOTCHAS 30) — so the shell has to have said so.
+	const foreground = () => page.evaluate(() => globalThis.voiceChatDesktop.isForeground())
+	if ((await foreground()) !== true) throw new Error('A visible client reported no foreground')
+
 	const processState = () =>
 		JSON.parse(
 			powershell(
@@ -283,8 +334,23 @@ try {
 	await waitFor(() => !isHidden(), 'initial window')
 	powershell(`(Get-Process -Id ${child.pid}).CloseMainWindow()`)
 	await waitFor(isHidden, 'close-to-tray')
+
+	await waitFor(async () => (await foreground()) === false, 'the page to learn it is hidden')
+	const trayBody = 'сообщение, пока клиент в трее'
+	const beforeHidden = shownCount()
+	await page.evaluate(
+		(body) => globalThis.voiceChatDesktop.showNotification({ title: 'Данил', body }),
+		trayBody
+	)
+	await waitFor(() => shownCount() > beforeHidden, 'a notification raised from the tray')
+	// The shell reporting success is not the same as Windows having shown anything, so
+	// take the answer from the Action Center instead.
+	await waitFor(() => shownToasts(trayBody) === 1, 'the notification to reach the Action Center')
+	console.log('PASS notifications: a client hidden in the tray reaches the Windows Action Center')
+
 	execFileSync(exe, [], { windowsHide: true })
 	await waitFor(() => !isHidden(), 'single-instance restore')
+	await waitFor(async () => (await foreground()) === true, 'the page to learn it is back')
 	const count = powershell("@(Get-Process -Name 'voice-chat' -ErrorAction SilentlyContinue).Count")
 	if (count !== '1') throw new Error(`Expected one Voice Chat process, found ${count}`)
 	execFileSync(exe, ['--tray'], { windowsHide: true })
@@ -297,7 +363,6 @@ try {
 	await waitFor(() => child.exitCode !== null, 'explicit exit')
 	console.log('PASS lifecycle: explicit exit stops the process')
 
-	const logDirectory = join(process.env.LOCALAPPDATA, 'ru.zabastx.voicechat', 'logs')
 	const logs = readdirSync(logDirectory)
 		.filter((name) => name.endsWith('.log'))
 		.map((name) => join(logDirectory, name))
@@ -322,7 +387,20 @@ try {
 		throw new Error('The shell accepted a forged Native Bridge message')
 	}
 	console.log('PASS bridge: the shell applied setVoiceActive and refused every forged envelope')
+
+	if (recorded.includes('notification failed') || recorded.includes('notification rate limited')) {
+		throw new Error('The shell could not actually show a notification it accepted')
+	}
+	if (/Данил|сообщение|привет/.test(recorded)) {
+		throw new Error('Desktop log contains notification text')
+	}
+	console.log('PASS diagnostics: notifications are logged without a word of what they said')
 } finally {
+	try {
+		clearToasts()
+	} catch {
+		// the desktop's notification history is not this check's to insist on
+	}
 	await browser?.close().catch(() => {})
 	if (child?.exitCode === null) child.kill()
 	await close(overrideServer)

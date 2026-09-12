@@ -305,6 +305,49 @@ same path: an HTTP endpoint is rejected unless the config also carries
 `download_and_install` never returns — it hands the NSIS installer `/P /R` and calls
 `std::process::exit(0)`, so the proof of success is the restarted client, not a return value.
 
+### 30. A Desktop Client hidden in the tray still tells its page it has focus
+
+Hiding the window does not reach WebView2's own idea of visibility. Measured 2026-09-12 from inside
+the page, with no debugger attached: with the window hidden to the tray, `document.hasFocus()` is
+still `true`, `document.visibilityState` is still `'visible'` and `document.hidden` is still
+`false`. So every "is the member looking at this?" heuristic a browser can rely on — sounds,
+mark-read, whether to notify — silently inverts inside a Desktop Client, and the one feature that
+exists _for_ the hidden window would never fire.
+
+Fixed by making it the shell's question: `Bridge::report_foreground` pushes the answer into the page
+on every show, hide, close-to-tray and `WindowEvent::Focused`, and the page reads it through
+[useAppFocus()](../app/composables/useAppFocus.ts), which falls back to `document.hasFocus()` in a
+browser. A fresh document starts out assuming the member is looking, so the shell re-states the
+value from `NavigationCompleted` — a client started or reloaded with `--tray` would otherwise sit
+there believing it is in the foreground.
+
+The good news from the same measurement: nothing else is throttled while hidden. The WebSocket stays
+open and delivers, a 1000 ms timer fires at 1014 ms, and a chain of eight `setTimeout(…, 0)` drains
+in 15 ms — so the realtime connection and the bridge's dispatch queue both keep working in the tray.
+
+### 31. WebView2 denies the Web Notification API outright — there is no prompt to grant
+
+`'Notification' in window` is `true` inside WebView2, which makes feature detection say yes. Then
+`Notification.requestPermission()` resolves to **`denied`** without ever showing a prompt, and a
+constructed `Notification` fires `error` instead of `show`. Measured 2026-09-12 in the real shell,
+window visible and hidden alike. WebView2 leaves web notifications to the host app through
+`ICoreWebView2_22::add_NotificationReceived`; with no handler registered — and wry registers none —
+the whole API is refused rather than merely unwired.
+
+So the Desktop Client's notifications do not come from the page at all. The page hands the shell a
+bounded title and body over the Native Bridge's `notifications` capability and the shell raises the
+Windows toast itself ([notify.rs](../desktop/src-tauri/src/notify.rs)), which is the fallback
+[ADR 0013](adr/0013-remote-ui-behind-versioned-native-bridge.md) reserved for exactly this outcome.
+Two consequences worth knowing:
+
+- **A toast needs a registered Application User Model ID.** A Portable copy has no Start Menu
+  shortcut to carry one, so the client writes its own under
+  `HKCU\Software\Classes\AppUserModelId\ru.zabastx.voicechat` before the first toast; the NSIS
+  uninstaller deletes it. Without it `Toast::show()` fails and nothing appears.
+- **Do not reach for `tauri-plugin-notification`.** It would register JS commands, and the remote
+  origin is not meant to reach a Tauri command at all. `tauri-winrt-notification` is the same toast
+  without the command surface.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

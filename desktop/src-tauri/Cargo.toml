@@ -23,6 +23,11 @@ tauri-plugin-updater = "2.11.0"
 [target.'cfg(windows)'.dependencies]
 webview2-com = "=0.38.2"
 windows = "=0.61.3"
+# The toast and the Application User Model ID it is shown under (#11). Deliberately not
+# tauri-plugin-notification: that registers JS commands, and the remote origin is not
+# meant to reach a Tauri command at all (adr/0013).
+tauri-winrt-notification = "0.8.1"
+windows-registry = "0.6"
 
 [profile.release]
 strip = true

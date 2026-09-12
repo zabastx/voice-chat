@@ -4,6 +4,66 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop 0.1.0-alpha.1 + v0.26.0 — desktop notifications from the tray
+
+Issue #11 is built on `prototype/tauri-windows`, across both release lines: the Web Release picks
+the transport, the Desktop Release raises the toast.
+
+The premise the issue was written on turned out to be false, and measuring it first is what shaped
+everything else. **The Web Notification API cannot work inside WebView2**: `'Notification' in
+window` is `true`, then `requestPermission()` resolves to `denied` with no prompt and a constructed
+notification fires `error` — window visible and hidden alike ([GOTCHAS 31](../GOTCHAS.md)). And
+**a client hidden in the tray still reports `document.hasFocus() === true`** to its own page, with
+`visibilityState` still `'visible'` ([GOTCHAS 30](../GOTCHAS.md)), so the page could not even tell
+it was the case the feature exists for. Both were measured from inside the page with no debugger
+attached, so neither is an artefact of the harness. The same measurement cleared the realtime
+question the issue asked about: while hidden the WebSocket stays open and delivering, a 1000 ms
+timer fires at 1014 ms, and eight chained `setTimeout(…, 0)` drain in 15 ms.
+
+So [ADR 0013](../adr/0013-remote-ui-behind-versioned-native-bridge.md)'s reserved fallback is taken,
+and the bridge grows two capabilities. `notifications` is one bounded reverse operation,
+`showNotification({title, body})`: two short lines of plain text, folded to one line and length-
+bounded in TypeScript before sending and again in Rust on arrival, with no tag, icon, button, action
+or URL, and every other query parameter dropped rather than read. The shell rate-limits what it
+relays (12 a minute) so a page stuck in a loop cannot bury the desktop, and logs that a notification
+happened without a word of what it said. `window-focus` is not an operation but a native event: the
+shell pushes whether the member can see the window on every show, hide, close-to-tray and
+`WindowEvent::Focused`, and re-states it after each navigation because a fresh injection assumes the
+member is looking. Letting the shell decide whether to notify was rejected — only the page knows
+whether the message belongs to the conversation on screen, only the shell knows whether that screen
+is visible, so each answers the half it can see. `bridgeVersion` stays 1: the shape of the contract
+did not change, and the Web Release feature-detects the new capabilities.
+
+The toast itself is [notify.rs](../../desktop/src-tauri/src/notify.rs), on
+`tauri-winrt-notification` rather than `tauri-plugin-notification`, which would have registered JS
+commands the remote origin is not meant to reach at all. Windows raises a toast on behalf of an
+Application User Model ID and a Portable copy has no shortcut to carry one, so the client registers
+its own under HKCU before the first notification; the NSIS uninstaller deletes the key.
+
+Web half: [useDesktopNotifications()](../../app/composables/useDesktopNotifications.ts) resolves one
+transport per document — `native` in a Desktop Client, `web` in a browser, `none` where neither
+exists — so a message can never produce two notifications, and bounds the text once for both so the
+same message reads the same either way. A member who already refused a browser permission is never
+asked again; the existing «Уведомления заблокированы» state says so instead.
+[useAppFocus()](../../app/composables/useAppFocus.ts) answers "is the member looking at this?" from
+the shell inside a Desktop Client and from `document.hasFocus()` in a browser, and now drives the
+message sounds and the mark-read-on-return that were silently inverted in the tray as well.
+
+Two harnesses cover it. `bun run desktop:check` proves the toast can reach the desktop: the page
+waits to learn from the shell that it is hidden, sends a notification, and the assertion reads
+**Windows' own Action Center** rather than the client's log; the same check pins the TypeScript and
+Rust bounds together by sending a notification of exactly the size the page believes is legal.
+`bun run notify:check` proves the decision in front of it — eight scenarios across both transports,
+each blocked on the message arriving over the reader's own WebSocket, so a zero means "chose not to"
+rather than "never heard about it". It needs a running dev server, so it is a command rather than a
+CI gate. What is not verified is in
+[verification.md](verification.md): a human has not yet watched a real DM raise a real toast, and
+clicking a toast is not wired to anything — the contract carries no URL, and restoring the window on
+activation is left to a later Desktop Release. Web Release bumped to v0.26.0 with a changelog entry,
+because a member using the Desktop Client can now see something they could not before. The
+Cargo/Tauri version stays `0.1.0-alpha.1`: no `desktop-v*` Release has been published, so this shell
+code still goes into that same first release. Nothing deployed.
+
 ## Desktop 0.1.0-alpha.1 — installed update
 
 Issue #10 is built on `prototype/tauri-windows`. The installed client runs the same
@@ -152,7 +212,8 @@ Issue #6 is built on `prototype/tauri-windows`, both halves of
 
 Native half, [desktop/src-tauri/src/bridge.rs](../../desktop/src-tauri/src/bridge.rs): the shell
 freezes `window.voiceChatDesktop` — `{desktopVersion, bridgeVersion: 1, capabilities:
-['voice-lifecycle'], setVoiceActive}` — onto the trusted origin only, through a main-frame
+['voice-lifecycle'], setVoiceActive}`, since grown by the notification capabilities above — onto the
+trusted origin only, through a main-frame
 initialization script gated on `location.origin`, so the bundled error screen and every embed
 subframe get nothing. The reverse channel is a cancelled `voicechat://bridge/<op>?value=…`
 navigation through the existing `on_navigation` handler — the mechanism the error screen's retry and
