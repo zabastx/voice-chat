@@ -155,6 +155,13 @@ export function assembleDesktopRelease(
 	const signature = readFileSync(signaturePath, 'utf8').trim()
 	if (!signature) throw new Error(`Empty updater signature: ${signaturePath}`)
 
+	// A draft's `untagged-*` root answers 404 the moment the Release is published,
+	// so the manifest must never name it. The root comes from the tag, not GitHub's
+	// draft html_url.
+	if (options.downloadRoot?.includes('/untagged-')) {
+		throw new Error('The manifest download root must be tag-scoped, not a draft untagged URL')
+	}
+
 	const manifest = releaseManifest({
 		version: options.version,
 		notes: options.notes,

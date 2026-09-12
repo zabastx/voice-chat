@@ -218,6 +218,28 @@ describe('desktop release assembly', () => {
 		}
 	})
 
+	test('refuses a draft-only untagged download root', () => {
+		const directory = mkdtempSync(join(tmpdir(), 'voice-chat-release-'))
+		try {
+			writeFileSync(join(directory, PUBLISHED.setup), 'installer-bytes')
+			writeFileSync(join(directory, PUBLISHED.signature), 'signature-value\n')
+			writeFileSync(join(directory, PUBLISHED.portable), 'portable-bytes')
+
+			expect(() =>
+				assembleDesktopRelease({
+					version: VERSION,
+					notes: NOTES,
+					artifactsDirectory: directory,
+					published: publishedSet(),
+					downloadRoot:
+						'https://github.com/zabastx/voice-chat/releases/download/untagged-9243b344d9fb0de9df90'
+				})
+			).toThrow('untagged')
+		} finally {
+			rmSync(directory, { recursive: true, force: true })
+		}
+	})
+
 	test('refuses a published asset that is not the artifact that was built', () => {
 		const directory = mkdtempSync(join(tmpdir(), 'voice-chat-release-'))
 		try {
@@ -374,7 +396,10 @@ describe('desktop release workflow', () => {
 		expect(script).toContain('.draft')
 		expect(script).toContain('releases/$release_id')
 		expect(script).toContain('--download-root')
-		expect(script).toContain('releases/download/')
+		// The tag, not a draft's `untagged-*` html_url, is the root that survives
+		// publishing — the earlier sed over `.html_url` produced a dead URL.
+		expect(script).toContain('releases/download/$RELEASE_TAG')
+		expect(script).not.toContain('.html_url')
 		expect(script).toContain('desktop-release.ts manifest')
 		expect(script).toContain('mapfile -t metadata')
 		expect(script).toContain('gh release upload')

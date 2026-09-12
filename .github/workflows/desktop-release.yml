@@ -185,13 +185,10 @@ jobs:
           fi
           gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" \
             > "$RUNNER_TEMP/desktop-release.json"
-          # A draft serves its assets from an `untagged-*` root that dies when
-          # the Release is published, so the manifest points at the tag-based
-          # root the asset keeps: .../releases/download/<tag>/<name>.
-          download_root="$(
-            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '.html_url' \
-              | sed 's#/releases/tag/#/releases/download/#'
-          )"
+          # A draft's html_url is an `untagged-*` slug that dies the moment the
+          # Release is published, so the manifest's download root is built from
+          # the tag the asset keeps: .../releases/download/<tag>/<name>.
+          download_root="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
           bun scripts/desktop-release.ts manifest \
             --release "$RUNNER_TEMP/desktop-release.json" \
             --download-root "$download_root" \
