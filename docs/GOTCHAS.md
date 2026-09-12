@@ -348,6 +348,28 @@ Two consequences worth knowing:
   origin is not meant to reach a Tauri command at all. `tauri-winrt-notification` is the same toast
   without the command surface.
 
+### 32. The Tauri signer reads `TAURI_SIGNING_PRIVATE_KEY` even when you pass `--private-key-path`
+
+`tauri signer sign` folds the environment's `TAURI_SIGNING_PRIVATE_KEY` into its own `--private-key`
+option. Pass a path as well and it fails outright — _"the argument '--private-key-path' cannot be used
+with '--private-key'"_ — even though the path was the more specific input. Cost the first real draft
+run its signing step.
+
+Fixed in [desktop-signing.ts](../scripts/desktop-signing.ts) by deleting `TAURI_SIGNING_PRIVATE_KEY`
+(and `..._PATH`) off the child environment before invoking the signer: the arguments are the only
+source of truth. Anything else that shells out to the signer while the release secrets are in the
+environment must do the same.
+
+### 33. `releases/tags/<tag>` 404s for a draft whose tag is not a git ref
+
+A draft created by `gh release create --draft <tag>` before the tag has ever been pushed has no git
+ref, so the by-tag API endpoint answers **404** — while `gh release upload <tag> ...` and the UI both
+work fine. Cost the first real draft run its manifest step, after the draft already existed.
+
+Fixed in [desktop-release.yml](../.github/workflows/desktop-release.yml) by finding the draft in the
+paginated releases list (`select(.tag_name == … and .draft)`) and fetching it by id. Same trap for
+anything that reads a draft back before publishing it.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

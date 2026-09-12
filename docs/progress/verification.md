@@ -85,19 +85,18 @@ What the checks pin:
   content of the `.sig` the signer wrote, that `SHA256SUMS.txt` names the **published** files against the
   built bytes, and that a published asset whose size does not match the built one is refused. An assembly
   whose setup was never signed is refused too.
-- The same test parses `.github/workflows/desktop-release.yml`: the only trigger is `desktop-v*`; `guard`
-  runs `git merge-base --is-ancestor` against `origin/master`; `quality` needs `guard` and runs every gate
-  with `bun install --frozen-lockfile`, with no `TAURI_SIGNING_PRIVATE_KEY` anywhere in the job; `release`
-  needs `quality`, names the `desktop-release` environment, holds `contents: write`, and exactly one step
-  (the `sign` step) sees the two environment-scoped secrets; the draft is `gh release create --draft`, then
-  `gh api` reads the stored assets back and `gh release upload` adds the derived manifest and checksum.
+- The same test parses `.github/workflows/desktop-release.yml`: the only release trigger is `desktop-v*`
+  (plus a draft-only `workflow_dispatch` test path); `guard` runs `git merge-base --is-ancestor` against
+  `origin/master`; `quality` needs `guard` and runs every gate with `bun install --frozen-lockfile`, with
+  no `TAURI_SIGNING_PRIVATE_KEY` anywhere in the job; `release` needs `quality`, names the
+  `desktop-release` environment, holds `contents: write`, and exactly one step (the `sign` step) sees the
+  two environment-scoped secrets; the draft is `gh release create --draft`, then `gh api` reads the stored
+  assets back and `gh release upload` adds the derived manifest and checksum.
 
-Not verified: **the real draft run.** `zabastx/voice-chat` has no `desktop-release` environment and no
-updater key secrets, so no run has entered the environment, signed a real artifact, or created a draft.
-The Windows runner steps themselves are the ones the existing `desktop:install-check` /
-`desktop:installed-update-check` jobs already exercise. Also undriven: the `guard` rejecting a non-master
-tag against a real push event, GitHub's manual-approval gate, and the real API response shape `gh api`
-returns for a draft's assets.
+**The real draft run has since happened** — see the #13 section at the top of this file for the
+end-to-end evidence, the four defects it exposed, and the draft it left (unpublished). Still undriven
+from this earlier static pass: the `guard` rejecting a non-master tag against a real push event (the
+dispatch rehearsal skips that rule by design), and the real-hardware smoke test.
 
 ## Desktop 0.1.0-alpha.1 + v0.26.0 — desktop notifications from the tray
 

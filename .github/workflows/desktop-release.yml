@@ -172,13 +172,13 @@ jobs:
         run: |
           set -euo pipefail
           # A draft whose tag has never been pushed has no git ref, so
-          # `releases/tags/<tag>` answers 404. Find it in the release list and
-          # read it back by id instead.
-          release_id="$(
-            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
-              --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft) | .id" \
-              | head -n 1
-          )"
+          # `releases/tags/<tag>` answers 404 even though `gh release upload
+          # <tag>` works. Find the draft in the release list and read it back by
+          # id instead. `head` writes into a variable rather than a pipe: under
+          # `pipefail` a SIGPIPE from a short read would fail the step.
+          release_ids="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft) | .id")"
+          release_id="$(printf '%s\n' "$release_ids" | sed -n '1p')"
           if [ -z "$release_id" ]; then
             echo "::error::No draft Release found for $RELEASE_TAG"
             exit 1
