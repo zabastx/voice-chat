@@ -103,7 +103,13 @@ fn read_notification(title: Option<&str>, body: Option<&str>) -> Option<Notifica
 fn bounded(raw: &str, limit: usize) -> Option<String> {
     let plain = raw
         .chars()
-        .map(|character| if character.is_control() { ' ' } else { character })
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
         .collect::<String>();
     let text = plain.split_whitespace().collect::<Vec<_>>().join(" ");
     (text.chars().count() <= limit).then_some(text)
@@ -380,11 +386,15 @@ mod tests {
     #[test]
     fn accepts_only_a_named_operation_with_a_correctly_typed_payload() {
         assert_eq!(
-            accepted(&format!("voicechat://bridge/setVoiceActive?value=1&token={TOKEN}")),
+            accepted(&format!(
+                "voicechat://bridge/setVoiceActive?value=1&token={TOKEN}"
+            )),
             Some(true)
         );
         assert_eq!(
-            accepted(&format!("voicechat://bridge/setVoiceActive?value=0&token={TOKEN}")),
+            accepted(&format!(
+                "voicechat://bridge/setVoiceActive?value=0&token={TOKEN}"
+            )),
             Some(false)
         );
         for raw in [
@@ -443,7 +453,13 @@ mod tests {
         let Incoming::Accepted(BridgeMessage::ShowNotification(shown)) = read(&raw) else {
             panic!("a well-formed notification with extra parameters was refused");
         };
-        assert_eq!(shown, Notification { title: "Данил".into(), body: "привет".into() });
+        assert_eq!(
+            shown,
+            Notification {
+                title: "Данил".into(),
+                body: "привет".into()
+            }
+        );
     }
 
     #[test]
@@ -478,7 +494,10 @@ mod tests {
             "voicechat://bridge/setVoiceActive?value=1".to_owned(),
             "voicechat://bridge/setVoiceActive?value=1&token=".to_owned(),
             "voicechat://bridge/setVoiceActive?value=1&token=guess".to_owned(),
-            format!("voicechat://bridge/setVoiceActive?value=1&token={}", &TOKEN[..8]),
+            format!(
+                "voicechat://bridge/setVoiceActive?value=1&token={}",
+                &TOKEN[..8]
+            ),
         ] {
             assert!(matches!(read(&raw), Incoming::Rejected), "{raw}");
         }

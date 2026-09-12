@@ -83,7 +83,10 @@ impl Notifier {
         let Ok(mut recent) = self.recent.lock() else {
             return false;
         };
-        while recent.front().is_some_and(|at| now.duration_since(*at) >= RATE_WINDOW) {
+        while recent
+            .front()
+            .is_some_and(|at| now.duration_since(*at) >= RATE_WINDOW)
+        {
             recent.pop_front();
         }
         if recent.len() >= RATE_LIMIT {
@@ -141,7 +144,11 @@ mod tests {
     struct SilentToaster;
 
     impl Toaster for SilentToaster {
-        fn show(&self, _app: &tauri::AppHandle, _notification: &Notification) -> Result<(), String> {
+        fn show(
+            &self,
+            _app: &tauri::AppHandle,
+            _notification: &Notification,
+        ) -> Result<(), String> {
             Ok(())
         }
     }
@@ -155,9 +162,15 @@ mod tests {
         let notifier = notifier();
         let now = Instant::now();
         for attempt in 0..RATE_LIMIT {
-            assert!(notifier.allow(now), "refused notification {attempt} inside the limit");
+            assert!(
+                notifier.allow(now),
+                "refused notification {attempt} inside the limit"
+            );
         }
-        assert!(!notifier.allow(now), "accepted more than {RATE_LIMIT} in one window");
+        assert!(
+            !notifier.allow(now),
+            "accepted more than {RATE_LIMIT} in one window"
+        );
     }
 
     #[test]

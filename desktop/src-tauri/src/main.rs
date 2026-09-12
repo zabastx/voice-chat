@@ -523,7 +523,12 @@ fn main() {
                     })
                     .build()?;
 
-            watch_navigation(&window, origin, Arc::clone(&connection), Arc::clone(&bridge))?;
+            watch_navigation(
+                &window,
+                origin,
+                Arc::clone(&connection),
+                Arc::clone(&bridge),
+            )?;
             // Read by the updater, so an agreed update waits for the call to end, and by
             // `report_foreground`, so the page learns it is sitting in the tray.
             app.manage(bridge);
