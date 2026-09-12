@@ -13,8 +13,10 @@ import {
 	RELEASE_NOTES_SECTIONS,
 	releaseManifest,
 	selectPublishedWindowsAssets,
-	sha256
+	sha256,
+	updaterKeyFromEnvironment
 } from '../scripts/desktop-release'
+import { generateUpdaterKey, signArtifact } from '../scripts/desktop-signing'
 import { windowsReleaseAssets } from '../shared/utils/desktop-release-assets'
 
 const workflowPath = new URL('../.github/workflows/desktop-release.yml', import.meta.url)
@@ -233,6 +235,36 @@ describe('desktop release assembly', () => {
 				})
 			).toThrow('signature')
 		} finally {
+			rmSync(directory, { recursive: true, force: true })
+		}
+	})
+})
+
+describe('desktop release signing', () => {
+	test('signs with an env-supplied key while TAURI_SIGNING_PRIVATE_KEY is present', () => {
+		const directory = mkdtempSync(join(tmpdir(), 'voice-chat-signing-'))
+		const previous = process.env.TAURI_SIGNING_PRIVATE_KEY
+		try {
+			const generated = generateUpdaterKey(directory)
+			const artifact = join(directory, PUBLISHED.setup)
+			writeFileSync(artifact, 'stand-in installer bytes')
+
+			// The release job has the key in the environment; the CLI folds it into
+			// its own --private-key, which used to collide with --private-key-path.
+			const { key, dispose } = updaterKeyFromEnvironment({
+				TAURI_SIGNING_PRIVATE_KEY: readFileSync(generated.privateKeyPath, 'utf8')
+			})
+			process.env.TAURI_SIGNING_PRIVATE_KEY = readFileSync(generated.privateKeyPath, 'utf8')
+			try {
+				const signature = signArtifact(key, artifact, '')
+				expect(signature.length).toBeGreaterThan(0)
+				expect(existsSync(`${artifact}.sig`)).toBe(true)
+			} finally {
+				dispose()
+			}
+		} finally {
+			if (previous === undefined) delete process.env.TAURI_SIGNING_PRIVATE_KEY
+			else process.env.TAURI_SIGNING_PRIVATE_KEY = previous
 			rmSync(directory, { recursive: true, force: true })
 		}
 	})

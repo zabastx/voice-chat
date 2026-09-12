@@ -9,10 +9,17 @@ const root = join(import.meta.dirname, '..')
 const cli = join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
 
 function signer(args: string[]) {
+	// The Tauri CLI folds these environment variables into its own `--private-key`
+	// option, which collides with the `--private-key-path` we pass explicitly and
+	// fails with "cannot be used with". The arguments here are the only source of
+	// truth, so the ambient signing variables are dropped for the call.
+	const env = { ...process.env, CI: '1' }
+	delete env.TAURI_SIGNING_PRIVATE_KEY
+	delete env.TAURI_SIGNING_PRIVATE_KEY_PATH
 	return execFileSync(process.execPath, [cli, 'signer', ...args], {
 		cwd: root,
 		encoding: 'utf8',
-		env: { ...process.env, CI: '1' }
+		env
 	})
 }
 
