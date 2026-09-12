@@ -78,6 +78,13 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   (GitHub REST + a fixture adapter); selection, caching and the manifest live in
   [server/utils/desktop-update.ts](server/utils/desktop-update.ts). `204` = nothing to offer,
   `503` = GitHub is unreachable and nothing was cached — never a partial manifest.
+- **Desktop Release** — a `desktop-v<semver>` tag whose commit is on `master` runs
+  [.github/workflows/desktop-release.yml](.github/workflows/desktop-release.yml): `quality` runs the Bun
+  and Cargo gates with no secrets, then `release` enters the protected `desktop-release` Environment
+  (manual approval) and uploads a **draft** with the NSIS setup, Portable EXE, `latest.json`, its `.sig`
+  and `SHA256SUMS.txt`. Assembly is [scripts/desktop-release.ts](scripts/desktop-release.ts) and the asset
+  names live in [scripts/desktop-artifacts.ts](scripts/desktop-artifacts.ts); publishing the draft is the
+  promotion step ([ADR 0014](docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)).
 - **Auth** — nuxt-auth-utils sealed cookies. First account = admin, seeds `#general` + `lounge`.
   Everyone else needs a single-use invite. Roles are hierarchical (`admin` > `moderator` > `member`);
   `requireRole(event, min)` in [server/utils/auth.ts](server/utils/auth.ts) authorizes against the

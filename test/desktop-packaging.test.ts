@@ -27,7 +27,10 @@ describe('desktop packaging', () => {
 
 		expect(desktopReleaseArtifacts('0.1.0-alpha.1')).toEqual({
 			setup: 'Voice Chat_0.1.0-alpha.1_x64-setup.exe',
-			portable: 'Voice Chat_0.1.0-alpha.1_x64-portable.exe'
+			signature: 'Voice Chat_0.1.0-alpha.1_x64-setup.exe.sig',
+			portable: 'Voice Chat_0.1.0-alpha.1_x64-portable.exe',
+			manifest: 'latest.json',
+			checksum: 'SHA256SUMS.txt'
 		})
 	})
 

@@ -4,6 +4,38 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop 0.1.0-alpha.1 — signed release workflow
+
+Issue #12 is built on `prototype/tauri-windows`. A `desktop-v<semver>` tag now drives
+[desktop-release.yml](../../.github/workflows/desktop-release.yml). The `guard` job rejects anything that
+is not a `desktop-v<semver>` tag and proves its commit is an ancestor of `origin/master`
+(`git merge-base --is-ancestor`), then `quality` runs the repository gates
+(`bun install --frozen-lockfile`, `fmt:check`, `lint`, `typecheck`, `test`) and the Rust ones
+(`cargo fmt --check`, `cargo check`, `cargo test`) on Windows with no signing material at all. Only the
+`release` job enters the protected `desktop-release` GitHub Environment — required reviewers are an
+environment setting, so the updater key is withheld until a human approves — and only it holds
+`contents: write`. The private key and password are passed to the single signing step, never set at
+workflow level.
+
+[scripts/desktop-release.ts](../../scripts/desktop-release.ts) is the assembly seam. After
+`desktop:build` emits the NSIS setup and Portable EXE, it signs the setup with the environment key and
+derives everything else from the files on disk: `latest.json` carries the signature it reads back from
+`<setup>.exe.sig` and points at that setup's own `releases/download/<tag>/…` URL, and `SHA256SUMS.txt`
+lists the SHA-256 of the setup and the Portable EXE. The three Russian sections of
+`desktop/release-notes/<version>.md` are asserted, and a prerelease has to name the SmartScreen warning,
+so a Release cannot ship without honest notes. The script prints the five absolute asset paths on stdout;
+the workflow hands them to `gh release create --draft`, so the names live only in
+[desktop-artifacts.ts](../../scripts/desktop-artifacts.ts). Publishing that draft is the promotion step
+the Update feed recognises ([ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md));
+the workflow itself never publishes.
+
+Static checks live in [test/desktop-release.test.ts](../../test/desktop-release.test.ts): they drive the
+assembly over a temporary directory (manifest URL, signature round-trip, checksum equality) and parse the
+workflow YAML directly to pin the tag guard, the `quality → release` ordering, the protected environment,
+the secret scoping and the draft upload. The one real draft run — a Windows runner, the environment's
+approval, the signing secrets — still has to happen against the repository; see
+[verification.md](verification.md).
+
 ## Desktop 0.1.0-alpha.1 + v0.26.0 — desktop notifications from the tray
 
 Issue #11 is built on `prototype/tauri-windows`, across both release lines: the Web Release picks

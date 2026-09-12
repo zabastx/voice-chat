@@ -117,6 +117,19 @@ destination from the page) is a later Desktop Release. For the same reason the n
 tag, so a second message about one conversation stacks where a browser would replace. Neither blocks
 the alpha.
 
+**Signed Desktop Release workflow, 2026-09-12** (issue #12): a `desktop-v<semver>` tag whose commit is
+reachable from `master` is the only trigger. `quality` runs the Bun and Cargo gates on Windows with no
+signing material, and only the `release` job enters the protected `desktop-release` GitHub Environment,
+so required reviewers gate the updater key before it is read; the private key and password are exposed to
+the one signing step, not the workflow, and only that job holds `contents: write`.
+[scripts/desktop-release.ts](../../scripts/desktop-release.ts) derives `latest.json` and
+`SHA256SUMS.txt` from the files on disk — the manifest's signature is read back from the `.sig` the
+signer wrote and its URL is built from the setup's own name under the tag — so a Release can never point
+at an unsigned or missing asset. Asset names stay owned by
+[desktop-artifacts.ts](../../scripts/desktop-artifacts.ts) and reach `gh release create` as the script's
+stdout, which is also where the `--draft` lives: publishing the draft is the promotion step the feed
+recognises ([ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md)).
+
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs

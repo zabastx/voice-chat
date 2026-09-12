@@ -9,6 +9,7 @@
 		"desktop:dev": "bun scripts/desktop.ts dev",
 		"desktop:compile": "bun scripts/desktop.ts compile",
 		"desktop:build": "bun scripts/desktop.ts build",
+		"desktop:release": "bun scripts/desktop-release.ts",
 		"desktop:run": "bun scripts/desktop.ts run",
 		"desktop:check": "node desktop/tray-check.mjs",
 		"desktop:install-check": "bun desktop/install-check.mjs",

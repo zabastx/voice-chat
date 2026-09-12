@@ -238,11 +238,37 @@ Installed-клиент использует тот же coordinator, но спр
 собирает два подписанных installer'а из текущего дерева и прогоняет весь путь: отложенное обновление
 ничего не качает, артефакт с чужой подписью отклоняется, согласованная установка ждёт конца звонка,
 а после него клиент перезапускается уже обновлённым и с сохранённым Sign-in. Приватный ключ в
-репозитории не хранится: harness каждый раз создаёт одноразовую пару, а боевой ключ живёт в
-GitHub Environment `desktop-release` (ticket #12). Уведомления остаются ticket #11.
+репозитории не хранится: harness каждый раз создаёт одноразовую пару.
+
+## Подписанный Draft Release по тегу
+
+Тег `desktop-v<version>`, commit которого достижим из `master`, запускает
+[desktop-release.yml](../.github/workflows/desktop-release.yml). Guard проверяет формат тега и ancestry,
+job `quality` прогоняет те же Bun- и Cargo-гейты без signing material, и только job `release` входит в
+protected GitHub Environment `desktop-release` с обязательным ручным approval. Приватный ключ updater
+передаётся ровно одному шагу signing'а как `TAURI_SIGNING_PRIVATE_KEY` / `..._PASSWORD` и никогда не
+объявляется на уровне workflow; `contents: write` тоже только у этого job.
+
+Перед первым запуском maintainer настраивает окружение: создаёт Environment `desktop-release` с required
+reviewers, кладёт в него два secret'а, а публичную половину ключа и production origin — в переменные
+репозитория:
+
+- `DESKTOP_UPDATER_PUBKEY` — публичная половина ключа из `tauri signer generate`, вшивается в сборку.
+- `DESKTOP_PRODUCTION_ORIGIN` — единственный production HTTPS origin.
+
+`bun run desktop:build` собирает NSIS и Portable EXE, затем `bun run desktop:release` (то же, что
+`bun scripts/desktop-release.ts`) подписывает setup и выводит пути пяти asset'ов: setup, его `.sig`,
+Portable EXE, `latest.json` и `SHA256SUMS.txt`. Manifest и checksum выводятся из файлов на диске, поэтому
+URL указывает на существующий подписанный installer, а checksum — на реально собранные байты. Русские
+Release notes лежат в `desktop/release-notes/<version>.md` и обязаны содержать «Что изменилось»,
+«Известные ограничения» и «Как установить или обновить»; prerelease обязан упомянуть SmartScreen. Workflow
+загружает asset'ы в **draft** GitHub Release и никогда не публикует его сам — публикация является
+продвижением в Update stream
+([ADR 0014](../docs/adr/0014-independent-desktop-releases-with-one-update-stream.md)).
 
 ## Оставшиеся ограничения
 
-Notification contract реализуется в ticket #11, подписанный релизный workflow — в #12.
-Push-to-talk отложен. Реальные устройства, screen share, сон и пробуждение, embedded players и
-длительный звонок требуют отдельной проверки в WebView2.
+Подписанный workflow собран и покрыт статическими тестами, но настоящий draft run ещё не выполнялся:
+в репозитории нет Environment `desktop-release` и signing-секретов. Push-to-talk отложен. Реальные
+устройства, screen share, сон и пробуждение, embedded players и длительный звонок требуют отдельной
+проверки в WebView2.

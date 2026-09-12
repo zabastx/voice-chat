@@ -1,7 +1,8 @@
 # 0014 — Independent Desktop Releases with one update stream
 
 Date: 2026-09-09
-Status: accepted — feed, installer, and both update paths implemented; release workflow pending
+Status: accepted — feed, installer, both update paths, and the release workflow are implemented; the
+first real draft run is pending the `desktop-release` environment
 
 The `Voice Chat` Desktop Client has a release line independent from the Web Release. Desktop tags
 use `desktop-v<version>`, beginning with `desktop-v0.1.0-alpha.1`; Native Bridge compatibility uses

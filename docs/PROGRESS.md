@@ -101,5 +101,12 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     a bounded `showNotification({title, body})` plus a `window-focus` event the shell pushes. A DM or
     a mention raises exactly one toast from the tray, read back from Windows' own Action Center in
     `desktop:check`; nobody has yet watched a real one land for a real message, and clicking a toast
-    is wired to nothing. The frontier is now
-    [#12 the signed release workflow](https://github.com/zabastx/voice-chat/issues/12).
+    is wired to nothing.
+    [#12 the signed release workflow](https://github.com/zabastx/voice-chat/issues/12) is built: a
+    `desktop-v<semver>` tag from `master` runs the Bun and Cargo quality gates with no signing material,
+    then enters the protected `desktop-release` Environment for manual approval before it signs the NSIS
+    setup and uploads a draft Release with the Portable EXE, `latest.json`, its `.sig` and
+    `SHA256SUMS.txt`. The assembly and the workflow are pinned by static tests; the one real draft run
+    still needs the environment, the secrets and a Windows runner. The frontier is now
+    [#13 verify and publish 0.1.0-alpha.1](https://github.com/zabastx/voice-chat/issues/13), blocked by
+    the un-run draft.

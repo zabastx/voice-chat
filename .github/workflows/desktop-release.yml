@@ -1,0 +1,142 @@
+name: Desktop release
+
+# A Desktop tag from master is the only way in. The guard job proves the tag is
+# `desktop-v<semver>` and that its commit is already on master, quality runs the
+# repository and Rust gates without any signing material, and only then does the
+# release job enter the protected `desktop-release` environment and wait for a
+# human approval before it can see the updater key. It creates a draft: publishing
+# that draft is the promotion step the Update feed recognises (adr/0014).
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Require a desktop-v tag reachable from master
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          case "$tag" in
+            desktop-v*) ;;
+            *)
+              echo "::error::Not a Desktop Release tag: $tag"
+              exit 1
+              ;;
+          esac
+          version="${tag#desktop-v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+            echo "::error::$tag is not desktop-v<semver>"
+            exit 1
+          fi
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::$tag is not reachable from master"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  quality:
+    needs: guard
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Formatting
+        run: bun run fmt:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Tests
+        run: bun run test
+
+      - name: Rust formatting
+        run: cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check
+
+      - name: Rust checks
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --all-targets
+
+      - name: Rust tests
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
+
+  release:
+    needs: [guard, quality]
+    runs-on: windows-latest
+    environment: desktop-release
+    permissions:
+      contents: write
+    env:
+      VOICECHAT_DESKTOP_PRODUCTION_ORIGIN: ${{ vars.DESKTOP_PRODUCTION_ORIGIN }}
+      VOICECHAT_DESKTOP_UPDATER_PUBKEY: ${{ vars.DESKTOP_UPDATER_PUBKEY }}
+      VOICECHAT_DESKTOP_VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build the NSIS installer and Portable EXE
+        run: bun run desktop:build
+
+      - name: Sign, manifest and checksum the Release
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          notes="desktop/release-notes/${VOICECHAT_DESKTOP_VERSION}.md"
+          bun scripts/desktop-release.ts \
+            --tag "$GITHUB_REF_NAME" \
+            --notes "$notes" \
+            > "$RUNNER_TEMP/desktop-release-assets.txt"
+          cat "$RUNNER_TEMP/desktop-release-assets.txt"
+
+      - name: Create the draft Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="desktop/release-notes/${VOICECHAT_DESKTOP_VERSION}.md"
+          mapfile -t assets < "$RUNNER_TEMP/desktop-release-assets.txt"
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "Voice Chat $VOICECHAT_DESKTOP_VERSION" \
+            --notes-file "$notes" \
+            "${assets[@]}"

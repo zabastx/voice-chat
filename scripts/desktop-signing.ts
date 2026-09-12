@@ -38,9 +38,12 @@ export function generateUpdaterKey(directory: string): UpdaterKeyPair {
 	return { publicKey: readFileSync(publicKeyPath, 'utf8').trim(), privateKeyPath }
 }
 
-/** Signs one artifact and returns the signature the update manifest carries. */
-export function signArtifact(key: UpdaterKeyPair, artifact: string): string {
-	signer(['sign', '--private-key-path', key.privateKeyPath, '--password', '', artifact])
+/**
+ * Signs one artifact and returns the signature the update manifest carries. The
+ * release key has a password; a throwaway harness key is generated without one.
+ */
+export function signArtifact(key: UpdaterKeyPair, artifact: string, password = ''): string {
+	signer(['sign', '--private-key-path', key.privateKeyPath, '--password', password, artifact])
 	const signaturePath = `${artifact}.sig`
 	if (!existsSync(signaturePath)) throw new Error(`Tauri signer did not sign ${artifact}`)
 	return readFileSync(signaturePath, 'utf8').trim()
