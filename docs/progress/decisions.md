@@ -132,6 +132,15 @@ share one `windowsReleaseAssets()` matcher
 complete x64 Release is. Publishing the draft is the promotion step the feed recognises
 ([ADR 0014](../adr/0014-independent-desktop-releases-with-one-update-stream.md)).
 
+**First live alpha-to-alpha update, 2026-09-12** (issue #14): publishing `desktop-v0.1.0-alpha.2`
+proved the delivery path end to end — an installed `0.1.0-alpha.1` found it over the production feed,
+applied it after consent and came back with the same Sign-in, while a Portable `0.1.0-alpha.1` opened
+the replacement Release page and replaced nothing. Drafting it first also proved drafts are invisible
+to the feed. The promotion surfaced a repeat of the #13 manifest defect: a draft's `html_url` is an
+`untagged-*` slug, so deriving `latest.json`'s download root from it produced a URL that 404s on
+publish. The root is now built from `$RELEASE_TAG` and an untagged root is refused, so the manifest
+cannot name a dead URL again.
+
 **Deferred to v2+:** browser/Web Push, multiple spaces, a real roles
 engine, per-device Sign-in management (a `sessions` table with a device list and per-device
 sign-out — the Sign-in Epoch can be replaced by one later without changing the cookie shape). Already un-deferred: Postgres (v0.12.0), 1:1 DMs

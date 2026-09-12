@@ -4,6 +4,32 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## Desktop 0.1.0-alpha.2 — first live alpha-to-alpha update
+
+Issue #14 is closed: `desktop-v0.1.0-alpha.2` is published (2026-09-12) and is the release that proved
+the live update path end to end. Its commit is only the alpha.2 release notes — no client code
+differs from `0.1.0-alpha.1` — so the binary under test is the same shell. The tag ran the same
+workflow, passed the tag-from-`master` guard and the full Bun + Cargo gates, and the `release` job
+waited in the protected `desktop-release` environment until a human approved it before it left the
+usual signed draft. While it was a draft the production feed stayed on alpha.1, which is the proof
+that drafts are invisible to clients.
+
+Promotion surfaced a repeat of the #13 manifest defect: a draft's `html_url` is an `untagged-*` slug,
+so the workflow's `sed` built a `latest.json` URL that 404s once the Release is published. `c78697d`
+now builds the manifest's download root from `$RELEASE_TAG` and `assembleDesktopRelease` refuses an
+untagged root, and the workflow test pins the tag root rather than merely matching
+`releases/download/`. The draft's `latest.json` was corrected before publishing, so the asset names
+the real tag URL.
+
+On a real Windows machine against the production feed, an installed `0.1.0-alpha.1` discovered
+`0.1.0-alpha.2`, showed the Russian offer, applied it after consent and came back with the identical
+`nuxt-session` cookie, while a Portable `0.1.0-alpha.1` opened the replacement Release page and
+replaced nothing. The Voice-Channel deferral is unchanged shell code since #10, where it was driven
+with real signed installers, so that evidence applies to this binary. Full evidence in
+[verification.md](verification.md). This is the first of the two alpha-to-alpha updates stable
+requires; the Web Release version and changelog are untouched, because a Web Release member sees
+nothing new here.
+
 ## Desktop 0.1.0-alpha.1 — signed release workflow
 
 Issue #12 is built, and its real draft run has now happened (issue #13). A `desktop-v<semver>` tag drives
@@ -23,9 +49,10 @@ and still only creates a draft, so it is a rehearsal for issue #13, not a second
 
 `0.1.0-alpha.1` is **published** (2026-09-12): `master` was fast-forwarded onto the desktop line, the
 `desktop-v0.1.0-alpha.1` tag was pushed, the tag-driven workflow ran green on a Windows runner, and the
-draft it produced was published — so the Release is `Latest` and the Update feed offers it. The feed was
+draft it produced was published — so the Release entered the Update feed. The feed was
 driven against the live GitHub API: an older client gets `200` with the tag-scoped setup URL, a current
-or newer client `204`. See [verification.md](verification.md).
+or newer client `204`. `0.1.0-alpha.2` is now the published `Latest` (see the section above). See
+[verification.md](verification.md).
 
 [scripts/desktop-release.ts](../../scripts/desktop-release.ts) is the assembly seam, and it runs in two
 passes because GitHub does not keep the names it is handed. `sign` signs the NSIS setup with the

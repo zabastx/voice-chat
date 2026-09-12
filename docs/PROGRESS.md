@@ -126,5 +126,12 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     check out. **#13 was closed with these gaps still open** (recorded in
     [verification.md](progress/verification.md), not as done): the real-hardware smoke test (mic and
     headphones, a 30-minute tray call, sleep/wake, screen share, real toasts) and a fresh-machine
-    portable/installed run. [#14](https://github.com/zabastx/voice-chat/issues/14) proves the live update
-    on the next alpha.
+    portable/installed run. [#14](https://github.com/zabastx/voice-chat/issues/14) is closed:
+    `desktop-v0.1.0-alpha.2` was published and a live installed `0.1.0-alpha.1` updated to it over the
+    production feed, keeping its Sign-in, while a Portable `0.1.0-alpha.1` opened the replacement
+    Release page without installing anything (see [progress/verification.md](progress/verification.md)).
+    That promotion also caught a repeat of the #13 `latest.json` defect — a draft's `html_url` is an
+    `untagged-*` slug — now fixed by building the manifest root from the tag. One of the two
+    alpha-to-alpha updates stable requires is done; the #13 real-hardware gaps (real mic/headphones, a
+    30-minute tray call, sleep/wake, screen share, real toasts) and a fresh-machine run are still owed
+    by a human.

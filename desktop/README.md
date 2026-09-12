@@ -2,7 +2,7 @@
 
 Tauri 2 shell открывает серверную Web Release в WebView2. Nuxt, Postgres и LiveKit остаются на
 сервере, а профиль WebView2 сохраняет Sign-in между запусками. Desktop Client имеет отдельную
-версию `0.1.0-alpha.1`, binary `voice-chat.exe` и постоянный identifier
+версию (текущий опубликованный выпуск — `0.1.0-alpha.2`), binary `voice-chat.exe` и постоянный identifier
 `ru.zabastx.voicechat`.
 
 Release-сборка принимает только один HTTPS origin, встроенный во время компиляции. Переменная
@@ -126,7 +126,7 @@ filesystem, process или store. Всё нативное проходит че�
 
 ```js
 {
-  desktopVersion: '0.1.0-alpha.1',
+  desktopVersion: '0.1.0-alpha.2',
   bridgeVersion: 1,
   capabilities: ['voice-lifecycle', 'notifications', 'window-focus'],
   setVoiceActive, showNotification, isForeground, onForegroundChange
@@ -269,7 +269,8 @@ reviewers, кладёт в него два secret'а, а публичную по
 
 ## Оставшиеся ограничения
 
-Подписанный workflow собран и покрыт статическими тестами, но настоящий draft run ещё не выполнялся:
-в репозитории нет Environment `desktop-release` и signing-секретов. Push-to-talk отложен. Реальные
-устройства, screen share, сон и пробуждение, embedded players и длительный звонок требуют отдельной
-проверки в WebView2.
+`0.1.0-alpha.1` и `0.1.0-alpha.2` опубликованы; живое обновление установленного клиента с alpha.1 на
+alpha.2 по production Update feed проверено на настоящей Windows-машине 2026-09-12
+([матрица проверок](../docs/progress/verification.md)). Push-to-talk отложен. Реальные микрофон и
+наушники, screen share, сон и пробуждение, 30-минутный звонок в трее, real toasts и первый запуск на
+чистой Windows всё ещё требуют ручной проверки в WebView2.

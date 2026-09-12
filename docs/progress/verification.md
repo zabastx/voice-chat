@@ -4,6 +4,52 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## Desktop 0.1.0-alpha.2 — the first live alpha-to-alpha update (issue #14)
+
+2026-09-12, real production feed and a real Windows x64 machine with the seeded local profile. The
+next Desktop tag was cut (`3154d77`, just the `0.1.0-alpha.2` release notes — no client code differs
+from `0.1.0-alpha.1`), pushed, and built by the same workflow.
+
+- Run [34715551395](https://github.com/zabastx/voice-chat/actions/runs/34715551395): `guard`'s real
+  tag-from-`master` ancestry check passed, the full Bun + Cargo `quality` gate passed, and the
+  `release` job waited in the protected `desktop-release` environment until a human approved. It
+  left a **draft** with all five assets (`Voice.Chat_0.1.0-alpha.2_x64-setup.exe` 3 740 577 B, its
+  `.sig` 432 B, the Portable EXE 14 433 792 B, `latest.json`, `SHA256SUMS.txt`).
+- **A draft is invisible.** While it was a draft the production feed still answered an older client
+  `200` with `0.1.0-alpha.1`; `version=0.1.0-alpha.1` and `version=0.1.0-alpha.2` both got `204`.
+- **The #13 manifest defect recurred, and is now fixed.** The draft's `latest.json` pointed at
+  `.../releases/download/untagged-9243b344d9fb0de9df90/…`: a draft's `html_url` is an `untagged-*`
+  slug, so the workflow's `sed` derived a root that 404s the moment the Release is published. Fixed
+  in `c78697d` — the manifest's download root is built from `$RELEASE_TAG`, and
+  `assembleDesktopRelease` refuses an untagged root; the workflow test now pins the tag root instead
+  of merely matching `releases/download/`. The draft's `latest.json` was corrected and re-uploaded
+  before promotion, so the published asset names the real tag URL (verified after publish).
+- **Promotion reaches the feed.** After publishing, the feed switched within its 5-minute TTL:
+  `version=0.0.9` and `version=0.1.0-alpha.1` both got `200` with `0.1.0-alpha.2`, the tag-scoped
+  setup URL and the 432-byte signature. Downloading that exact URL gave SHA-256
+  `02c4388a…a203191`, byte-for-byte the published `SHA256SUMS.txt` line.
+- **The installed client updated itself live.** The published `0.1.0-alpha.1` setup was installed
+  silently (per-user NSIS) onto the seeded profile. On launch it was signed in (channel view; a
+  persistent `nuxt-session` cookie), read the native Russian offer — exact version, the release
+  notes, «Установить» / «Отложить» — and on «Установить» the updater replaced it: the installed
+  EXE's product version flipped `0.1.0-alpha.1` → `0.1.0-alpha.2`, and the restarted client came
+  back on the same channel with the **identical** `nuxt-session` cookie (hash and expiry unchanged).
+- **The Portable client replaced nothing.** The published Portable `0.1.0-alpha.1` (same shared
+  profile, signed in) showed the portable question with «Открыть выпуск» / «Отложить»; pressing
+  «Открыть выпуск» logged `desktop update release opened` and raised no install event. The Portable
+  EXE's SHA-256 was unchanged and the installed client's version stayed `0.1.0-alpha.2`, so no
+  installer ran.
+
+The agreed-install **deferral during a Voice Channel** was not re-driven live here: making a fresh
+offer appear would need a higher alpha. It is unchanged shell code since issue #10, where it was
+driven against two real signed installers (the agreed install logged
+`desktop update waiting for voice channel`, requested nothing for three poll intervals, and only
+applied after the call flag cleared — see the installed-update section below), so that evidence
+applies to this binary. The feed's no-downgrade / re-draft recovery rules remain covered by
+`test/desktop-update.test.ts`.
+
+This is the **first of the two alpha-to-alpha updates** stable requires (ADR 0014).
+
 ## Desktop 0.1.0-alpha.1 — the real draft release run (issue #13)
 
 2026-09-12, GitHub Actions `windows-latest`, run
