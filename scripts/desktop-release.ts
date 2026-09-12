@@ -118,6 +118,13 @@ export interface AssembleDesktopReleaseOptions {
 	artifactsDirectory?: string
 	/** what GitHub actually stored for this Release */
 	published: WindowsReleaseAssets<PublishedReleaseAsset>
+	/**
+	 * The tag-scoped download root, e.g. the Release's `html_url` or
+	 * `.../releases/download/<tag>`. GitHub serves a draft's assets from an
+	 * `untagged-*` URL that dies the moment the Release is published, so the
+	 * manifest has to point at the tag-based URL the asset will keep.
+	 */
+	downloadRoot?: string
 }
 
 export function assembleDesktopRelease(
@@ -153,7 +160,9 @@ export function assembleDesktopRelease(
 		notes: options.notes,
 		pubDate: options.pubDate ?? new Date().toISOString(),
 		signature,
-		setupUrl: options.published.setup.browser_download_url
+		setupUrl: options.downloadRoot
+			? `${options.downloadRoot.replace(/\/$/, '')}/${encodeURIComponent(options.published.setup.name)}`
+			: options.published.setup.browser_download_url
 	})
 	const checksum = checksumFile([
 		{ name: options.published.setup.name, digest: sha256(setupPath) },
@@ -194,6 +203,7 @@ interface CliOptions {
 	notesPath: string
 	releasePath?: string
 	pubDate?: string
+	downloadRoot?: string
 }
 
 function parseCli(argv: string[]): CliOptions {
@@ -223,7 +233,8 @@ function parseCli(argv: string[]): CliOptions {
 		artifactsDirectory: flags.get('artifacts') ?? defaultArtifactsDirectory,
 		notesPath,
 		releasePath: flags.get('release'),
-		pubDate: flags.get('pub-date')
+		pubDate: flags.get('pub-date'),
+		downloadRoot: flags.get('download-root')
 	}
 }
 
