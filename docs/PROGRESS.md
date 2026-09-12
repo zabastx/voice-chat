@@ -76,8 +76,8 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     [#5 production shell](https://github.com/zabastx/voice-chat/issues/5) is built and verified
     locally, and [#8 Update feed](https://github.com/zabastx/voice-chat/issues/8) is built: the public
     `GET /api/desktop/update` selects the newest published `desktop-v*` Release and answers the Tauri
-    updater, covered by the repo's first test suite (`bun run test`). It has not run against the VPS
-    and no `desktop-v*` Release has been published yet, so the feed has never served a real one. The
+    updater, covered by the repo's first test suite (`bun run test`). It now runs against the VPS and
+    serves the published `0.1.0-alpha.1` Release for real (see the desktop alpha item below). The
     [#6 Native Bridge](https://github.com/zabastx/voice-chat/issues/6) is built: the shell freezes a
     versioned descriptor onto the trusted origin only, the remote page still gets no Tauri `invoke`,
     and its one reverse operation — `setVoiceActive(boolean)` — is what the updater ticket will read
@@ -119,9 +119,12 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     desktop — and then publishing the draft, which is the promotion step that puts it in the Update feed.
     That happened on 2026-09-12: `master` was fast-forwarded onto the desktop line, the real
     `desktop-v0.1.0-alpha.1` tag was pushed, the tag-driven run was green, and the draft was published.
-    The feed was then driven against the live GitHub API (older client `200` with the tag URL, current
-    `204`), and a fifth defect was fixed along the way — the manifest was pointing at a draft-only
-    `untagged-*` URL that dies on publish. **Still open on #13:** the real-hardware smoke test (mic and
+    A fifth defect was fixed along the way — the manifest was pointing at a draft-only `untagged-*` URL
+    that dies on publish. The VPS was redeployed the same day, so the public feed is live: driven over
+    `https://chat.zabastx.ru/api/desktop/update`, an older client gets `200` with the tag-scoped setup
+    URL, a current or newer one `204`, and the downloaded setup's SHA-256 and Ed25519 signature both
+    check out. **#13 was closed with these gaps still open** (recorded in
+    [verification.md](progress/verification.md), not as done): the real-hardware smoke test (mic and
     headphones, a 30-minute tray call, sleep/wake, screen share, real toasts) and a fresh-machine
-    portable/installed run, plus redeploying the VPS so the public feed is actually reachable there.
-    [#14](https://github.com/zabastx/voice-chat/issues/14) proves the live update on the next alpha.
+    portable/installed run. [#14](https://github.com/zabastx/voice-chat/issues/14) proves the live update
+    on the next alpha.

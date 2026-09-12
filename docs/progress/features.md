@@ -114,8 +114,8 @@ CI gate. What is not verified is in
 clicking a toast is not wired to anything — the contract carries no URL, and restoring the window on
 activation is left to a later Desktop Release. Web Release bumped to v0.26.0 with a changelog entry,
 because a member using the Desktop Client can now see something they could not before. The
-Cargo/Tauri version stays `0.1.0-alpha.1`: no `desktop-v*` Release has been published, so this shell
-code still goes into that same first release. Nothing deployed.
+Cargo/Tauri version stays `0.1.0-alpha.1`: this shell code went into the `desktop-v0.1.0-alpha.1`
+Release that is now published.
 
 ## Desktop 0.1.0-alpha.1 — installed update
 
@@ -171,7 +171,7 @@ builds remain HTTPS-only. It reads the native offer with UI Automation and press
 label with a `BM_CLICK` (GOTCHAS 28), covering postpone, accept with the exact Release URL, the
 running version drawing no offer at all, and a `503` feed leaving only a log line. Each launch also
 checks process survival, an unchanged EXE hash, and the absence of an install. The Windows CI job
-runs it after the installer harness. No Desktop Release has been published and nothing is deployed.
+runs it after the installer harness. The first Desktop Release is published and the VPS feed serves it.
 
 ## Desktop Update feed — server side
 
@@ -210,7 +210,7 @@ URL and any signature.
 
 The Portable client side is built in issue #9. Waiting out a Voice Channel and applying a signed
 installed update remain issues #10–#12; the Native Bridge already supplies the active-call signal
-those need. Nothing deployed.
+those need. Deployed, and now serving the published `desktop-v0.1.0-alpha.1` Release for real.
 
 ## Desktop 0.1.0-alpha.1 — NSIS installer and Portable EXE
 
@@ -234,7 +234,7 @@ temporary trusted HTTPS origin. It refuses any machine that already has an insta
 It uninstalls once with Portable still running and once with no client running. The check runs
 locally and is wired into a clean `windows-latest` job in `ci.yml`; the first hosted run remains for
 the release-candidate work. Issue #7 changes only Desktop delivery, so the Web Release version and
-member-facing changelog stay unchanged. Nothing deployed.
+member-facing changelog stay unchanged. The first Desktop Release is published and the VPS feed serves it.
 
 ## Desktop 0.1.0-alpha.1 — production shell
 
@@ -256,7 +256,7 @@ origin, including runtime-override rejection, broken TLS, initial and later reco
 lifecycle and log bounds.
 The Portable update offer is built in issue #9. Installed updater and notification behavior remain
 in issues #10–#12.
-Nothing deployed.
+The shell ships in the published `desktop-v0.1.0-alpha.1` Release.
 
 ## Desktop 0.1.0-alpha.1 — Native Bridge
 
@@ -294,11 +294,11 @@ LiveKit connect and drops it in `reset()`, which covers leave, disconnect and a 
 
 Only capability of version 1 is the invisible `voice-lifecycle` signal, so no member-visible
 affordance appears or disappears in this Web Release — hence no `package.json` bump and no changelog
-entry. The Cargo/Tauri version stays `0.1.0-alpha.1` too: no `desktop-v*` Release has been published,
-so this shell code is still going into that same first release rather than following one. One set of contract scenarios
+entry. The Cargo/Tauri version stays `0.1.0-alpha.1` too: this shell code is in the
+`desktop-v0.1.0-alpha.1` Release that is now published, rather than in a following one. One set of contract scenarios
 ([test/native-bridge-contract.ts](../../test/native-bridge-contract.ts)) runs against the browser
 adapter in `bun test` and against the real Tauri adapter inside WebView2 in `bun run desktop:check`.
-Nothing deployed.
+The bridge ships in the published `desktop-v0.1.0-alpha.1` Release.
 
 ## v0.25.0 — Windows desktop experiment
 
@@ -309,8 +309,9 @@ No Nuxt server is bundled. Server URL comes from `VOICECHAT_DESKTOP_URL`, defaul
 only HTTPS or loopback HTTP is accepted. Remote content receives no Tauri capabilities.
 `desktop:bench` and `measure.ps1` measure the whole process tree.
 Login, two-way synthetic audio and native hide/restore passed; the 100–200 MB call budget
-was missed (239.5 MiB in tray). PTT, installer and updater are unbuilt; real media devices,
-screen sharing and Watch Together are unverified. Nothing deployed.
+was missed (239.5 MiB in tray). The installer and updater were built later, in the published
+`desktop-v0.1.0-alpha.1` Release; PTT remains unbuilt, and real media devices,
+screen sharing and Watch Together are unverified.
 
 ## Web application
 

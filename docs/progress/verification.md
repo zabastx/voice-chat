@@ -80,11 +80,28 @@ GitHub catalog ([desktop-catalog.ts](../../server/utils/desktop-catalog.ts) +
 The `200` body's `windows-x86_64.url` is `.../releases/download/desktop-v0.1.0-alpha.1/Voice.Chat_…-setup.exe`
 — the working tag URL; the signature is the one the signed setup carries.
 
+### The deployed feed (VPS)
+
+The VPS was redeployed on 2026-09-12, so the public endpoint is live. Driven directly against
+`https://chat.zabastx.ru/api/desktop/update`, with no session cookie:
+
+| query                                              | result |
+| -------------------------------------------------- | ------ |
+| `target=windows&arch=x86_64&version=0.0.9`         | `200`  |
+| `target=windows&arch=x86_64&version=0.1.0-alpha.1` | `204`  |
+| `target=windows&arch=x86_64&version=9.9.9`         | `204`  |
+| `target=windows&arch=aarch64&version=0.0.9`        | `204`  |
+| `target=darwin&arch=x86_64&version=0.0.9`          | `204`  |
+| `target=windows&arch=x86_64` (no version)          | `200`  |
+
+The `200` body's `windows-x86_64.url` is the same tag URL. Downloading that exact URL over the deployed
+feed gave a setup whose SHA-256 matches `SHA256SUMS.txt`, and the signature in the deployed manifest
+verifies Ed25519 over the file's BLAKE2b-512 prehash against the repository's `DESKTOP_UPDATER_PUBKEY`.
+So the whole path — real Release → deployed catalog → deployed feed → signed download — is live. (`HEAD`
+requests 302 to `/login`; the Tauri updater sends `GET`, which is public.)
+
 ### What this does **not** prove
 
-- **The deployed VPS has not been redeployed with this code**, so `https://chat.zabastx.ru/api/desktop/update`
-  still 302s to `/login` (the running prod build predates the public endpoint). The feed was verified
-  against the live GitHub API locally, not over the deployed origin.
 - **The real-hardware smoke test is undriven by this run** — see the standing list at the bottom of this
   file. Real microphone and headphones, a 30-minute call in the tray, sleep/wake, screen share, DM and
   mention toasts on a real desktop, and the Portable-vs-installed profile behaviours still need a human
