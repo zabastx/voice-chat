@@ -239,10 +239,19 @@ describe('desktop release assembly', () => {
 })
 
 describe('desktop release workflow', () => {
-	test('is triggered only by desktop-v tags and reads the repository by default', async () => {
+	test('is triggered by desktop-v tags and by a test-only dispatch', async () => {
 		const workflow = await loadWorkflow()
-		expect(Object.keys(workflow.on ?? {})).toEqual(['push'])
+		expect(Object.keys(workflow.on ?? {})).toEqual(['push', 'workflow_dispatch'])
 		expect(workflow.on?.push).toEqual({ tags: ['desktop-v*'] })
+		expect(workflow.on?.workflow_dispatch).toEqual({
+			inputs: {
+				tag: {
+					description: 'Desktop tag to build as a draft (desktop-v<semver>)',
+					required: true,
+					default: 'desktop-v0.1.0-alpha.1'
+				}
+			}
+		})
 		expect(workflow.permissions).toEqual({ contents: 'read' })
 	})
 
@@ -252,6 +261,9 @@ describe('desktop release workflow', () => {
 		expect(script).toContain('desktop-v<semver>')
 		expect(script).toContain('git merge-base --is-ancestor')
 		expect(script).toContain('origin/master')
+		// the dispatch path carries the tag as an input and is a draft test only
+		expect(script).toContain('DISPATCH_TAG')
+		expect(script).toContain('workflow_dispatch')
 	})
 
 	test('runs every quality gate with no signing material before the release', async () => {
@@ -301,7 +313,7 @@ describe('desktop release workflow', () => {
 		expect(script).toContain('--draft')
 		expect(script).toContain('--notes-file')
 		expect(script).toContain('mapfile -t binaries')
-		expect(script).toContain('releases/tags/$GITHUB_REF_NAME')
+		expect(script).toContain('releases/tags/$RELEASE_TAG')
 		expect(script).toContain('desktop-release.ts manifest')
 		expect(script).toContain('mapfile -t metadata')
 		expect(script).toContain('gh release upload')
