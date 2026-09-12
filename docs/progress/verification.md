@@ -49,22 +49,48 @@ Four defects surfaced only when the workflow actually ran; all are fixed:
    has no git ref, so the step that derives `latest.json` and `SHA256SUMS.txt` failed after the draft was
    already created. It now finds the draft in the releases list and fetches it by id.
 
-The draft was created twice and deleted once while iterating; the deleted one is gone. The surviving
-draft is **not published**, so the Update feed still offers nothing.
+### The real Release (2026-09-12)
 
-Also confirmed by the same run and the API: the environment's `required_reviewers` genuinely gate the
-signing job — the run sat at `pending_deployments` until approved, and `current_user_can_approve` was the
-owner.
+`master` was fast-forwarded onto the desktop line (`c6653bd`) and the real `desktop-v0.1.0-alpha.1` tag
+was pushed, running [34703446106](https://github.com/zabastx/voice-chat/actions/runs/34703446106). This
+time `guard` passed the actual **tag-from-`master` ancestry check**, and the whole workflow was green:
+`quality`, then `release` behind the environment approval. It left a draft, which was then **published**
+— the promotion step — after which the Release is `Latest`.
+
+5. **A published `latest.json` pointed at a dead URL.** The manifest was assembled while the Release was
+   a draft, so GitHub reported the setup's URL as `.../releases/download/untagged-…/…`; publishing the
+   Release moves the asset to `.../releases/download/desktop-v0.1.0-alpha.1/…`, and the `untagged-*` URL
+   then answers **404**. The workflow now passes a tag-scoped `--download-root` so `latest.json` always
+   names the URL the asset keeps; the already-published `latest.json` was regenerated and re-uploaded by
+   hand. (The live feed never read this file — it builds its manifest from GitHub's current
+   `browser_download_url` — so no client was ever offered the dead URL, but the member-facing asset was
+   wrong until fixed.)
+
+The live Update feed was then driven against the **real published Release** through the production
+GitHub catalog ([desktop-catalog.ts](../../server/utils/desktop-catalog.ts) +
+[desktop-update.ts](../../server/utils/desktop-update.ts)):
+
+| client version  | target / arch       | result                                               |
+| --------------- | ------------------- | ---------------------------------------------------- |
+| `0.0.9`         | `windows`/`x86_64`  | `200` — `0.1.0-alpha.1`, tag URL, 432-byte signature |
+| `0.1.0-alpha.1` | `windows`/`x86_64`  | `204` (current)                                      |
+| `9.9.9`         | `windows`/`x86_64`  | `204` (newer)                                        |
+| `0.0.9`         | `windows`/`aarch64` | `204` (unsupported arch)                             |
+
+The `200` body's `windows-x86_64.url` is `.../releases/download/desktop-v0.1.0-alpha.1/Voice.Chat_…-setup.exe`
+— the working tag URL; the signature is the one the signed setup carries.
 
 ### What this does **not** prove
 
-- **No tag was pushed and nothing was published.** The draft's assets are served from an `untagged-*`
-  URL because a draft's tag is not a git ref; a real Release (a pushed `desktop-v*` tag, then publishing
-  the draft) is the only way the feed sees it, and that still has to happen from `master`.
+- **The deployed VPS has not been redeployed with this code**, so `https://chat.zabastx.ru/api/desktop/update`
+  still 302s to `/login` (the running prod build predates the public endpoint). The feed was verified
+  against the live GitHub API locally, not over the deployed origin.
 - **The real-hardware smoke test is undriven by this run** — see the standing list at the bottom of this
   file. Real microphone and headphones, a 30-minute call in the tray, sleep/wake, screen share, DM and
   mention toasts on a real desktop, and the Portable-vs-installed profile behaviours still need a human
-  with the devices, per issue #13's acceptance criteria.
+  with the devices, per issue #13's acceptance criteria. **This is the main gap #13 closed over.**
+- **A real client has not been offered and installed this update** — that is issue #14's job (updating a
+  live install to the _next_ alpha).
 - **The portable/installed manual acceptance on a clean Windows machine** is still the earlier harness
   evidence, not a fresh-machine run of this draft's artifacts.
 

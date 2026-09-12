@@ -117,5 +117,11 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
     could not read back its own draft by tag. What remains for #13 is the human half — real
     microphone/headphones and a 30-minute tray call, sleep/wake and screen share, notifications on a real
     desktop — and then publishing the draft, which is the promotion step that puts it in the Update feed.
-    After that the frontier is [#14](https://github.com/zabastx/voice-chat/issues/14), proving the live
-    update on the next alpha.
+    That happened on 2026-09-12: `master` was fast-forwarded onto the desktop line, the real
+    `desktop-v0.1.0-alpha.1` tag was pushed, the tag-driven run was green, and the draft was published.
+    The feed was then driven against the live GitHub API (older client `200` with the tag URL, current
+    `204`), and a fifth defect was fixed along the way — the manifest was pointing at a draft-only
+    `untagged-*` URL that dies on publish. **Still open on #13:** the real-hardware smoke test (mic and
+    headphones, a 30-minute tray call, sleep/wake, screen share, real toasts) and a fresh-machine
+    portable/installed run, plus redeploying the VPS so the public feed is actually reachable there.
+    [#14](https://github.com/zabastx/voice-chat/issues/14) proves the live update on the next alpha.

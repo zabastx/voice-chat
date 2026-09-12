@@ -21,6 +21,12 @@ The workflow also has a `workflow_dispatch` test path: it takes the tag as an in
 master-ancestry rule, and builds the same draft from any branch. It still needs the environment approval
 and still only creates a draft, so it is a rehearsal for issue #13, not a second way to publish.
 
+`0.1.0-alpha.1` is **published** (2026-09-12): `master` was fast-forwarded onto the desktop line, the
+`desktop-v0.1.0-alpha.1` tag was pushed, the tag-driven workflow ran green on a Windows runner, and the
+draft it produced was published — so the Release is `Latest` and the Update feed offers it. The feed was
+driven against the live GitHub API: an older client gets `200` with the tag-scoped setup URL, a current
+or newer client `204`. See [verification.md](verification.md).
+
 [scripts/desktop-release.ts](../../scripts/desktop-release.ts) is the assembly seam, and it runs in two
 passes because GitHub does not keep the names it is handed. `sign` signs the NSIS setup with the
 environment key and lists the setup, its `.sig` and the Portable EXE; the workflow uploads those three
@@ -28,7 +34,9 @@ with `gh release create --draft`. `manifest` then reads the draft back with `gh 
 `latest.json` and `SHA256SUMS.txt` from GitHub's own `browser_download_url` and stored names — spaces
 become dots on upload, so a guessed URL would 404 — and the workflow uploads those two. Because a draft's
 tag has no git ref, the draft is found in the releases list and fetched by id rather than through
-`releases/tags/<tag>` (which answers 404 until the tag is pushed). The feed and the assembly share one
+`releases/tags/<tag>` (which answers 404 until the tag is pushed), and the manifest's setup URL is built
+from the Release's tag-scoped download root so it survives publishing (a draft's `untagged-*` asset URL
+stops resolving the moment the Release is published). The feed and the assembly share one
 `windowsReleaseAssets()` matcher
 ([shared/utils/desktop-release-assets.ts](../../shared/utils/desktop-release-assets.ts)), so both agree on
 what a complete x64 Release is. The three Russian sections of `desktop/release-notes/<version>.md` are
