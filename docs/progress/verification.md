@@ -16,6 +16,10 @@ it proved. The last section lists what is still **not** verified. Part of
 - Signed in as `danil`, «Настройки → О приложении» rendered the section: «Скачать 0.1.0-alpha.2»,
   «Портативная версия», «Страница выпуска» and the alpha/SmartScreen note, above «Что нового».
   (Sign-in first needed the dev DB fixed — GOTCHAS 35.)
+- Deployed to the VPS on 2026-09-13 (`docker compose pull app && docker compose up -d app`, image from
+  `build-app.yml` run 34770476951): `https://chat.zabastx.ru` serves `appVersion` `0.27.0`,
+  `/api/desktop/download` answers `200` with `0.1.0-alpha.2`, and the update feed still answers an
+  `0.1.0-alpha.1` client with `200`.
 - **Not driven:** `/register`, a non-Windows browser, the `503` fallback in the UI, and the section
   inside a real Desktop Client.
 

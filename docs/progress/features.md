@@ -15,7 +15,7 @@ Desktop Update would offer; `204` = nothing eligible, `503` = GitHub unreachable
 button with the version, «Портативная версия», «Страница выпуска», an alpha/SmartScreen note; «Пока
 только для Windows 10/11 x64» on other OSes; the Desktop Client's own version inside the shell; a GitHub
 Releases link on `503`) and as one quiet line on `/login` and `/register`, shown only in a Windows
-browser. **Built, not yet deployed.**
+browser. **Built, deployed 2026-09-13.**
 
 ## v0.26.1 — desktop shell stays in the Voice Channel
 
@@ -25,8 +25,8 @@ Native Bridge's cancelled `voicechat://bridge/setVoiceActive` navigation fires `
 livekit-client's default `disconnectOnPageLeave` treats that as leaving the page (GOTCHAS 34).
 [useVoice.ts](../../app/composables/useVoice.ts) now turns that off and disconnects on `pagehide`
 instead. New local check `bun run desktop:voice-check` ([voice-check.mjs](../../desktop/voice-check.mjs))
-drives the debug shell against the dev stack. **Built, verified locally, not yet deployed** — the
-installed clients stay broken until the VPS serves 0.26.1.
+drives the debug shell against the dev stack. **Built, verified locally, deployed 2026-09-13 with v0.27.0**;
+a prod join from a real shell is still owed.
 
 ## Voice Chat Desktop epic (issue #4) — closed
 
