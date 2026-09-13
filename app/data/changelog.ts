@@ -11,6 +11,14 @@ export interface ChangelogEntry {
 // newest first
 export const changelog: ChangelogEntry[] = [
 	{
+		version: '0.26.1',
+		date: '2026-09-13',
+		title: 'Голосовые каналы в клиенте для Windows',
+		changes: [
+			'Клиент для Windows снова держит голосовой канал: раньше он выкидывал из канала через мгновение после подключения и показывал «Вы подключились без микрофона».'
+		]
+	},
+	{
 		version: '0.26.0',
 		date: '2026-09-12',
 		title: 'Уведомления, когда приложение свёрнуто',

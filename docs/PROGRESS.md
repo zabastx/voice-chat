@@ -20,6 +20,10 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
 
 ## Remaining work / next steps
 
+0. **Deploy Web Release 0.26.1** — every published Windows shell drops out of a Voice Channel right
+   after joining until the VPS serves it (GOTCHAS 34). After the deploy, join from the Portable
+   `0.1.0-alpha.2` on prod with a real mic and record it in
+   [progress/verification.md](progress/verification.md).
 1. **Drop the legacy `app-data` volume** — the Postgres cutover on the VPS is **done** (prod has
    been on Postgres since before v0.21.0), but the volume that carried `/data/app.sqlite` is still
    mounted in [compose.yaml](../compose.yaml) and the one-shot `scripts/migrate-sqlite-to-pg.ts` is

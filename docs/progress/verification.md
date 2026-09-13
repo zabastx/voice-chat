@@ -4,6 +4,28 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## v0.26.1 — desktop shell dropped out of Voice Channels (diagnosed and fixed)
+
+2026-09-13, local Windows x64, WebView2 over CDP. Reported on the published Portable
+`0.1.0-alpha.2` against prod: join → «Вы подключились без микрофона» → out of the channel; its desktop
+log had `voice channel active` and `voice channel idle` in the same second.
+
+- **Repro, no human in the loop:** debug shell → local dev stack, fresh WebView2 profile, microphone
+  granted through `Browser.grantPermissions`. 3/3 runs: `connecting -> connected`, then
+  `Page leave detected, disconnecting`, then `connected -> disconnected`.
+- **Falsified one variable at a time** by stopping the page from registering one window listener:
+  without `beforeunload` the call held (mic published, no page-leave); without `pagehide` it still
+  dropped. The only thing navigating was the bridge's `setVoiceActive(true)` after connect.
+- **Fix** (`disconnectOnPageLeave: false` + own `pagehide` disconnect): 3/3 runs held the call with
+  the mic published. A reload of a joined page closed the participant on the LiveKit server 76 ms later
+  with `CLIENT_REQUEST_LEAVE`, so a real page leave is still prompt.
+- **Regression check:** `bun run desktop:voice-check` — red on the pre-fix `useVoice.ts` ("LiveKit
+  treated a Native Bridge navigation as leaving the page"), green with the fix, ~30 s including an
+  incremental `cargo build`.
+
+Not verified: the fix on prod with the published alpha shells (needs the 0.26.1 deploy), and a real
+first-run permission prompt clicked by a human — the check grants the mic over CDP.
+
 ## Voice Chat Desktop epic (issue #4) — gate re-run and closure
 
 2026-09-13, local Windows x64, `master` at `66d27b7fb845`. Issue #4 was closed as built-with-gaps

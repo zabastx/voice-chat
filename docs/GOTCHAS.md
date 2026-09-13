@@ -370,6 +370,26 @@ Fixed in [desktop-release.yml](../.github/workflows/desktop-release.yml) by find
 paginated releases list (`select(.tag_name == … and .draft)`) and fetching it by id. Same trap for
 anything that reads a draft back before publishing it.
 
+### 34. A cancelled `location.href` navigation still fires `beforeunload` — LiveKit leaves the call
+
+The Native Bridge sends every reverse operation as `location.href = 'voicechat://bridge/…'`, cancelled in
+the shell's `on_navigation` (GOTCHAS 26). The document survives, but the page has already run
+`beforeunload` — it fires before `NavigationStarting`, so cancelling cannot take it back. livekit-client
+defaults to `disconnectOnPageLeave: true` and listens to exactly that event, so `setVoiceActive(true)`,
+sent right after `room.connect()`, disconnected the room it had just joined: the in-flight mic publish
+threw («Вы подключились без микрофона»), `Disconnected` ran `reset()`, and the desktop log showed
+`voice channel active` and `voice channel idle` in the same second. `pagehide` does **not** fire for
+the cancelled navigation. The browser was never affected — there is no bridge there.
+
+Fixed in Web Release 0.26.1 ([useVoice.ts](../app/composables/useVoice.ts)): `disconnectOnPageLeave:
+false`, and our own `pagehide` listener disconnects the room when the document really goes (a reload
+still closes the participant with `CLIENT_REQUEST_LEAVE` in ~80 ms, not a departure timeout). Anything
+else that ever listens to `beforeunload` in the Web Release — a "leave site?" prompt, a draft flush —
+will fire on **every** bridge call too; use `pagehide` instead. `bun run desktop:voice-check` is the
+regression check. The harnesses that "passed" voice in the shell before it either mocked
+`getUserMedia` or had a human grant the prompt, and none asserted the room was still connected after
+the bridge call.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

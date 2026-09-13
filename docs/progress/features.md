@@ -4,6 +4,17 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## v0.26.1 — desktop shell stays in the Voice Channel
+
+Web Release fix, no Desktop Release: every published shell (`0.1.0-alpha.1`, `0.1.0-alpha.2`) dropped
+out of a Voice Channel within a second of joining, with «Вы подключились без микрофона». Cause: the
+Native Bridge's cancelled `voicechat://bridge/setVoiceActive` navigation fires `beforeunload`, and
+livekit-client's default `disconnectOnPageLeave` treats that as leaving the page (GOTCHAS 34).
+[useVoice.ts](../../app/composables/useVoice.ts) now turns that off and disconnects on `pagehide`
+instead. New local check `bun run desktop:voice-check` ([voice-check.mjs](../../desktop/voice-check.mjs))
+drives the debug shell against the dev stack. **Built, verified locally, not yet deployed** — the
+installed clients stay broken until the VPS serves 0.26.1.
+
 ## Voice Chat Desktop epic (issue #4) — closed
 
 The parent spec [#4](https://github.com/zabastx/voice-chat/issues/4) is closed: every sub-issue it was

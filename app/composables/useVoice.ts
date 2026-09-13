@@ -265,9 +265,17 @@ export function useVoice() {
 				)
 			}
 		})
+		// leave the room when the document is really going away, in place of LiveKit's
+		// `disconnectOnPageLeave` (off in join(), see there)
+		const onPageHide = () => void room?.disconnect()
+		window.addEventListener('pagehide', onPageHide)
 		// HMR resets `micWatcherStarted`, so without this every edit to this file stacks
 		// another watcher onto the old ones and each slider tick fans out across all of them
-		if (import.meta.hot) import.meta.hot.dispose(() => scope.stop())
+		if (import.meta.hot)
+			import.meta.hot.dispose(() => {
+				scope.stop()
+				window.removeEventListener('pagehide', onPageHide)
+			})
 	}
 
 	async function join(channelId: string) {
@@ -298,6 +306,13 @@ export function useVoice() {
 				adaptiveStream: true,
 				// the publisher side of the same idea: stop encoding layers nobody subscribes to
 				dynacast: true,
+				// LiveKit's own page-leave hook listens to `beforeunload`, which also fires for a
+				// navigation that never happens: the Native Bridge sends every reverse operation as
+				// a cancelled `voicechat://bridge/…` navigation, so `setVoiceActive(true)` right
+				// after connect used to drop the Windows client out of the call it had just
+				// joined. `pagehide` fires only when the document really goes — see the `pagehide`
+				// listener next to the device watchers, and GOTCHAS 34.
+				disconnectOnPageLeave: false,
 				audioCaptureDefaults: prefs.value.micDeviceId
 					? { deviceId: prefs.value.micDeviceId }
 					: undefined,

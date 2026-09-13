@@ -77,6 +77,18 @@ single-instance restore, явный exit, bounded logs и desktop-уведомл
 показывает настоящие toast'ы и очищает свою историю уведомлений до и после себя. Временный
 сертификат удаляется после проверки.
 
+## Проверка голосового канала в shell
+
+```powershell
+bun run dev   # и docker compose -f compose.dev.yaml up -d
+bun run desktop:voice-check
+```
+
+Harness собирает debug shell, открывает его на `localhost:3000` с чистым профилем WebView2, выдаёт
+доступ к микрофону через CDP, входит как `danil` и подключается к первому голосовому каналу. Проверка
+падает, если LiveKit отключился сам (вызов Native Bridge принят за уход со страницы, GOTCHAS 34) или
+микрофон не опубликован. Клиент Voice Chat перед запуском нужно закрыть.
+
 ## Проверка installer и Portable EXE
 
 ```powershell

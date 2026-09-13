@@ -1,6 +1,6 @@
 {
 	"name": "voice-chat",
-	"version": "0.26.0",
+	"version": "0.26.1",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -12,6 +12,7 @@
 		"desktop:release": "bun scripts/desktop-release.ts",
 		"desktop:run": "bun scripts/desktop.ts run",
 		"desktop:check": "node desktop/tray-check.mjs",
+		"desktop:voice-check": "node desktop/voice-check.mjs",
 		"desktop:install-check": "bun desktop/install-check.mjs",
 		"desktop:update-check": "bun desktop/update-check.mjs",
 		"desktop:installed-update-check": "bun desktop/installed-update-check.mjs",
