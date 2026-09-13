@@ -5,6 +5,10 @@
 			<span class="text-dimmed text-sm">версия {{ currentVersion }}</span>
 		</div>
 
+		<ClientOnly>
+			<DesktopDownload />
+		</ClientOnly>
+
 		<section class="space-y-4">
 			<h3 class="text-muted text-xs font-semibold uppercase">Что нового</h3>
 			<ChangelogList />

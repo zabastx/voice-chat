@@ -27,8 +27,13 @@
 					<UAlert v-if="error" :title="error" color="error" icon="i-lucide-circle-alert" />
 				</template>
 				<template #footer>
-					Уже есть аккаунт?
-					<ULink class="text-primary font-medium" to="/login">Войти</ULink>
+					<p>
+						Уже есть аккаунт?
+						<ULink class="text-primary font-medium" to="/login">Войти</ULink>
+					</p>
+					<ClientOnly>
+						<DesktopDownload class="mt-2" compact />
+					</ClientOnly>
 				</template>
 			</UAuthForm>
 		</UPageCard>

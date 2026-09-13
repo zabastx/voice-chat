@@ -67,12 +67,33 @@ async function withFeed(
 	run: (get: (query?: string) => Promise<Response>) => Promise<void>
 ) {
 	// tests drive failure paths deliberately; keep the warning out of the output
+	await withFeedRoutes(options, ({ update }) => run(update))
+}
+
+interface FeedRoutes {
+	update: (query?: string) => Promise<Response>
+	download: () => Promise<Response>
+}
+
+/** Serves both of the feed's routes from one feed, so they share its cache. */
+async function withFeedRoutes(
+	options: Omit<DesktopUpdateFeedOptions, 'onError'>,
+	run: (routes: FeedRoutes) => Promise<void>
+) {
 	const feed = createDesktopUpdateFeed({ ...options, onError: () => {} })
-	const server = Bun.serve({ port: 0, fetch: (request) => feed.respond(request) })
-	const get = (query = '?target=windows&arch=x86_64') =>
-		fetch(`http://127.0.0.1:${server.port}/api/desktop/update${query}`)
+	const server = Bun.serve({
+		port: 0,
+		fetch: (request) =>
+			new URL(request.url).pathname === '/api/desktop/download'
+				? feed.respondDownload()
+				: feed.respond(request)
+	})
+	const base = `http://127.0.0.1:${server.port}/api/desktop`
 	try {
-		await run(get)
+		await run({
+			update: (query = '?target=windows&arch=x86_64') => fetch(`${base}/update${query}`),
+			download: () => fetch(`${base}/download`)
+		})
 	} finally {
 		await server.stop(true)
 	}
@@ -288,6 +309,79 @@ describe('GET /api/desktop/update — minimum supported Release', () => {
 		await withCatalog([release('0.2.0')], async (get) => {
 			const response = await get('?target=windows&arch=x86_64&version=0.1.0')
 			expect(response.headers.get(MINIMUM_VERSION_HEADER)).toBeNull()
+		})
+	})
+})
+
+describe('GET /api/desktop/download — the Desktop Download', () => {
+	test('offers the newest published Release with both of its downloads', async () => {
+		await withFeedRoutes(
+			{ catalog: catalogOf([release('0.1.0'), release('0.2.0-alpha.1')]) },
+			async ({ download }) => {
+				const response = await download()
+				expect(response.status).toBe(200)
+				expect(response.headers.get('cache-control')).toBe('no-store')
+				expect(await response.json()).toEqual({
+					version: '0.2.0-alpha.1',
+					setupUrl: `${ASSET_HOST}/desktop-v0.2.0-alpha.1/${encodeURIComponent(setupName('0.2.0-alpha.1'))}`,
+					portableUrl: `${ASSET_HOST}/desktop-v0.2.0-alpha.1/Voice%20Chat_0.2.0-alpha.1_x64-portable.exe`,
+					releaseUrl: 'https://github.test/zabastx/voice-chat/releases/tag/desktop-v0.2.0-alpha.1'
+				})
+			}
+		)
+	})
+
+	test('is always the Release a Desktop Update would offer', async () => {
+		const redrafted = release('0.3.0', { draft: true })
+		const partial = release('0.4.0')
+		partial.assets = partial.assets.filter((asset) => !asset.name.includes('portable'))
+		await withFeedRoutes(
+			{ catalog: catalogOf([release('0.2.0'), redrafted, partial]) },
+			async ({ update, download }) => {
+				const manifest = await (await update('?target=windows&arch=x86_64&version=0.1.0')).json()
+				expect((await (await download()).json()).version).toBe(manifest.version)
+				expect(manifest.version).toBe('0.2.0')
+			}
+		)
+	})
+
+	test('offers nothing when no Release is eligible', async () => {
+		await withFeedRoutes(
+			{ catalog: catalogOf([release('0.3.0', { draft: true, publishedAt: null })]) },
+			async ({ download }) => {
+				const response = await download()
+				expect(response.status).toBe(204)
+				expect(await response.text()).toBe('')
+			}
+		)
+	})
+
+	test('answers 503 when GitHub fails and nothing was ever cached', async () => {
+		const catalog: DesktopReleaseCatalog = {
+			list: () => Promise.reject(new Error('GitHub releases request failed: 403')),
+			readSignature: () => Promise.reject(new Error('unreachable'))
+		}
+		await withFeedRoutes({ catalog, cacheTtlMs: 60_000 }, async ({ download }) => {
+			const response = await download()
+			expect(response.status).toBe(503)
+			expect(response.headers.get('retry-after')).toBe('60')
+		})
+	})
+
+	test('shares one cached catalog read with the update route', async () => {
+		let reads = 0
+		const inner = catalogOf([release('0.2.0')])
+		const catalog: DesktopReleaseCatalog = {
+			async list() {
+				reads += 1
+				return inner.list()
+			},
+			readSignature: (asset) => inner.readSignature(asset)
+		}
+		await withFeedRoutes({ catalog, cacheTtlMs: 60_000 }, async ({ update, download }) => {
+			expect((await update('?target=windows&arch=x86_64&version=0.1.0')).status).toBe(200)
+			expect((await download()).status).toBe(200)
+			expect(reads).toBe(1)
 		})
 	})
 })

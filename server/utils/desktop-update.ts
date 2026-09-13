@@ -1,3 +1,4 @@
+import type { DesktopDownloadDto } from '../../shared/types/desktop-download'
 import { windowsReleaseAssets } from '../../shared/utils/desktop-release-assets'
 import type {
 	DesktopReleaseAsset,
@@ -37,6 +38,7 @@ export interface EligibleDesktopRelease {
 	version: DesktopVersion
 	setup: DesktopReleaseAsset
 	signatureAsset: DesktopReleaseAsset
+	portable: DesktopReleaseAsset
 }
 
 function isPublicHttpsPage(url: string): boolean {
@@ -76,7 +78,8 @@ export function selectDesktopRelease(
 			record,
 			version,
 			setup: artifacts.setup,
-			signatureAsset: artifacts.signature
+			signatureAsset: artifacts.signature,
+			portable: artifacts.portable
 		}
 		if (!best) {
 			best = candidate
@@ -99,6 +102,7 @@ interface DesktopUpdateOffer {
 	pubDate: string | null
 	url: string
 	signature: string
+	portableUrl: string
 }
 
 export interface DesktopUpdateFeedOptions {
@@ -117,6 +121,11 @@ export interface DesktopUpdateFeedOptions {
 
 export interface DesktopUpdateFeed {
 	respond(request: Request): Promise<Response>
+	/**
+	 * The Desktop Download for a Member without the Desktop Client: the same
+	 * offer and the same cache, as plain links instead of an updater manifest.
+	 */
+	respondDownload(): Promise<Response>
 }
 
 function boundedNotes(notes: string) {
@@ -169,7 +178,8 @@ export function createDesktopUpdateFeed(options: DesktopUpdateFeedOptions): Desk
 			notes: boundedNotes(selected.record.notes),
 			pubDate: publishedAt && !Number.isNaN(Date.parse(publishedAt)) ? publishedAt : null,
 			url: selected.setup.url,
-			signature
+			signature,
+			portableUrl: selected.portable.url
 		}
 	}
 
@@ -236,6 +246,25 @@ export function createDesktopUpdateFeed(options: DesktopUpdateFeedOptions): Desk
 				}),
 				{ status: 200, headers }
 			)
+		},
+
+		async respondDownload() {
+			const headers = new Headers({ 'cache-control': 'no-store' })
+			const offer = await currentOffer()
+			if (offer === undefined) {
+				headers.set('retry-after', String(Math.ceil(ttl / 1000)))
+				return new Response(null, { status: 503, headers })
+			}
+			if (!offer) return new Response(null, { status: 204, headers })
+
+			const body: DesktopDownloadDto = {
+				version: formatDesktopVersion(offer.version),
+				setupUrl: offer.url,
+				portableUrl: offer.portableUrl,
+				releaseUrl: offer.releaseUrl
+			}
+			headers.set('content-type', 'application/json')
+			return new Response(JSON.stringify(body), { status: 200, headers })
 		}
 	}
 }

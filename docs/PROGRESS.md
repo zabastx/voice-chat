@@ -24,6 +24,10 @@ Related, outside this folder: [GOTCHAS.md](GOTCHAS.md) (traps that already cost 
    after joining until the VPS serves it (GOTCHAS 34). After the deploy, join from the Portable
    `0.1.0-alpha.2` on prod with a real mic and record it in
    [progress/verification.md](progress/verification.md).
+   Web Release **0.27.0** (Desktop Download: «Скачать» in «О приложении» and on login/register) ships
+   in the same deploy. Afterwards, open «О приложении» on prod in a non-Windows browser and in the
+   Desktop Client — only the Windows-browser state was driven locally (see
+   [progress/verification.md](progress/verification.md)).
 1. **Drop the legacy `app-data` volume** — the Postgres cutover on the VPS is **done** (prod has
    been on Postgres since before v0.21.0), but the volume that carried `/data/app.sqlite` is still
    mounted in [compose.yaml](../compose.yaml) and the one-shot `scripts/migrate-sqlite-to-pg.ts` is

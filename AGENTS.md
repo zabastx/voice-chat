@@ -77,7 +77,10 @@ Full list with symptoms in [docs/GOTCHAS.md](docs/GOTCHAS.md).
   The catalog is behind a two-method interface in [server/utils/desktop-catalog.ts](server/utils/desktop-catalog.ts)
   (GitHub REST + a fixture adapter); selection, caching and the manifest live in
   [server/utils/desktop-update.ts](server/utils/desktop-update.ts). `204` = nothing to offer,
-  `503` = GitHub is unreachable and nothing was cached — never a partial manifest.
+  `503` = GitHub is unreachable and nothing was cached — never a partial manifest. The public
+  `GET /api/desktop/download` (the **Desktop Download** — links for Members without the client) is
+  served by the same feed instance ([server/utils/desktop-feed.ts](server/utils/desktop-feed.ts)), so
+  both routes always name the same Release.
 - **Desktop Release** — a `desktop-v<semver>` tag whose commit is on `master` runs
   [.github/workflows/desktop-release.yml](.github/workflows/desktop-release.yml): `quality` runs the Bun
   and Cargo gates with no secrets, then `release` enters the protected `desktop-release` Environment

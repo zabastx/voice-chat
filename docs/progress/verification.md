@@ -4,6 +4,21 @@ Evidence for the ✅ rows in [features.md](features.md): what was actually drive
 it proved. The last section lists what is still **not** verified. Part of
 [PROGRESS.md](../PROGRESS.md).
 
+## v0.27.0 — Desktop Download
+
+- `bun run test`: five new scenarios in [desktop-update.test.ts](../../test/desktop-update.test.ts) —
+  both links of the newest published Release, the download naming exactly the Release the updater
+  route offers (with a redrafted and a Portable-less Release in the catalog), `204`, `503` with
+  `retry-after`, and one catalog read shared by both routes.
+- Dev server against the real GitHub catalog: `GET /api/desktop/download` returned `200` with
+  `0.1.0-alpha.2` and tag-scoped setup/portable URLs. `/login` in a Windows Chromium rendered
+  «Есть приложение для Windows — скачать» pointing at that setup.
+- Signed in as `danil`, «Настройки → О приложении» rendered the section: «Скачать 0.1.0-alpha.2»,
+  «Портативная версия», «Страница выпуска» and the alpha/SmartScreen note, above «Что нового».
+  (Sign-in first needed the dev DB fixed — GOTCHAS 35.)
+- **Not driven:** `/register`, a non-Windows browser, the `503` fallback in the UI, and the section
+  inside a real Desktop Client.
+
 ## v0.26.1 — desktop shell dropped out of Voice Channels (diagnosed and fixed)
 
 2026-09-13, local Windows x64, WebView2 over CDP. Reported on the published Portable

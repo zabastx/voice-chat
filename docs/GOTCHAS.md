@@ -390,6 +390,22 @@ regression check. The harnesses that "passed" voice in the shell before it eithe
 `getUserMedia` or had a human grant the prompt, and none asserted the room was still connected after
 the bridge call.
 
+### 35. «Database not initialised» in dev = Docker's port proxy ran out of 4-tuples, not a code bug
+
+Symptom: every DB-backed route 500s with `Database not initialised — the db nitro plugin must run first`,
+on clean `master` too, with no other error in the log. The db plugin is async and Nitro doesn't await
+it, so a hung `initDb()` never logs anything; `pg_stat_activity` shows no app connection at all, and a
+bare postgres.js script against `NUXT_DATABASE_URL` hangs instead of failing.
+
+Cause (2026-09-13): `netstat -ano | grep -c :5532` showed ~15 000 sockets, all `TIME_WAIT` on the
+`127.0.0.1:5532` side of Docker Desktop's port proxy (`com.docker.backend`, up for two days), with
+no owning process and not expiring. Their remote ports covered the whole ephemeral range, so a new
+connection to that one host port had no free 4-tuple and hung. Other ports were unaffected.
+
+Fix: `docker restart voicechat-postgres` (data is in the volume) — the connection came back in 47 ms
+and the stuck sockets began draining. If that is not enough, restart Docker Desktop. Check the count
+first before suspecting the app.
+
 ## Deploy notes worth remembering
 
 - Two DNS records: `DOMAIN` and `livekit.DOMAIN`, both → VPS IP. Caddy proxies LiveKit _signaling_; RTC media flows directly over UDP (LiveKit on host networking in prod).

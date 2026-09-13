@@ -14,7 +14,12 @@
 				<template #validation>
 					<UAlert v-if="error" :title="error" color="error" icon="i-lucide-circle-alert" />
 				</template>
-				<template #footer> Нет аккаунта? Попросите у админа ссылку-приглашение. </template>
+				<template #footer>
+					<p>Нет аккаунта? Попросите у админа ссылку-приглашение.</p>
+					<ClientOnly>
+						<DesktopDownload class="mt-2" compact />
+					</ClientOnly>
+				</template>
 			</UAuthForm>
 		</UPageCard>
 	</div>

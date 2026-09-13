@@ -4,6 +4,19 @@ What is built, what is deployed, and what still needs verifying — one row per 
 [PROGRESS.md](../PROGRESS.md). Evidence for the ✅ rows lives in
 [verification.md](verification.md).
 
+## v0.27.0 — Desktop Download
+
+A Member without the Desktop Client can now get it from the app. The public
+`GET /api/desktop/download` ([download.get.ts](../../server/api/desktop/download.get.ts)) answers
+`{version, setupUrl, portableUrl, releaseUrl}` from the **same feed instance and cache** as the
+updater route ([desktop-feed.ts](../../server/utils/desktop-feed.ts)), so it always names the Release a
+Desktop Update would offer; `204` = nothing eligible, `503` = GitHub unreachable with nothing cached.
+[DesktopDownload.vue](../../app/components/DesktopDownload.vue) renders it in «О приложении» (download
+button with the version, «Портативная версия», «Страница выпуска», an alpha/SmartScreen note; «Пока
+только для Windows 10/11 x64» on other OSes; the Desktop Client's own version inside the shell; a GitHub
+Releases link on `503`) and as one quiet line on `/login` and `/register`, shown only in a Windows
+browser. **Built, not yet deployed.**
+
 ## v0.26.1 — desktop shell stays in the Voice Channel
 
 Web Release fix, no Desktop Release: every published shell (`0.1.0-alpha.1`, `0.1.0-alpha.2`) dropped

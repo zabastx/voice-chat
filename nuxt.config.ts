@@ -115,7 +115,10 @@ export default defineNuxtConfig({
 			// bot @username, used to build the t.me/<bot>?start=<token> deep link
 			telegramBotUsername: '',
 			// numeric community id, for the vk.me/club<id>?ref=<token> deep link
-			vkGroupId: ''
+			vkGroupId: '',
+			// where the Desktop Download points when the feed cannot answer (503):
+			// every Release of the repo the feed reads, drafts hidden by GitHub
+			desktopReleasesPage: 'https://github.com/zabastx/voice-chat/releases'
 		}
 	}
 })
